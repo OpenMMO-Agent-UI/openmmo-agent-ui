@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; frame-src http://127.0.0.1:* http://localhost:*; style-src 'self' 'unsafe-inline'"
+    />
+    <title>OpenMMO Agent</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>OpenMMO Agent</h1>
+      <span class="dot" id="dot"></span>
+      <span class="status" id="status">stopped</span>
+      <span class="vitals" id="vitals"></span>
+      <span class="spacer"></span>
+      <span class="viewtoggle">
+        <button data-view="scene" class="on">3D</button>
+        <button data-view="panel">Map</button>
+      </span>
+      <button id="restart" class="ghost" hidden>Apply &amp; restart</button>
+      <button id="start" class="primary">Start</button>
+      <button id="stop" hidden>Stop</button>
+    </header>
+
+    <div id="banner" hidden>
+      <div>
+        <b>Sign in to continue</b>
+        <p>Open the page and enter the code below. Any device works.</p>
+      </div>
+      <code id="banner-code">—</code>
+      <button id="banner-open">Open sign-in page</button>
+      <button id="banner-copy" class="ghost">Copy code</button>
+      <button id="banner-close" class="ghost">×</button>
+    </div>
+
+    <div id="errors" hidden></div>
+
+    <main>
+      <aside>
+        <nav id="tabs">
+          <button data-tab="character" class="on">Character</button>
+          <button data-tab="model">Model</button>
+          <button data-tab="prompt">Prompt</button>
+          <button data-tab="thoughts">Thoughts</button>
+          <button data-tab="connection">Connection</button>
+          <button data-tab="log">Log</button>
+        </nav>
+
+        <section data-panel="character">
+          <label>Character name<input id="characterName" placeholder="unique across the server" /></label>
+          <div class="row">
+            <label>Class<select id="characterClass"></select></label>
+            <label>Gender<select id="gender"></select></label>
+          </div>
+          <p class="hint" id="genderHint"></p>
+          <label class="check"><input type="checkbox" id="alwaysActive" /> Keep thinking with nobody around</label>
+          <div class="row">
+            <label>Think every (s)<input type="number" id="minIntervalSecs" min="1" /></label>
+            <label>Idle every (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
+          </div>
+          <p class="hint">
+            Shorter intervals mean more LLM calls. Idle applies when no chat or combat has happened recently.
+          </p>
+        </section>
+
+        <section data-panel="model" hidden>
+          <label>Backend<select id="llm"></select></label>
+          <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
+          <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
+          <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted, sent as an env var" /></label>
+          <div class="row">
+            <label>Max tokens<input type="number" id="maxTokens" min="64" /></label>
+            <label>Temperature<input type="number" id="temperature" min="0" max="2" step="0.1" /></label>
+          </div>
+          <label data-for="openai">Reasoning effort<select id="reasoningEffort">
+              <option value="none">none</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="">(omit)</option>
+            </select></label>
+          <p class="hint" id="backendHint"></p>
+        </section>
+
+        <section data-panel="prompt" hidden>
+          <div class="row">
+            <label>Preset<select id="preset"></select></label>
+            <button id="loadPreset" class="ghost">Load</button>
+          </div>
+          <textarea id="promptText" spellcheck="false"></textarea>
+          <div class="row">
+            <button id="savePrompt" class="primary">Save prompt</button>
+            <button id="showSystem" class="ghost">System prompt</button>
+          </div>
+          <p class="hint" id="promptFile"></p>
+          <pre id="systemPrompt" hidden></pre>
+        </section>
+
+        <section data-panel="thoughts" hidden>
+          <div class="row">
+            <div id="feedFilters"></div>
+            <button id="clearFeed" class="ghost">Clear</button>
+          </div>
+          <div id="feed"></div>
+          <p class="hint">Every prompt the agent sends and every reply it gets. Click a turn to expand it.</p>
+        </section>
+
+        <section data-panel="connection" hidden>
+          <label>Server<input id="server" placeholder="wss://openmmo.to.nexus/ws" /></label>
+          <label>Terrain origin<input id="terrain" placeholder="https://openmmo.to.nexus" /></label>
+          <label>Sign-in<select id="authMode">
+              <option value="google">Google account</option>
+              <option value="npc_token">NPC token (operator)</option>
+            </select></label>
+          <label data-for="google">Google client secret<input type="password" id="googleClientSecret" placeholder="GOCSPX-…" /></label>
+          <label data-for="npc_token">NPC account<input id="npcAccount" placeholder="npc_example" /></label>
+          <div class="row">
+            <label>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>
+            <label>Log level<select id="rustLog">
+                <option value="info">info</option>
+                <option value="debug">debug</option>
+                <option value="warn">warn</option>
+              </select></label>
+          </div>
+          <p class="hint" id="binaryInfo"></p>
+          <div class="row">
+            <button id="pickBinary" class="ghost">Choose binary…</button>
+            <button id="openAgentDir" class="ghost">Open agent folder</button>
+          </div>
+        </section>
+
+        <section data-panel="log" hidden>
+          <div class="row">
+            <label class="check"><input type="checkbox" id="autoscroll" checked /> Follow</label>
+            <button id="clearLog" class="ghost">Clear</button>
+          </div>
+          <pre id="log"></pre>
+        </section>
+      </aside>
+
+      <div id="view">
+        <iframe id="frame" hidden></iframe>
+        <div id="placeholder">
+          <h2>Nothing to watch yet</h2>
+          <p>Start the agent and its world appears here, rendered by the real game client from the agent's own view.</p>
+          <p class="hint" id="viewHint">Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.</p>
+        </div>
+      </div>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "openmmo-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop client for running an OpenMMO LLM agent: process control, model/prompt tuning, and a live 3D spectator view of your character.",
+  "license": "MIT",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --inspect",
+    "link": "bash scripts/link.sh",
+    "patches": "bash scripts/patches.sh"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0"
+  },
+  "dependencies": {
+    "ws": "^8.21.1"
+  }
+}

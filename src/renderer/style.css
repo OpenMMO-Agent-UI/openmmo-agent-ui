@@ -1,0 +1,402 @@
+:root {
+  --bg: #12141a;
+  --panel: #1a1d26;
+  --panel-2: #21252f;
+  --line: #2c313d;
+  --text: #dfe3ec;
+  --muted: #8b93a5;
+  --accent: #ffd76a;
+  --ok: #5fd48a;
+  --err: #e05252;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+}
+
+header h1 {
+  margin: 0 8px 0 70px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+header button {
+  -webkit-app-region: no-drag;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #545a68;
+}
+
+.dot.on {
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(95, 212, 138, 0.6);
+}
+
+.status {
+  color: var(--muted);
+}
+
+button {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: #3d4454;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #2a2410;
+  font-weight: 600;
+}
+
+button.ghost {
+  background: transparent;
+}
+
+#banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #2b2718;
+  border-bottom: 1px solid #4a4127;
+}
+
+#banner p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+#banner code {
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #12141a;
+  color: var(--accent);
+  font-size: 16px;
+  letter-spacing: 0.1em;
+}
+
+#errors {
+  padding: 8px 14px;
+  background: #2b1a1a;
+  border-bottom: 1px solid #52302f;
+  color: #ffb4b4;
+  white-space: pre-wrap;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+aside {
+  width: 380px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+nav {
+  display: flex;
+  border-bottom: 1px solid var(--line);
+}
+
+nav button {
+  flex: 1;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 4px;
+}
+
+nav button.on {
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+section {
+  flex: 1;
+  padding: 14px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+label {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+}
+
+input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
+textarea {
+  height: 260px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.row > label {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.hint {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+pre {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d0f14;
+  color: #c6cddc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+}
+
+section[data-panel='log'] {
+  display: flex;
+  flex-direction: column;
+}
+
+section[data-panel='log'] pre {
+  flex: 1;
+  min-height: 0;
+}
+
+#systemPrompt {
+  max-height: 300px;
+}
+
+.line-err {
+  color: #ffb4b4;
+}
+
+.line-app {
+  color: var(--accent);
+}
+
+#view {
+  flex: 1;
+  position: relative;
+  background: #0d0f14;
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+#placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px;
+  text-align: center;
+  color: var(--muted);
+}
+
+#placeholder h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+}
+
+#placeholder p {
+  margin: 0;
+  max-width: 46ch;
+}
+
+.vitals {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewtoggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.viewtoggle button {
+  border: none;
+  border-radius: 0;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.viewtoggle button.on {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+#feedFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.chip {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+.chip.on {
+  opacity: 1;
+  color: var(--text);
+}
+
+section[data-panel='thoughts'] {
+  display: flex;
+  flex-direction: column;
+}
+
+#feed {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d0f14;
+  padding: 6px;
+}
+
+.feed-item {
+  padding: 5px 6px;
+  border-radius: 5px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  background: #141821;
+}
+
+.feed-head {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.feed-body {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 3.2em;
+  overflow: hidden;
+}
+
+.feed-item.open .feed-body {
+  max-height: none;
+}
+
+.k-llm-prompt .feed-head {
+  color: #7fa8d8;
+}
+
+.k-llm-response .feed-head {
+  color: var(--accent);
+}
+
+.k-llm-error .feed-head,
+.k-llm-error .feed-body {
+  color: #ffb4b4;
+}
+
+.k-chat .feed-body {
+  color: #9fe0b5;
+}
+
+.k-combat .feed-body {
+  color: #f0b48a;
+}

@@ -1,0 +1,416 @@
+diff --git a/.gitignore b/.gitignore
+index 97303747..35a8ee36 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -96,3 +96,20 @@ agent-client/data/cache/
+ !.codex/config.toml
+ !.codex/skills/
+ !.codex/skills/**
++
++# The generated config's backup carries the Google installed-app secret that
++# upstream deliberately keeps out of the repo, and memory.txt is the agent's
++# own notes — neither belongs in a commit.
++/agent-client/data/config.toml.bak
++/agent-client/data/memory.txt
++
++# openmmo-client is its own repository, cloned in here.
++/openmmo-client/
++
++# openmmo-client: overlay symlinks created by openmmo-client/scripts/link.sh.
++# The real files live in openmmo-client/overlay/ so a rebase never touches them.
++/agent-client/src/mirror.rs
++/client/src/lib/stores/observerStore.ts
++/client/src/lib/components/AgentPanel.svelte
++/client/src/lib/agent/
++/agent-client/data/user_prompt.txt
+diff --git a/client/src/App.svelte b/client/src/App.svelte
+index a8fc1787..978806de 100644
+--- a/client/src/App.svelte
++++ b/client/src/App.svelte
+@@ -3,6 +3,7 @@
+   import { Canvas } from '@threlte/core'
+   import GameScene from './lib/components/GameScene.svelte'
+   import GameHud from './lib/components/GameHud.svelte'
++  import AgentPanel from './lib/components/AgentPanel.svelte'
+   import LoginScreen from './lib/components/LoginScreen.svelte'
+   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
+   import CharacterSelectScene from './lib/components/CharacterSelectScene.svelte'
+@@ -10,6 +11,7 @@
+   import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
+   import RenderFrameLimiter from './lib/components/RenderFrameLimiter.svelte'
+   import { gameStore } from './lib/stores/gameStore'
++  import { isObserver } from './lib/stores/observerStore'
+   import { createWebGPURenderer } from './lib/utils/renderer'
+   import {
+     networkManager,
+@@ -34,7 +36,10 @@
+     | 'waiting_dying'
+     | 'dialog_open'
+     | 'dialog_closed'
+-  let screen = $state<AppScreen>('login')
++  let screen = $state<AppScreen>(isObserver ? 'game' : 'login')
++  let observerError = $state('')
++  /// Connected to the mirror but the agent has not entered the world yet.
++  let observerWaiting = $derived(isObserver && !observerError && !currentPlayerHp)
+   let serverUrl = $state('')
+   let accountName = $state('')
+   let accountCharacters = $state<AccountCharacter[]>([])
+@@ -79,6 +84,15 @@
+   // caps itself at 3s and normally finishes long before login completes.
+   let showCanvas = $derived(screen !== 'login' && !gpuProbePending)
+ 
++  // Spectator: there is no login and no character to pick — connect to the
++  // agent's mirror and draw whatever it is seeing.
++  onMount(() => {
++    if (!isObserver) return
++    void networkManager.observe().then((result) => {
++      if (!result.ok) observerError = result.message ?? 'Agent is not reachable'
++    })
++  })
++
+   onMount(() => {
+     if (!gpuProbePending) return
+     void runGpuBenchmark()
+@@ -346,6 +360,12 @@
+     </div>
+   {/if}
+ 
++  {#if observerError}
++    <div class="observer-error">{observerError}</div>
++  {:else if observerWaiting}
++    <div class="observer-waiting">Waiting for the agent to enter the world…</div>
++  {/if}
++
+   <!-- UI overlays (outside Canvas) -->
+   {#if screen === 'game'}
+     <GameHud
+@@ -364,6 +384,9 @@
+       onCloseRespawnDialog={closeRespawnDialog}
+       onOpenSettings={() => (showSettings = true)}
+     />
++    {#if !isObserver}
++      <AgentPanel />
++    {/if}
+   {:else if screen === 'character-select'}
+     <CharacterSelectScreen
+       {accountName}
+@@ -482,4 +505,30 @@
+     width: 20px;
+     height: 20px;
+   }
++
++  .observer-waiting {
++    position: fixed;
++    top: 12px;
++    left: 50%;
++    transform: translateX(-50%);
++    z-index: 10000;
++    padding: 10px 16px;
++    border-radius: 8px;
++    background: rgba(30, 34, 44, 0.9);
++    color: #b9c1d2;
++    font-size: 14px;
++  }
++
++  .observer-error {
++    position: fixed;
++    top: 12px;
++    left: 50%;
++    transform: translateX(-50%);
++    z-index: 10000;
++    padding: 10px 16px;
++    border-radius: 8px;
++    background: rgba(120, 30, 30, 0.92);
++    color: #ffd9d9;
++    font-size: 14px;
++  }
+ </style>
+diff --git a/client/src/lib/components/GameScene.svelte b/client/src/lib/components/GameScene.svelte
+index cb8450e3..312b6544 100644
+--- a/client/src/lib/components/GameScene.svelte
++++ b/client/src/lib/components/GameScene.svelte
+@@ -54,6 +54,8 @@
+   import ObjectOverlay from './map-editor/ObjectOverlay.svelte'
+   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
+   import { type PlayerState } from '../utils/movementUtils'
++  import { isObserver } from '../stores/observerStore'
++  import { drainAgentEvents } from '../agent/actions'
+   import {
+     SUN_MAX_INTENSITY,
+     computeSunLightSnapshot,
+@@ -493,7 +495,7 @@
+       // Movement runs in map/housing editor so right-click-to-move works.
+       const playerControlStart = performance.now()
+       if (playerControl) {
+-        const events = pendingPlayerControlEvents
++        const events = pendingPlayerControlEvents.concat(drainAgentEvents())
+         pendingPlayerControlEvents = []
+         playerControl.updatePlayerControl(deltaTime, {
+           editorMode: $mapEditorMode || $housingEditorMode,
+@@ -537,6 +539,20 @@
+       // Update remote player interpolation
+       const remoteInterpolationStart = performance.now()
+       remotePlayerManager.update(deltaTime)
++      // Spectator: the watched agent is interpolated as a remote player, but
++      // the camera, terrain streaming and HUD all read currentPlayer, so its
++      // position and animation state are copied across each frame.
++      if (isObserver && currentPlayer) {
++        const observed = remotePlayerManager.players.get(currentPlayer.id)
++        if (observed) {
++          currentPlayer.position.set(
++            observed.position.x,
++            observed.position.y,
++            observed.position.z
++          )
++          currentPlayerState = observed
++        }
++      }
+       loopProfiler.record(
+         'remoteInterpolation',
+         performance.now() - remoteInterpolationStart
+diff --git a/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte b/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
+index b079e7b0..9c5e54de 100644
+--- a/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
++++ b/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
+@@ -5,6 +5,7 @@
+   import { SvelteMap } from 'svelte/reactivity'
+   import PlayerModel from '../PlayerModel.svelte'
+   import PlayerControl from '../PlayerControl.svelte'
++  import { isObserver } from '../../stores/observerStore'
+   import type { PlayerControlEvent } from '../player-control/events'
+   import type {
+     ChatBubble,
+@@ -393,7 +394,9 @@
+   }
+ </script>
+ 
+-{#if camera && currentPlayer}
++<!-- A spectator has no input and no movement of its own: the agent's
++     position arrives over the mirror. -->
++{#if camera && currentPlayer && !isObserver}
+   <PlayerControl
+     bind:this={playerControl}
+     {waterSurfaceAt}
+diff --git a/client/src/lib/managers/monsterManager.ts b/client/src/lib/managers/monsterManager.ts
+index e1bc10f6..3c72085c 100644
+--- a/client/src/lib/managers/monsterManager.ts
++++ b/client/src/lib/managers/monsterManager.ts
+@@ -15,6 +15,7 @@ import {
+ } from '../data/materialImpactSounds'
+ import { deathDropDelayQueue } from './deathDropDelay'
+ import { dungeonManager } from './dungeonManager'
++import { ownedByMe } from '../stores/observerStore'
+ import type { Position } from '../utils/movementUtils'
+ import type { TerrainHeightManager } from './terrainHeightManager'
+ import type { TerrainSplatManager } from './terrainSplatManager'
+@@ -216,7 +217,7 @@ class MonsterManager {
+     this.monsters.set(id, { ...existing })
+ 
+     const myPlayerId = get(gameStore).currentPlayer?.id
+-    if (ownerId === myPlayerId && existing.state !== 'dead') {
++    if (ownedByMe(ownerId, myPlayerId) && existing.state !== 'dead') {
+       // Recreate the brain from the monster's live state.
+       ai_remove_brain(id)
+       const def = getMonsterDef(type)
+@@ -280,7 +281,7 @@ class MonsterManager {
+     // Create WASM brain for owned monsters
+     const gameState = get(gameStore)
+     const myPlayerId = gameState.currentPlayer?.id
+-    if (ownerId === myPlayerId) {
++    if (ownedByMe(ownerId, myPlayerId)) {
+       this.ensureTemplatesLoaded()
+       const behavior = this.resolveBehavior(type, aggressive)
+       // Dungeon monsters path on their depth's passability floor so the
+@@ -311,7 +312,7 @@ class MonsterManager {
+   remove(id: string) {
+     const monster = this.monsters.get(id)
+     const gameState = get(gameStore)
+-    if (monster?.ownerId === gameState.currentPlayer?.id) {
++    if (ownedByMe(monster?.ownerId, gameState.currentPlayer?.id)) {
+       ai_remove_brain(id)
+     }
+     this.monsters.delete(id)
+@@ -421,7 +422,7 @@ class MonsterManager {
+     if (!monster || monster.state === 'dead') return
+ 
+     monster.targetPlayerId = playerId
+-    if (monster.ownerId === get(gameStore).currentPlayer?.id) {
++    if (ownedByMe(monster.ownerId, get(gameStore).currentPlayer?.id)) {
+       const commands = ai_handle_hit(monster.id, playerId, false, 0) ?? []
+       this.processAiCommands(monster, commands)
+     }
+@@ -500,7 +501,7 @@ class MonsterManager {
+     for (const monster of this.monsters.values()) {
+       // Keep non-owned monster Y aligned with its floor's ground (owned
+       // monsters get Y from TickResult)
+-      if (monster.ownerId !== myPlayerId) {
++      if (!ownedByMe(monster.ownerId, myPlayerId)) {
+         const terrainY = this.monsterGroundY(
+           monster,
+           monster.position.x,
+@@ -539,7 +540,7 @@ class MonsterManager {
+             if (!leadWithHit) {
+               monster.isDeadPending = false
+             }
+-          } else if (monster.ownerId === myPlayerId) {
++          } else if (ownedByMe(monster.ownerId, myPlayerId)) {
+             const hitCommands: AiCommand[] =
+               ai_handle_hit(
+                 monster.id,
+@@ -574,7 +575,7 @@ class MonsterManager {
+       }
+ 
+       // Only control monsters that YOU own
+-      if (monster.ownerId === myPlayerId) {
++      if (ownedByMe(monster.ownerId, myPlayerId)) {
+         // Guard: If dead or about to die, stop AI immediately
+         if (monster.state === 'dead' || monster.isDeadPending) {
+           this.monsters.set(monster.id, { ...monster })
+@@ -807,10 +808,7 @@ class MonsterManager {
+       // Fanout skips the owner, so this is a correction — the brain must hear it
+       // too or its next tick overwrites this pose. Unsnapped: the server's own
+       // position is the authority, and emits get snapped anyway.
+-      if (
+-        monster.ownerId !== undefined &&
+-        monster.ownerId === get(gameStore).currentPlayer?.id
+-      ) {
++      if (ownedByMe(monster.ownerId, get(gameStore).currentPlayer?.id)) {
+         ai_apply_authoritative_position(id, position.x, position.y, position.z)
+       }
+     }
+diff --git a/client/src/lib/network/messageHandlers.ts b/client/src/lib/network/messageHandlers.ts
+index 03f19433..ada0eaa5 100644
+--- a/client/src/lib/network/messageHandlers.ts
++++ b/client/src/lib/network/messageHandlers.ts
+@@ -12,6 +12,7 @@ import {
+ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
+ import { Vector3 } from 'three'
+ import { remotePlayerManager } from '../managers/remotePlayerManager'
++import { isObserver, setObservedPlayerId } from '../stores/observerStore'
+ import { playFishingSound } from '../managers/sfxManager'
+ import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
+ import { monsterManager } from '../managers/monsterManager'
+@@ -242,6 +243,16 @@ export function handleServerMessage(
+         ...state,
+         currentPlayer: player,
+       }))
++      // A spectator has no movement FSM of its own: the agent's walk arrives
++      // as PlayerMoved, so it is interpolated like a remote player.
++      if (isObserver) {
++        setObservedPlayerId(serverPlayer.id)
++        remotePlayerManager.initPlayer(
++          serverPlayer.id,
++          serverPlayer.position,
++          serverPlayer.rotation
++        )
++      }
+       // Players who logged out inside a dungeon reconnect there.
+       dungeonManager.syncFromFloorLevel(
+         serverPlayer.floor_level ?? 0,
+@@ -337,7 +348,7 @@ export function handleServerMessage(
+ 
+     case 'PlayerMoved': {
+       const state = get(gameStore)
+-      if (state.currentPlayer?.id === data.player_id) {
++      if (!isObserver && state.currentPlayer?.id === data.player_id) {
+         break
+       }
+       const deckY = bridgeManager.findDeckYAt(
+@@ -386,6 +397,13 @@ export function handleServerMessage(
+           data.position.z
+         )
+         requestCameraReset()
++        if (isObserver) {
++          remotePlayerManager.teleportPlayer(
++            data.player_id,
++            data.position,
++            data.rotation
++          )
++        }
+         break
+       }
+       const tpDeckY = bridgeManager.findDeckYAt(
+diff --git a/client/src/lib/network/socket.ts b/client/src/lib/network/socket.ts
+index eeb5f26b..d607022e 100644
+--- a/client/src/lib/network/socket.ts
++++ b/client/src/lib/network/socket.ts
+@@ -22,6 +22,7 @@ import initWasm, {
+   protocol_version,
+   close_code_protocol_mismatch,
+ } from '../wasm/onlinerpg_shared'
++import { isObserver, observerUrl } from '../stores/observerStore'
+ import { createEvent } from './networkEvents'
+ import { handleServerMessage } from './messageHandlers'
+ import type {
+@@ -257,6 +258,7 @@ class NetworkManager {
+       monsterManager.reset()
+       remotePlayerManager.reset()
+       this.connect()
++      if (isObserver) return
+       const googleIdToken = getApiAuthToken()
+       if (googleIdToken && this.lastCharacterId) {
+         const opened = await this.waitForSocketOpen(5000)
+@@ -291,6 +293,7 @@ class NetworkManager {
+   }
+ 
+   private sendMessage(msg: ClientMessage) {
++    if (isObserver) return
+     if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
+       this.ensureHandshake()
+       const bytes = serializeClientMessage(msg)
+@@ -303,6 +306,7 @@ class NetworkManager {
+   }
+ 
+   private sendAndSerialize(msg: ClientMessage): boolean {
++    if (isObserver) return false
+     if (!this.isConnected()) return false
+     this.ensureHandshake()
+     const bytes = serializeClientMessage(msg)
+@@ -634,7 +638,7 @@ class NetworkManager {
+   /// and the first send resolve as separate promise continuations, and losing
+   /// that race got the connection dropped.
+   private ensureHandshake() {
+-    if (this.handshakeSent) return
++    if (isObserver || this.handshakeSent) return
+     this.handshakeSent = true
+     const bytes = serializeClientMessage({
+       ClientInfo: {
+@@ -867,6 +871,23 @@ class NetworkManager {
+     )
+   }
+ 
++  /// Spectator entry. There is nothing to send — the mirror opens with a
++  /// snapshot of the agent's world, so the JoinSuccess in it is both the
++  /// handshake and the go-ahead to draw.
++  async observe(): Promise<{ ok: boolean; message?: string }> {
++    if (!observerUrl) return { ok: false, message: 'No observe target' }
++    await this.ensureWasm()
++    this.connect(observerUrl)
++    const opened = await this.waitForSocketOpen(5000)
++    if (!opened) return { ok: false, message: 'Agent is not reachable' }
++
++    // Reaching the socket is the whole check. The agent may not be in the
++    // world yet — the panel binds its port before sign-in even runs — and the
++    // mirror relays JoinSuccess whenever it happens, so waiting on a deadline
++    // here would turn a slow login into a permanent error.
++    return { ok: true }
++  }
++
+   // --- Connection management ---
+ 
+   disconnect() {
+diff --git a/client/vite.config.ts b/client/vite.config.ts
+index 6015a5f8..9e9f4049 100644
+--- a/client/vite.config.ts
++++ b/client/vite.config.ts
+@@ -44,6 +44,10 @@ export default defineConfig(({ mode }) => {
+ 
+   return {
+     plugins: [monsterCsvPlugin(), wasm(), svelte()],
++    // openllm-client symlinks its own sources into src/. Without this rollup
++    // resolves each one to its real path outside the project and their
++    // relative imports break.
++    resolve: { preserveSymlinks: true },
+     define: { __APP_VERSION__: JSON.stringify(appVersion) },
+     server: {
+       host: true,
