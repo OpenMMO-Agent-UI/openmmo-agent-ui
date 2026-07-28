@@ -11,7 +11,13 @@ const { AgentProxy } = require('./proxy')
 
 const agent = new AgentProcess()
 const clientServer = new ClientServer()
-const proxy = new AgentProxy()
+// Relay faults surface in the agent's own log pane: from the user's side the
+// relay is part of "the agent", and a silent upstream failure reads as the
+// game server hanging up for no reason.
+const proxy = new AgentProxy((message) => {
+  console.error('[relay]', message)
+  agent.append('app', `relay: ${message}`)
+})
 let feedTimer = null
 let feedSeq = null
 let settings = null
@@ -181,6 +187,8 @@ ipcMain.handle('app:info', () => ({
   status: agent.status(),
   log: agent.log,
   clientBuilt: distReady(),
+  signedIn: config.signedIn(),
+  credentialPath: config.credentialPath(),
 }))
 
 ipcMain.handle('settings:save', (_e, patch) => {
@@ -239,6 +247,15 @@ ipcMain.handle('prompt:system', () => {
   } catch (err) {
     return `(unreadable: ${err.message})`
   }
+})
+
+/// Signing out has to take the agent with it: it holds a live session on the
+/// credential we are about to delete.
+ipcMain.handle('auth:signout', async () => {
+  const wasRunning = agent.running
+  if (wasRunning) await agent.stopAndWait()
+  const removed = config.signOut()
+  return { removed, wasRunning, signedIn: config.signedIn() }
 })
 
 ipcMain.handle('binary:pick', async () => {

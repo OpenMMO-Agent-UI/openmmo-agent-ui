@@ -96,9 +96,25 @@ class WorldSnapshot {
   }
 }
 
+/// Mirrors `api_base_url` in agent-client's orchestrator.rs: an explicit port
+/// means game port + 1, otherwise the same origin with the path dropped.
+/// agent-client derives its REST base from the server URL it was given, so
+/// pointing it at the relay means the relay has to answer there too.
+function apiBaseUrl(wsUrl) {
+  const [scheme, rest] = wsUrl.includes('://') ? wsUrl.split('://') : ['ws', wsUrl]
+  const httpScheme = scheme === 'wss' ? 'https' : 'http'
+  const authority = rest.split('/')[0]
+  const match = authority.match(/^(.*):(\d+)$/)
+  return match
+    ? `${httpScheme}://${match[1]}:${Number(match[2]) + 1}`
+    : `${httpScheme}://${authority}`
+}
+
 class AgentProxy {
-  constructor() {
+  constructor(onError = () => {}) {
+    this.onError = onError
     this.server = null
+    this.apiServer = null
     this.wss = null
     this.port = 0
     this.upstreamUrl = ''
@@ -125,6 +141,27 @@ class AgentProxy {
     })
     this.wss = new WebSocketServer({ noServer: true })
 
+    // agent-client reads houses and terrain objects over REST, from a base it
+    // derives as our port + 1. Forward those to wherever the real server keeps
+    // them, or it walks a world with no buildings in it.
+    this.apiServer = http.createServer((req, res) => {
+      const target = `${apiBaseUrl(this.upstreamUrl)}${req.url}`
+      const headers = { accept: req.headers.accept || '*/*' }
+      if (req.headers.authorization) headers.authorization = req.headers.authorization
+      fetch(target, { method: req.method, headers, signal: AbortSignal.timeout(20000) })
+        .then(async (upstream) => {
+          const body = Buffer.from(await upstream.arrayBuffer())
+          const type = upstream.headers.get('content-type')
+          res.writeHead(upstream.status, type ? { 'content-type': type } : {})
+          res.end(body)
+        })
+        .catch((err) => {
+          this.onError(`api ${target}: ${err.message}`)
+          res.writeHead(502, { 'content-type': 'text/plain' })
+          res.end('relay upstream failed')
+        })
+    })
+
     this.server.on('upgrade', (req, socket, head) => {
       const path = (req.url || '').split('?')[0]
       if (path !== '/ws' && path !== '/mirror') {
@@ -137,11 +174,8 @@ class AgentProxy {
       })
     })
 
-    await new Promise((resolve, reject) => {
-      this.server.once('error', reject)
-      this.server.listen(0, '127.0.0.1', resolve)
-    })
-    this.port = this.server.address().port
+    // The pair has to be adjacent, so keep drawing until both are free.
+    this.port = await listenAdjacentPair(this.server, this.apiServer)
     return this.agentUrl
   }
 
@@ -173,15 +207,26 @@ class AgentProxy {
       this.onServerFrame(frame)
     })
 
-    const closeBoth = () => {
+    // Carry the close through instead of hanging up blind. The server's
+    // reason is often the only explanation there is — a protocol refusal or a
+    // session replacement reads as an unexplained drop without it.
+    const closeBoth = (code, reason) => {
       if (this.agentSocket === downstream) this.agentSocket = null
-      if (upstream.readyState <= WebSocket.OPEN) upstream.close()
-      if (downstream.readyState <= WebSocket.OPEN) downstream.close()
+      const [safeCode, safeReason] = relayableClose(code, reason)
+      for (const sock of [upstream, downstream]) {
+        if (sock.readyState <= WebSocket.OPEN) sock.close(safeCode, safeReason)
+      }
     }
     upstream.on('close', closeBoth)
-    upstream.on('error', closeBoth)
     downstream.on('close', closeBoth)
-    downstream.on('error', closeBoth)
+    upstream.on('error', (err) => {
+      this.onError(`upstream ${this.upstreamUrl}: ${err.message}`)
+      closeBoth()
+    })
+    downstream.on('error', (err) => {
+      this.onError(`agent socket: ${err.message}`)
+      closeBoth()
+    })
   }
 
   attachSpectator(ws) {
@@ -238,11 +283,48 @@ class AgentProxy {
     this.agentSocket = null
     if (this.wss) this.wss.close()
     if (this.server) this.server.close()
+    if (this.apiServer) this.apiServer.close()
     this.server = null
+    this.apiServer = null
     this.wss = null
     this.port = 0
     this.snapshot.reset()
   }
+}
+
+/// 1005/1006 are "no code was sent" placeholders the spec forbids sending, and
+/// anything outside the private range is refused too. Fall back to a normal
+/// close so the relay never dies trying to report a death.
+function relayableClose(code, reason) {
+  const text = reason ? reason.toString() : ''
+  const usable = typeof code === 'number' && (code === 1000 || (code >= 3000 && code <= 4999))
+  return usable ? [code, text] : [1000, text]
+}
+
+/// Bind `ws` to a free port whose neighbour is also free, and `api` to that
+/// neighbour. A busy pair is retried rather than fatal.
+async function listenAdjacentPair(ws, api, attempts = 20) {
+  for (let i = 0; i < attempts; i++) {
+    const port = await listen(ws, 0)
+    try {
+      await listen(api, port + 1)
+      return port
+    } catch (err) {
+      if (err.code !== 'EADDRINUSE') throw err
+      await new Promise((r) => ws.close(r))
+    }
+  }
+  throw new Error('could not find two adjacent free ports for the relay')
+}
+
+function listen(server, port) {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => { server.off('listening', onOk); reject(err) }
+    const onOk = () => { server.off('error', onError); resolve(server.address().port) }
+    server.once('error', onError)
+    server.once('listening', onOk)
+    server.listen(port, '127.0.0.1')
+  })
 }
 
 function toBuffer(data) {
@@ -261,4 +343,4 @@ function safeVariant(frame) {
   }
 }
 
-module.exports = { AgentProxy, WorldSnapshot, OWNER_ONLY }
+module.exports = { AgentProxy, WorldSnapshot, OWNER_ONLY, apiBaseUrl }

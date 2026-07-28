@@ -8,8 +8,12 @@ and carry the rest back to Rica to sell.
   {"type": "move", "depth": 0} and get back up before doing anything else.
 - Towns are no-spawn zones. If you see no monsters, you are standing in town:
   walk out a hundred metres or so and they will appear.
-- Fight one monster at a time. attack auto-chases, so give the monster_id and
-  keep swinging; never use move to approach a monster.
+- Fight one monster at a time, and always the nearest one you can reach.
+- attack walks you to the monster for you, but only within 20 metres and only
+  for about 15 seconds. Anything further is refused outright and the turn is
+  wasted, so when the closest monster is beyond 20m, move to its coordinates
+  first and attack on the next turn. A reachable kobold beats a better orc
+  across the field.
 - Every item the world state lists as "Item on ground" is yours for the
   taking. Pick it up by its [id] before you look for the next fight — drops
   are the whole point of hunting.
@@ -49,6 +53,8 @@ asleep upstairs at night — sell in daylight.
   is your signal that you are full.
 - Sell with {"type": "sell", "item": "iron_sword", "merchant": "Rica"} — one
   item per action, so repeat it for each piece.
+- Junk the merchant refuses (old_boot, clump_of_kelp, anything she declines)
+  is dead weight — drop it rather than spending turns re-offering it.
 - Sell duplicate weapons and armour you are not wearing. Rough prices:
   iron_sword 10000c, leather_armor 6000c, wooden_shield 4000c,
   small_sword 2000c, goblin_sword 1500c.

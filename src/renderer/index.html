@@ -116,6 +116,10 @@
               <option value="npc_token">NPC token (operator)</option>
             </select></label>
           <label data-for="google">Google client secret<input type="password" id="googleClientSecret" placeholder="GOCSPX-…" /></label>
+          <div data-for="google">
+            <p class="hint" id="authState"></p>
+            <button id="signOut" class="ghost">Sign out of Google</button>
+          </div>
           <label data-for="npc_token">NPC account<input id="npcAccount" placeholder="npc_example" /></label>
           <div class="row">
             <label>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>

@@ -174,6 +174,17 @@ function applyView() {
   $('placeholder').hidden = true
 }
 
+/// `note` overrides the resting description right after a sign-out, so the
+/// click has visible consequences instead of a silently changed file.
+function setAuthState(isSignedIn, note) {
+  $('authState').textContent =
+    note ??
+    (isSignedIn
+      ? 'Signed in — Start connects without asking again.'
+      : 'Not signed in — Start shows a code to enter in your browser.')
+  $('signOut').disabled = !isSignedIn
+}
+
 function setVitals(v) {
   if (!v || !v.self) {
     $('vitals').textContent = ''
@@ -341,6 +352,17 @@ function bindActions() {
     pre.hidden = false
   })
 
+  $('signOut').addEventListener('click', async () => {
+    const res = await api.signOut()
+    if (!res.removed) {
+      setAuthState(false, 'Nothing to sign out of — no credential is stored.')
+      return
+    }
+    setAuthState(false, res.wasRunning
+      ? 'Signed out and stopped the agent. Press Start to sign in again.'
+      : 'Signed out. Press Start to sign in again.')
+  })
+
   $('pickBinary').addEventListener('click', async () => {
     const picked = await api.pickBinary()
     if (picked) {
@@ -366,6 +388,7 @@ async function init() {
   renderClassOptions()
   renderBackend()
 
+  setAuthState(info.signedIn)
   $('binaryInfo').textContent = info.binary
     ? `Binary: ${info.binary}`
     : `No agent-client binary found. Build it with "cargo build --release -p agent-client", or choose one below.`

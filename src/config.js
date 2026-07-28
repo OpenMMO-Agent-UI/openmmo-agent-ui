@@ -27,7 +27,11 @@ const BACKENDS = [
     kind: 'http',
     envKey: 'OPENROUTER_API_KEY',
     // Suggestions only; the field takes any id from openrouter.ai/models.
-    models: ['openai/gpt-oss-20b:free', 'openrouter/hunter-alpha'],
+    models: [
+      'anthropic/claude-haiku-4.5',
+      'anthropic/claude-sonnet-5',
+      'openai/gpt-oss-20b:free',
+    ],
   },
   {
     id: 'openai',
@@ -49,13 +53,13 @@ const DEFAULTS = {
   characterClass: 'rogue',
   gender: 'male',
   llm: 'codex',
-  models: { codex: 'gpt-5.4-mini', claude: 'sonnet', openrouter: 'openrouter/hunter-alpha', openai: '' },
+  models: { codex: 'gpt-5.4-mini', claude: 'sonnet', openrouter: 'anthropic/claude-haiku-4.5', openai: '' },
   openaiBaseUrl: 'https://ollama.com/v1',
   reasoningEffort: 'none',
   maxTokens: 1024,
   temperature: 0.7,
   minIntervalSecs: 5,
-  idleIntervalSecs: 3600,
+  idleIntervalSecs: 15,
   alwaysActive: true,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
@@ -65,6 +69,15 @@ const DEFAULTS = {
 }
 
 const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret']
+
+function isLoopbackUrl(value) {
+  try {
+    const host = new URL(String(value)).hostname
+    return ['127.0.0.1', 'localhost', '[::1]', '::1'].includes(host)
+  } catch {
+    return false
+  }
+}
 
 function settingsPath() {
   return path.join(app.getPath('userData'), 'settings.json')
@@ -80,6 +93,30 @@ function agentDir() {
   const packaged = path.join(process.resourcesPath || '', 'agent-client')
   if (app.isPackaged && fs.existsSync(path.join(packaged, 'data'))) return packaged
   return path.join(repoRoot(), 'agent-client')
+}
+
+/// Where agent-client caches the Google refresh token — mirrors
+/// `resolve_cache_path` in its google_auth.rs. Deleting this file is what
+/// "sign out" means: the next start has nothing to reuse and runs the device
+/// flow again.
+function credentialPath() {
+  if (process.platform === 'win32' && process.env.APPDATA) {
+    return path.join(process.env.APPDATA, 'onlinerpg', 'google.json')
+  }
+  return path.join(app.getPath('home'), '.config', 'onlinerpg', 'google.json')
+}
+
+function signedIn() {
+  return fs.existsSync(credentialPath())
+}
+
+/// Returns false when there was nothing to remove, so the UI can say so
+/// rather than claim a sign-out that never happened.
+function signOut() {
+  const file = credentialPath()
+  if (!fs.existsSync(file)) return false
+  fs.unlinkSync(file)
+  return true
 }
 
 function encryptSecrets(secrets) {
@@ -144,7 +181,11 @@ function importExistingConfig(settings) {
     if (value !== undefined && value !== null && value !== '') merged[key] = value
   }
 
-  take('server', parsed.server)
+  // `server` in a generated config points at our own relay, not at a game
+  // server. Importing that would make the relay dial a dead loopback port —
+  // and it only takes one rename (userData is keyed on the app name) for a
+  // fresh settings file to re-import a stale one.
+  if (!isLoopbackUrl(parsed.server)) take('server', parsed.server)
   take('terrain', parsed.terrain || parsed.terrain_dir)
   take('watchPort', parsed.watch_port)
   take('maxConcurrent', parsed.max_concurrent)
@@ -229,7 +270,7 @@ function renderConfigToml(s) {
     `character_class = ${tomlString(s.characterClass)}`,
     `gender = ${tomlString(s.gender)}`,
     `min_interval_secs = ${Number(s.minIntervalSecs) || 5}`,
-    `idle_interval_secs = ${Number(s.idleIntervalSecs) || 3600}`,
+    `idle_interval_secs = ${Number(s.idleIntervalSecs) || 15}`,
     `always_active = ${s.alwaysActive ? 'true' : 'false'}`,
     // Without this the `memory_update` the model writes every turn is thrown
     // away, and the agent relearns the same town from scratch on each restart.
@@ -261,6 +302,12 @@ function validate(s) {
     errors.push(`Pick a model for ${backend.label}`)
   }
   if (s.llm === 'openai' && !s.openaiBaseUrl) errors.push('OpenAI-compatible mode needs a base URL')
+  if (isLoopbackUrl(s.server)) {
+    errors.push(
+      `Server points at this machine (${s.server}). That is the relay's own address, ` +
+        `not a game server — set it back to ${DEFAULTS.server} under Connection.`,
+    )
+  }
   return errors
 }
 
@@ -276,6 +323,9 @@ function writeConfig(settings) {
 
 module.exports = {
   BACKENDS,
+  credentialPath,
+  signOut,
+  signedIn,
   CLASSES,
   DEFAULTS,
   agentDir,

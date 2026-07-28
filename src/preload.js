@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   loadPreset: (name) => ipcRenderer.invoke('prompt:preset', name),
   systemPrompt: () => ipcRenderer.invoke('prompt:system'),
   pickBinary: () => ipcRenderer.invoke('binary:pick'),
+  signOut: () => ipcRenderer.invoke('auth:signout'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),
   onState: on('agent:state'),
