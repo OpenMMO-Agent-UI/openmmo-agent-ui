@@ -1,0 +1,13 @@
+=== CURRENT STATE ===
+You: Daky Lv.7 Knight HP 52/52 at (-1800.0, 1.0, 4700.0)
+Your gold: 19510c
+Your bag: healing_potion, small_sword, small_sword, old_boot
+You are wearing: chest: leather_armor, main_hand: worn_iron_sword, off_hand: worn_torch
+Monster: orc [m9_1] HP 18/18 state=idle at (-1845.0, 1.0, 4700.0)
+Monster: kobold [m9_2] HP 5/5 state=idle at (-1812.0, 1.0, 4700.0)
+Monster: goblin [m9_3] HP 9/9 state=idle at (-1788.0, 1.0, 4700.0)
+
+=== EVENTS ===
+[Time] Y220 M7 D29 10:15 (day)
+
+What do you do?

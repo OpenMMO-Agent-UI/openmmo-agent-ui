@@ -27,10 +27,12 @@ const BACKENDS = [
     kind: 'http',
     envKey: 'OPENROUTER_API_KEY',
     // Suggestions only; the field takes any id from openrouter.ai/models.
+    // Measured on the agent's real turn: these keep the distance rule and read
+    // the bag correctly. Cheaper models exist and invent inventory.
     models: [
+      'qwen/qwen3.7-flash',
+      'openai/gpt-oss-20b',
       'anthropic/claude-haiku-4.5',
-      'anthropic/claude-sonnet-5',
-      'openai/gpt-oss-20b:free',
     ],
   },
   {
@@ -53,13 +55,13 @@ const DEFAULTS = {
   characterClass: 'rogue',
   gender: 'male',
   llm: 'codex',
-  models: { codex: 'gpt-5.4-mini', claude: 'sonnet', openrouter: 'anthropic/claude-haiku-4.5', openai: '' },
+  models: { codex: 'gpt-5.4-mini', claude: 'sonnet', openrouter: 'qwen/qwen3.7-flash', openai: '' },
   openaiBaseUrl: 'https://ollama.com/v1',
   reasoningEffort: 'none',
   maxTokens: 1024,
   temperature: 0.7,
   minIntervalSecs: 5,
-  idleIntervalSecs: 15,
+  idleIntervalSecs: 8,
   alwaysActive: true,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,

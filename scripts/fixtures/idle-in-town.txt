@@ -1,0 +1,24 @@
+=== CURRENT STATE ===
+You: Daky Lv.8 Knight HP 58/58 at (-1486.9, 0.6, 4748.7)
+Dungeon: Old Crypt entrance at (-1450, 4720), 47m away, 5 floors deep
+Your gold: 2g 33s 10c
+Your bag: healing_potion, fishing_rod
+You are wearing: chest: leather_armor, main_hand: worn_iron_sword, off_hand: worn_torch
+Player: Negan Lv.13 HP 122/122 at (-1504.3, 0.0, 4736.5)
+Player: Rica Lv.1 HP 7/7 at (-1487.8, 0.6, 4749.2)
+Rica sells: torch 50c, dagger 25s, spear 35s, fishing_rod 3s, wooden_shield 40s, leather_cap 15s, leather_belt 8s, leather_pants 25s, iron_boots 60s, iron_sword 1g, healing_potion 5s, scroll_of_return 8s — and pays 40% of base for what you sell them.
+Player: jake1 Lv.5 HP 28/28 at (-1500.0, 0.6, 4758.8)
+
+=== EVENTS ===
+[PlayerDisappeared] 309
+[Buyback] Rica will sell back: small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s — {"type": "buyback", "item": ..., "merchant": "Rica"}.
+[Buyback] Rica will sell back: small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s — {"type": "buyback", "item": ..., "merchant": "Rica"}.
+[Buyback] Rica will sell back: small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s — {"type": "buyback", "item": ..., "merchant": "Rica"}.
+[Buyback] Rica will sell back: small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s — {"type": "buyback", "item": ..., "merchant": "Rica"}.
+[Buyback] Rica will sell back: small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s, small_sword @8s — {"type": "buyback", "item": ..., "merchant": "Rica"}.
+[Time] Y220 M7 D30 17:53 (day)
+[Move] Daky -> (-1486.9, 0.6, 4748.7)
+[PlayerNearby] Rica Lv.1 appeared 9.6m away at (-1487.8, 0.6, 4749.2)
+[Arrived] You walked up to Rica and now stand right next to them. No further movement is needed to interact.
+
+What do you do?

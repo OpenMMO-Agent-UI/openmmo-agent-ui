@@ -123,6 +123,43 @@ config pasted into a bug report carries no credential.
 existing file is imported once (so a hand-written `client_secret` survives) and
 backed up next to it.
 
+## Choosing a model
+
+Price alone picks badly here, and so does latency alone. The turn is a
+structured world state in and a small JSON action list out — a job small models
+can do, *if* they hold two things the prompt spells out: what is actually in
+the bag, and that `attack` gives up past 20 metres. The cheap end of the
+catalogue answers in perfectly valid JSON and still invents inventory to sell,
+or charges a monster forty metres off. Both burn a turn exactly like a timeout
+does.
+
+`scripts/bench-models.js` scores candidates on those decisions rather than on
+schema alone, using the prompt that actually ships and pricing from the live
+catalogue:
+
+```bash
+OPENROUTER_API_KEY=sk-or-... node openmmo-client/scripts/bench-models.js
+```
+
+A run at the time of writing, three attempts per scenario, cost projected over
+an eight-hour night at one turn per 8 seconds:
+
+| model | p50 | inventory | distance | $/8h |
+|---|---|---|---|---|
+| `qwen/qwen3.7-flash` | 0.7s | 3/3 | 3/3 | $0.60 |
+| `openai/gpt-oss-20b` | 0.5s | 3/3 | 3/3 | $0.86 |
+| `anthropic/claude-haiku-4.5` | 1.5s | 3/3 | 3/3 | $14.34 |
+| `mistralai/mistral-nemo` | 0.3s | 0/3 | 0/3 | $0.23 |
+| `inclusionai/ling-2.6-flash` | 0.7s | 0/3 | 1/3 | $0.14 |
+
+The default is `qwen/qwen3.7-flash`: it keeps both rules, answers in well under
+a second, and costs a fiftieth of what a frontier model does — which is what
+buys the 8-second cadence the game wants, since monsters move while you think.
+
+One trap worth naming: `openai/gpt-oss-20b:free` answered in **51 seconds** and
+timed out repeatedly, while the same model on paid routing answers in 0.5s. A
+`:free` suffix measures the queue, not the model.
+
 ## In-browser agent mode
 
 The same idea also runs inside the web client itself, with no agent-client and

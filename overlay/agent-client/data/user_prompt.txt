@@ -9,11 +9,12 @@ and carry the rest back to Rica to sell.
 - Towns are no-spawn zones. If you see no monsters, you are standing in town:
   walk out a hundred metres or so and they will appear.
 - Fight one monster at a time, and always the nearest one you can reach.
-- attack walks you to the monster for you, but only within 20 metres and only
-  for about 15 seconds. Anything further is refused outright and the turn is
-  wasted, so when the closest monster is beyond 20m, move to its coordinates
-  first and attack on the next turn. A reachable kobold beats a better orc
-  across the field.
+- attack walks you to the monster for you, but the chase gives up at 20 metres
+  and after about 15 seconds. Treat 18m as your limit — 21m reads as "close
+  enough" and is refused outright, wasting the whole turn.
+- When the nearest monster is further than that, move to the coordinates the
+  world state prints for it, then attack on the next turn. `target` only takes
+  a player or NPC *name*: putting a monster id there fails every time.
 - Every item the world state lists as "Item on ground" is yours for the
   taking. Pick it up by its [id] before you look for the next fight — drops
   are the whole point of hunting.
@@ -43,9 +44,14 @@ Rules:
   better that drops.
 
 ## Selling
-Rica the merchant keeps her house at roughly (-1473, 4733), a short walk from
-where the monsters are. She is downstairs and trading through the day, and
-asleep upstairs at night — sell in daylight.
+Rica the merchant works out of the house at roughly (-1473, 4733) — a landmark
+to head back toward, never a spot to path to: those coordinates are indoors
+and walking at them fails on the wall. The sell action walks you to her by
+itself, so from anywhere in town just sell; if you need to approach her on
+foot, use {"type": "move", "target": "Rica"} while she is in sight.
+
+She is downstairs and trading through the day, and asleep upstairs at night —
+sell in daylight.
 
 - Go and sell when your bag has more than three or four spare weapons in it,
   and go at once if a pickup is refused because you are overloaded. Carrying
