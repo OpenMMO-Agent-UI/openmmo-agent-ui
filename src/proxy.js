@@ -61,6 +61,28 @@ const ENTITY_STATE_SLOT = new Map([
 /// Truly one-of-a-kind state: one gold total, one bag, one clock.
 const SINGLETON = new Set(['GoldUpdate', 'InventoryState', 'GameTimeSync'])
 
+/// The two frames that carry a whole `PlayerInventory` — the join-time state
+/// and every mutation after it. agent-client tracks both (its `self_equipped`)
+/// but its panel API only publishes the bag, so what the character is *wearing*
+/// is visible here and nowhere else. Same reason we watch outbound moves: the
+/// relay sees everything the agent is told.
+const INVENTORY = new Set(['InventoryState', 'InventoryUpdated'])
+
+/// `PlayerInventory` is `[bag, equipped]`, and `equipped` is a map keyed by
+/// `EquipSlot`'s serde names ("head", "main_hand", …) whose values are
+/// `ItemInstance` = `[instance_id, item_def_id, quantity, enchant]`.
+function wornFromInventory(body) {
+  const inventory = body && body[0]
+  const equipped = Array.isArray(inventory) ? inventory[1] : null
+  if (!equipped || typeof equipped !== 'object' || Array.isArray(equipped)) return null
+  const worn = {}
+  for (const [slot, item] of Object.entries(equipped)) {
+    if (!Array.isArray(item)) continue
+    worn[slot] = { itemDefId: item[1], quantity: item[2] ?? 1, enchant: item[3] ?? 0 }
+  }
+  return worn
+}
+
 /// `PlayerRespawned` carries a whole `Player` (so the id is nested at [0][0]);
 /// every other per-entity state message carries the id directly at [0].
 function entityStateId(name, body) {
@@ -323,8 +345,12 @@ function apiBaseUrl(wsUrl) {
 }
 
 class AgentProxy {
-  constructor(onError = () => {}) {
+  constructor(onError = () => {}, onWorn = () => {}) {
     this.onError = onError
+    /// Called with `{ slot: { itemDefId, quantity, enchant } }` whenever the
+    /// server restates the agent's inventory. Decoded here rather than in the
+    /// renderer because this is the only process that sees the frame.
+    this.onWorn = onWorn
     this.server = null
     this.apiServer = null
     this.wss = null
@@ -397,6 +423,9 @@ class AgentProxy {
     if (this.agentSocket) this.agentSocket.close()
     this.agentSocket = downstream
     this.snapshot.reset()
+    // A fresh session wears nothing until the server says otherwise; leaving
+    // the last session's gear on screen would outlive the character.
+    this.onWorn({})
 
     const upstream = new WebSocket(this.upstreamUrl)
     const pending = []
@@ -476,6 +505,10 @@ class AgentProxy {
     const [name, body] = safeVariant(frame)
     if (!name) return
     this.snapshot.observe(name, body, frame)
+    if (INVENTORY.has(name)) {
+      const worn = wornFromInventory(body)
+      if (worn) this.onWorn(worn)
+    }
     if (!OWNER_ONLY.has(name)) this.broadcast(frame)
   }
 
@@ -601,4 +634,4 @@ function safeVariant(frame) {
   }
 }
 
-module.exports = { AgentProxy, WorldSnapshot, OWNER_ONLY, apiBaseUrl }
+module.exports = { AgentProxy, WorldSnapshot, OWNER_ONLY, apiBaseUrl, wornFromInventory }

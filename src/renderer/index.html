@@ -130,7 +130,15 @@
       </header>
 
       <div class="gameshell">
+        <!-- Order is deliberate: what the character *is* (worn, carried)
+             before what the agent *thinks* (turns, log, personality). -->
         <nav class="rail">
+          <button data-drawer="worn" title="Equipment" aria-label="Equipment">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.4" /><path d="M4.5 20v-1.5a5 5 0 0 1 5-5h5a5 5 0 0 1 5 5V20" /></svg>
+          </button>
+          <button data-drawer="bag" title="Bag" aria-label="Bag">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V6a5 5 0 0 1 10 0v2" /><path d="M5 8h14l1 12H4z" /><path d="M9 11v2M15 11v2" /></svg>
+          </button>
           <button data-drawer="thoughts" title="Thoughts" aria-label="Thoughts">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z" /></svg>
           </button>
@@ -139,9 +147,6 @@
           </button>
           <button data-drawer="prompt" title="Personality" aria-label="Personality">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h9l5 5v11H5z" /><path d="M14 4v5h5" /><path d="M8 13h8M8 17h5" /></svg>
-          </button>
-          <button data-drawer="bag" title="Bag" aria-label="Bag">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V6a5 5 0 0 1 10 0v2" /><path d="M5 8h14l1 12H4z" /><path d="M9 11v2M15 11v2" /></svg>
           </button>
           <span class="rail-spacer"></span>
           <button id="openSettingsFromGame" title="Settings" aria-label="Settings">
@@ -203,6 +208,10 @@
               <textarea id="instanceText" spellcheck="false"></textarea>
               <button id="saveInstance" class="ghost">Save</button>
               <p class="hint" id="instanceFile"></p>
+            </div>
+            <div data-drawer-panel="worn" hidden>
+              <div id="wornList" class="worn-list"></div>
+              <p class="hint" id="wornEmpty">Nothing worn yet.</p>
             </div>
             <div data-drawer-panel="bag" hidden>
               <div id="bagList" class="bag-list"></div>

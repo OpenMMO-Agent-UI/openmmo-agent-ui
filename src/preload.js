@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   onWatchReady: on('watch:ready'),
   onFeed: on('agent:feed'),
   onVitals: on('agent:vitals'),
+  onWorn: on('agent:worn'),
   onViewReady: on('view:ready'),
   onViewError: on('view:error'),
   onViewMemory: on('view:memory'),

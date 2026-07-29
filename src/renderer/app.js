@@ -375,10 +375,28 @@ function setAuthState(isSignedIn, note) {
   $('signOut').disabled = !isSignedIn
 }
 
+/// Every slot the game has (shared/src/inventory.rs EquipSlot), head down and
+/// then hands, so the list reads like a character sheet and an empty slot is
+/// as visible as a filled one — "no chest armour" is worth seeing.
+const WORN_SLOTS = [
+  ['head', 'Head'],
+  ['neck', 'Neck'],
+  ['ear', 'Ear'],
+  ['chest', 'Chest'],
+  ['belt', 'Belt'],
+  ['pants', 'Pants'],
+  ['boots', 'Boots'],
+  ['main_hand', 'Main hand'],
+  ['off_hand', 'Off hand'],
+  ['ring', 'Ring'],
+  ['ring_left', 'Ring (left)'],
+]
+
 function setVitals(v) {
   if (!v || !v.self) {
     $('vitals').textContent = ''
     renderBag([])
+    renderWorn({})
     return
   }
   const s = v.self
@@ -397,6 +415,33 @@ function setVitals(v) {
 function itemLabel(id, enchant) {
   const words = id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   return enchant ? `+${enchant} ${words}` : words
+}
+
+/// What the character has on, slot by slot, from the relay's view of the
+/// server's inventory frames (src/proxy.js) — the agent's own panel API
+/// reports the bag but never the gear.
+function renderWorn(worn) {
+  const box = $('wornList')
+  box.innerHTML = ''
+  const equipped = worn && typeof worn === 'object' ? worn : {}
+  let count = 0
+  for (const [slot, label] of WORN_SLOTS) {
+    const item = equipped[slot]
+    if (item) count++
+    const row = document.createElement('div')
+    row.className = item ? 'worn-row' : 'worn-row worn-bare'
+    const name = document.createElement('span')
+    name.className = 'worn-slot'
+    name.textContent = label
+    const value = document.createElement('span')
+    value.className = 'worn-item'
+    value.textContent = item ? itemLabel(item.itemDefId, item.enchant) : '—'
+    row.append(name, value)
+    box.appendChild(row)
+  }
+  // The slot list itself is always drawn, so the hint speaks to the gear:
+  // an all-empty sheet is the one case worth saying out loud.
+  $('wornEmpty').hidden = count > 0
 }
 
 /// agent-client keeps each pickup as its own bag instance rather than
@@ -532,7 +577,7 @@ function confirmAction(message, okLabel = 'Delete') {
 
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { thoughts: 'Thoughts', log: 'Log', prompt: 'Personality', bag: 'Bag' }
+  const titles = { worn: 'Equipment', bag: 'Bag', thoughts: 'Thoughts', log: 'Log', prompt: 'Personality' }
   for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.drawer
@@ -828,9 +873,11 @@ async function init() {
   bindCharacterTabs()
 
   renderFeedFilters()
+  renderWorn({})
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
+  api.onWorn(renderWorn)
   api.onViewReady((urls) => {
     viewUrls = { ...viewUrls, ...urls }
     applyView()

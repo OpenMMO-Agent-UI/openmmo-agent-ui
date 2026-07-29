@@ -728,7 +728,8 @@ iframe {
 
 .drawer-body pre,
 .drawer-body #feed,
-.drawer-body .bag-list {
+.drawer-body .bag-list,
+.drawer-body .worn-list {
   flex: 1;
   min-height: 0;
 }
@@ -843,6 +844,38 @@ iframe {
   flex: none;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------- worn equipment ---------- */
+
+.worn-list {
+  overflow-y: auto;
+}
+
+.worn-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.worn-slot {
+  flex: none;
+  color: var(--muted);
+}
+
+.worn-item {
+  color: var(--text);
+  text-align: right;
+}
+
+/* An empty slot stays listed — it says what the character could be wearing —
+   but recedes so the gear reads first. */
+.worn-bare .worn-item {
+  color: var(--muted);
+  opacity: 0.6;
 }
 
 /* ---------- settings modal ---------- */

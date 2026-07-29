@@ -16,10 +16,16 @@ const clientServer = new ClientServer()
 // Relay faults surface in the agent's own log pane: from the user's side the
 // relay is part of "the agent", and a silent upstream failure reads as the
 // game server hanging up for no reason.
-const proxy = new AgentProxy((message) => {
-  console.error('[relay]', message)
-  agent.append('app', `relay: ${message}`)
-})
+const proxy = new AgentProxy(
+  (message) => {
+    console.error('[relay]', message)
+    agent.append('app', `relay: ${message}`)
+  },
+  // What the character is wearing, which the agent's own panel API does not
+  // publish — pushed as it changes rather than polled, since the relay learns
+  // it the moment the server says so.
+  (worn) => send('agent:worn', worn)
+)
 let feedTimer = null
 let feedSeq = null
 let settings = null

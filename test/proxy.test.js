@@ -308,3 +308,75 @@ test('an agent move for a monster the spectator was never introduced to is not r
   const names = namesOf(proxy.snapshot.frames())
   assert.ok(!names.includes('MonsterMoved'), `got ${names.join(', ')}`)
 })
+
+/// `PlayerInventory` on the wire: [bag, equipped], each `ItemInstance` being
+/// [instance_id, item_def_id, quantity, enchant] and `equipped` keyed by
+/// EquipSlot's serde names.
+const inventoryFrame = (name, bag, equipped) => encode({ [name]: [[bag, equipped]] })
+
+test('what the character is wearing is read off the inventory frames', () => {
+  const worn = []
+  const proxy = new AgentProxy(() => {}, (w) => worn.push(w))
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(
+    inventoryFrame('InventoryState', [[7, 'bread', 2, 0]], {
+      main_hand: [1, 'iron_sword', 1, 2],
+      chest: [2, 'breastplate', 1, 0],
+    }),
+  )
+
+  assert.deepStrictEqual(worn.at(-1), {
+    main_hand: { itemDefId: 'iron_sword', quantity: 1, enchant: 2 },
+    chest: { itemDefId: 'breastplate', quantity: 1, enchant: 0 },
+  })
+})
+
+test('every later inventory mutation restates the gear, not just the join-time frame', () => {
+  const worn = []
+  const proxy = new AgentProxy(() => {}, (w) => worn.push(w))
+  proxy.onServerFrame(inventoryFrame('InventoryState', [], { main_hand: [1, 'iron_sword', 1, 0] }))
+  // Equipping happens through InventoryUpdated; a panel that only watched
+  // InventoryState would show the join-time gear for the rest of the session.
+  proxy.onServerFrame(
+    inventoryFrame('InventoryUpdated', [], {
+      main_hand: [1, 'iron_sword', 1, 0],
+      head: [3, 'leather_cap', 1, 0],
+    }),
+  )
+
+  assert.deepStrictEqual(Object.keys(worn.at(-1)).sort(), ['head', 'main_hand'])
+})
+
+/// Enough of a socket for attachAgent to wire up and then tear down; the
+/// upstream it dials is a closed port, which fails into the same close path.
+function fakeAgentSocket() {
+  return {
+    readyState: 1,
+    handlers: {},
+    on(event, fn) { this.handlers[event] = fn },
+    off() {},
+    send() {},
+    close() { this.readyState = 3 },
+  }
+}
+
+test('a new agent session clears the gear the previous one was wearing', () => {
+  const worn = []
+  const proxy = new AgentProxy(() => {}, (w) => worn.push(w))
+  proxy.onServerFrame(inventoryFrame('InventoryState', [], { head: [3, 'leather_cap', 1, 0] }))
+  assert.deepStrictEqual(Object.keys(worn.at(-1)), ['head'])
+
+  proxy.upstreamUrl = 'ws://127.0.0.1:1/ws'
+  proxy.attachAgent(fakeAgentSocket())
+
+  assert.deepStrictEqual(worn.at(-1), {}, 'attaching a fresh agent should empty the panel')
+  proxy.stop()
+})
+
+test('an inventory frame in a shape we cannot read is ignored, not reported as naked', () => {
+  const worn = []
+  const proxy = new AgentProxy(() => {}, (w) => worn.push(w))
+  proxy.onServerFrame(encode({ InventoryState: ['not-an-inventory'] }))
+
+  assert.strictEqual(worn.length, 0)
+})
