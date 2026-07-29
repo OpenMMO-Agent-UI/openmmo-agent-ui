@@ -488,14 +488,50 @@ class AgentProxy {
   /// takes its first step.
   onAgentFrame(frame) {
     const [name, body] = safeVariant(frame)
-    if (name !== 'PlayerMove' || !Array.isArray(body)) return
-    const [position, rotation, floorLevel] = body
-    if (!Array.isArray(position) || this.snapshot.selfPlayerId === null) return
-    this.snapshot.selfPosition = position
-    this.snapshot.selfRotation = typeof rotation === 'number' ? rotation : 0
-    this.snapshot.selfFloor = typeof floorLevel === 'number' ? floorLevel : this.snapshot.selfFloor
-    if (this.spectators.size === 0) return
-    this.broadcast(this.snapshot.selfPlayerMovedFrame())
+    if (!Array.isArray(body)) return
+    if (name === 'PlayerMove') {
+      const [position, rotation, floorLevel] = body
+      if (!Array.isArray(position) || this.snapshot.selfPlayerId === null) return
+      this.snapshot.selfPosition = position
+      this.snapshot.selfRotation = typeof rotation === 'number' ? rotation : 0
+      this.snapshot.selfFloor = typeof floorLevel === 'number' ? floorLevel : this.snapshot.selfFloor
+      if (this.spectators.size === 0) return
+      this.broadcast(this.snapshot.selfPlayerMovedFrame())
+      return
+    }
+    if (name === 'MonsterMove') this.onAgentMonsterMove(body)
+  }
+
+  /// The agent also runs the AI for every monster the server assigned it
+  /// (its own monster_ai.rs), and those moves are echoed back to the owner
+  /// no more than the agent's own are — so without this, every monster the
+  /// agent drives stands perfectly still in the spectator view while the
+  /// ones it does not drive walk around. Same translation as PlayerMove ->
+  /// PlayerMoved: the outbound client message plus the owner the server
+  /// would have stamped on it on the way out to everyone else.
+  ///
+  /// Claiming ownership here is safe because a spectator's `ownedByMe()` is
+  /// hardcoded false (overlay/.../observerStore.ts) — it will draw the
+  /// monster without adopting its brain, which is the whole reason
+  /// `MonsterAssigned` is in OWNER_ONLY.
+  onAgentMonsterMove(body) {
+    const [monsterId, position, rotation, state, targetPosition] = body
+    if (typeof monsterId !== 'string' || !Array.isArray(position)) return
+    const float = (n) => new Float(typeof n === 'number' ? n : 0)
+    const moved = encode({
+      MonsterMoved: [
+        monsterId,
+        position.map(float),
+        float(rotation),
+        state,
+        (Array.isArray(targetPosition) ? targetPosition : position).map(float),
+        this.snapshot.selfPlayerId,
+      ],
+    })
+    // Keep it for late joiners too, on the same terms as a server-sent move:
+    // only for a monster the spectator has actually been introduced to.
+    if (this.snapshot.knownMonsters.has(monsterId)) this.snapshot.monsterMoves.set(monsterId, moved)
+    if (this.spectators.size > 0) this.broadcast(moved)
   }
 
   stop() {

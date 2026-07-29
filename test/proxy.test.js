@@ -272,3 +272,39 @@ test('each outbound move is broadcast live to attached spectators', () => {
   assert.strictEqual(moves[2][1][0], 42, 'broadcast must carry the agent player id')
   assertNear(moves[2][1][1], [30, 0, 30])
 })
+
+test('monsters the agent drives are broadcast live and tracked for reconnects', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(monsterSpawnedFrame('m1', [10, 0, 10]))
+
+  const spy = fakeSpectator()
+  proxy.spectators.add(spy)
+  // The agent runs the AI for monsters assigned to it and sends MonsterMove;
+  // the server never echoes that back to the owner, so the relay is the only
+  // place it can be seen.
+  proxy.onAgentFrame(
+    encode({ MonsterMove: ['m1', [40, 0, 45].map(F), F(0), 'Chase', [50, 0, 55].map(F)] }),
+  )
+
+  const moves = decodedOf(spy.sent).filter(([n]) => n === 'MonsterMoved')
+  assert.strictEqual(moves.length, 1, 'the move should reach the spectator live')
+  assertNear(moves[0][1][1], [40, 0, 45])
+  assert.strictEqual(moves[0][1][5], 42, 'owner_id should be the agent, as the server would have stamped it')
+  assertNear(finalMonsterPosition(proxy.snapshot.frames(), 'm1'), [40, 0, 45])
+})
+
+test('an agent move for a monster the spectator was never introduced to is not replayed', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  // MonsterAssigned is OWNER_ONLY, so a monster known to the agent only that
+  // way was never announced to spectators — a move naming it would be an
+  // orphan. It is still broadcast live (harmless, and the client may know it
+  // by another route), but must not be baked into the catch-up snapshot.
+  proxy.onAgentFrame(
+    encode({ MonsterMove: ['ghost', [1, 0, 1].map(F), F(0), 'Idle', [1, 0, 1].map(F)] }),
+  )
+
+  const names = namesOf(proxy.snapshot.frames())
+  assert.ok(!names.includes('MonsterMoved'), `got ${names.join(', ')}`)
+})

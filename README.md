@@ -96,10 +96,14 @@ same order. Being in the middle buys two things:
 - **Every server message can be teed to spectators**, in the wire format the
   web client already speaks. It joins with `?observe=<url>` and runs in
   spectator mode: no input, no sends, no monster ownership.
-- **We see the agent's own outbound moves.** The server never echoes your
+- **We see the agent's own outbound moves.** The server never echoes your own
   movement back to you, so a spectator would otherwise watch a character that
-  never walks. Each outgoing `PlayerMove` becomes the `PlayerMoved` the agent's
-  neighbours receive.
+  never walks — and since the agent also runs the AI for every monster the
+  server assigned it, the same silence applies to those. Each outgoing
+  `PlayerMove` becomes the `PlayerMoved` the agent's neighbours receive, and
+  each `MonsterMove` the `MonsterMoved`, stamped with the agent as owner. That
+  ownership is safe to state because a spectator's `ownedByMe()` is always
+  false, so it draws the monster without adopting its brain.
 
 The proxy keeps a snapshot so a spectator that connects late is caught up
 before the live stream starts — and switching 3D ↔ Map *is* a late connect, so
