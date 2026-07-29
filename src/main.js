@@ -65,6 +65,43 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'))
 }
 
+/// A reply the agent cannot parse is dropped with a log line and no more:
+/// no event, no error, no movement. That reads exactly like a healthy agent
+/// standing still, and it once cost twenty minutes before anyone looked. The
+/// feed carries the raw text, so judge it here and say so out loud.
+let malformedRun = 0
+
+function checkTurnShape(items) {
+  for (const item of items) {
+    if (item.k !== 'llm-response') continue
+    const start = item.m.indexOf('{')
+    const end = item.m.lastIndexOf('}')
+    let ok = false
+    if (start !== -1 && end > start) {
+      try {
+        ok = Array.isArray(JSON.parse(item.m.slice(start, end + 1)).actions)
+      } catch {
+        ok = false
+      }
+    }
+    if (ok) {
+      malformedRun = 0
+      continue
+    }
+    malformedRun++
+    // One is a hiccup the next turn covers; a run of them is the model
+    // having drifted off the schema, and every one of those turns is lost.
+    if (malformedRun === 3) {
+      const message =
+        `The model has answered ${malformedRun} times without a valid ` +
+        `{thought, actions} object — those turns did nothing. Check the ` +
+        `Thoughts tab; a bare action is the usual drift.`
+      console.warn('[turns]', message)
+      agent.append('app', message)
+    }
+  }
+}
+
 /// Poll the agent's own panel API for the LLM feed and vitals. Done here
 /// rather than in the renderer because that page is file:// and the panel
 /// sends no CORS headers.
@@ -78,6 +115,7 @@ async function pollFeed(port) {
   const items = body.feed || []
   if (items.length) {
     feedSeq = items[items.length - 1].s
+    checkTurnShape(items)
     send('agent:feed', items)
   }
   send('agent:vitals', {
