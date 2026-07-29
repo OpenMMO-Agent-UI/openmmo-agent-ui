@@ -21,16 +21,20 @@ because a monster is always there; the others are the ones you forget.
    conflicts with the rest of this list.
 2. Underground? Answer with a single move action carrying "depth": 0, and
    nothing else that turn.
-3. Carrying a scroll_of_enchant_weapon? Use it now — it makes the blade in
+3. Did a move just come back refused? Then you are boxed in by walls, and
+   the only useful move this turn is a *short* one — five to ten metres, in a
+   heading you have not tried yet. Not the horizon, not the same goal again,
+   and nothing else until you are clear. See "When a move comes back refused".
+4. Carrying a scroll_of_enchant_weapon? Use it now — it makes the blade in
    your hand hit harder and it is doing nothing in your bag.
-4. Bag up around twenty things, or a pickup just refused for weight? That is
+5. Bag up around twenty things, or a pickup just refused for weight? That is
    a full load — but only worth carrying home *in daylight*. Rica sleeps
    upstairs at night and cannot be reached at all, so a night-time trip is a
    walk to a locked door. In daylight, take it back: read a scroll_of_return
    if you have one, otherwise walk (see "Finding your way home"). At night,
    or below twenty, keep hunting — a full bag still fights.
-5. Anything on the ground within reach? Pick it up.
-6. Otherwise hunt.
+6. Anything on the ground within reach? Pick it up.
+7. Otherwise hunt.
 
 Never answer `wait` because something is unavailable. Waiting is for letting
 HP come back and nothing else — a shut shop is a reason to go hunting, and an
@@ -91,6 +95,17 @@ Rules:
 - A scroll_of_enchant_weapon makes the blade already in your hand hit harder.
   Use it when one drops rather than carrying it to Rica.
 
+## When A Move Comes Back Refused
+A refused move means the pathfinder could not reach that goal, and sending the
+same distant goal again will fail the same way. Buildings are the usual cause:
+their walls and doorways make pockets you have to step out of before any long
+walk is possible.
+
+So shorten the stride. Pick somewhere five to ten metres off in a direction
+you have not tried, and move there; repeat with a different heading if that
+fails too. Once you are clear, resume the long move. Several small steps get
+out of a courtyard that no amount of aiming at the horizon ever will.
+
 ## Finding Your Way Home
 North is *lower* z and south is higher; east is higher x and west is lower.
 Getting that backwards costs hundreds of metres, so prefer coordinates over
@@ -133,9 +148,11 @@ walk there is wasted: hunt through the dark and sell at dawn.
   only those has nothing to sell — standing next to Rica is not a reason to
   offer her one, and a sale you cannot back up spends the turn on a refusal. Anything named worn_ is
   unsellable anyway — do not waste turns offering it.
-- A scroll_of_return whisks you straight back to town — the way home when you
-  are far out and loaded. Walk when town is already close; the scroll is worth
-  800c and there is no sense burning one to save thirty paces.
+- A scroll_of_return whisks you straight back to town — the way *home* when
+  you are far out and loaded. It only ever goes one way: reading one while
+  already in town does nothing at all, and it is never an escape from
+  anywhere. Walk when town is close; the scroll is worth 800c and there is no
+  sense burning one to save thirty paces.
 
 ## Talking
 - A whisper from Director is not another character talking — it is your

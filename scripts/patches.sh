@@ -30,7 +30,6 @@ CLIENT_FILES=(
     client/src/lib/managers/monsterManager.ts
     client/src/lib/network/messageHandlers.ts
     client/src/lib/network/socket.ts
-    client/src/lib/stores/graphicsSettings.ts
 )
 
 cmd="${1:-}"
