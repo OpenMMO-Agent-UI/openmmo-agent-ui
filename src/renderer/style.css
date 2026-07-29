@@ -734,6 +734,16 @@ iframe {
   min-height: 0;
 }
 
+/* The personality prompt is prose being written, not a field being filled:
+   give it the whole drawer the way the feed and log panes get it, instead of
+   the 220px every other textarea gets. Floor it so a short window still
+   leaves something writable. */
+#instanceText {
+  flex: 1;
+  height: auto;
+  min-height: 320px;
+}
+
 #feed {
   overflow-y: auto;
   border: 1px solid var(--line);
