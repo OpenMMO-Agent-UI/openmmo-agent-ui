@@ -275,17 +275,43 @@ ipcMain.handle('auth:status', () => ({
   signedIn: Boolean(googleAuth.cachedRefreshToken(settings.googleClientId)),
 }))
 
-/// Shared tail of both sign-in paths below: mint an id_token from the
-/// refresh token and open the pre-flight session on it.
-async function finishSignIn(refreshToken) {
+/// Mints a fresh id_token from a refresh token and (re)opens the pre-flight
+/// session on it, replacing whatever was open before. Returns the id_token
+/// since finishSignIn() below still needs it for peekEmail().
+async function reopenPreflightSession(refreshToken) {
   const idToken = await googleAuth.mintIdToken(refreshToken, settings.googleClientId, settings.googleClientSecret)
   closePreflightSession()
   preflightSession = await characterSession.openSession(settings.server, idToken)
+  return idToken
+}
+
+/// Shared tail of both sign-in paths below.
+async function finishSignIn(refreshToken) {
+  const idToken = await reopenPreflightSession(refreshToken)
   return {
     ok: true,
     email: googleAuth.peekEmail(idToken),
     accountName: preflightSession.accountName,
     characters: preflightSession.characters,
+  }
+}
+
+/// Play closes the pre-flight session once agent-client takes over (see
+/// startAgent()) — but Stop, or the agent simply exiting, bounces the
+/// renderer straight back to the Character screen, whose create/delete
+/// still need a live session. Re-derive one from the cached credential
+/// alone rather than failing outright; never runs a new device flow, so a
+/// truly expired sign-in still reports "Not signed in" instead of silently
+/// prompting in the background.
+async function ensurePreflightSession() {
+  if (preflightSession) return { ok: true }
+  const refreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
+  if (!refreshToken) return { ok: false, error: 'Not signed in' }
+  try {
+    await reopenPreflightSession(refreshToken)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message }
   }
 }
 
@@ -323,7 +349,8 @@ ipcMain.handle('auth:signin', async () => {
 })
 
 ipcMain.handle('characters:create', async (_e, { name, characterClass, gender }) => {
-  if (!preflightSession) return { ok: false, error: 'Not signed in' }
+  const ready = await ensurePreflightSession()
+  if (!ready.ok) return ready
   try {
     return { ok: true, character: await preflightSession.createCharacter(name, characterClass, gender) }
   } catch (err) {
@@ -332,7 +359,8 @@ ipcMain.handle('characters:create', async (_e, { name, characterClass, gender })
 })
 
 ipcMain.handle('characters:delete', async (_e, characterId) => {
-  if (!preflightSession) return { ok: false, error: 'Not signed in' }
+  const ready = await ensurePreflightSession()
+  if (!ready.ok) return ready
   try {
     await preflightSession.deleteCharacter(characterId)
     return { ok: true }

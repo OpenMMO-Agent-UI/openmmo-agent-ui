@@ -3,6 +3,7 @@
 const fs = require('node:fs')
 const http = require('node:http')
 const path = require('node:path')
+const { app } = require('electron')
 
 const { repoRoot } = require('./config')
 
@@ -70,6 +71,51 @@ async function proxy(req, res, origin) {
       signal: AbortSignal.timeout(20000),
     })
     const body = Buffer.from(await upstream.arrayBuffer())
+    const type = upstream.headers.get('content-type')
+    res.writeHead(upstream.status, type ? { 'content-type': type } : {})
+    res.end(body)
+  } catch (err) {
+    res.writeHead(502, { 'content-type': 'text/plain' })
+    res.end(`Upstream ${target} failed: ${err.message}`)
+  }
+}
+
+/// Where fetched static assets (textures, models, bgm — see the two
+/// proxyAndCache() call sites below) are kept once downloaded, so a restart
+/// doesn't mean re-fetching all of them again. Keyed by request path rather
+/// than full URL on purpose: ClientServer binds a random port every run
+/// (listen(0, ...)), so the URL a Chromium disk cache would key on is never
+/// the same twice — this cache doesn't care what port served it.
+function assetCacheRoot() {
+  return path.join(app.getPath('userData'), 'asset-cache')
+}
+
+/// Like proxy(), but for content identified purely by path and never
+/// changing at that path (unlike /api/*, which stays on plain proxy()) — a
+/// texture at /textures/rock.png today is the same bytes next week. Serves
+/// straight from disk on a hit; on a miss, fetches once and writes it before
+/// responding, so only the very first spectator session ever pays for it.
+async function proxyAndCache(req, res, origin, cacheFile) {
+  try {
+    const cached = await fs.promises.readFile(cacheFile)
+    res.writeHead(200, { 'content-type': MIME[path.extname(cacheFile)] || 'application/octet-stream' })
+    res.end(cached)
+    return
+  } catch {
+    // Not cached yet — fall through to fetching it.
+  }
+
+  const target = `${origin}${req.url}`
+  try {
+    const upstream = await fetch(target, {
+      headers: { accept: req.headers.accept || '*/*' },
+      signal: AbortSignal.timeout(20000),
+    })
+    const body = Buffer.from(await upstream.arrayBuffer())
+    if (upstream.ok) {
+      await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true })
+      await fs.promises.writeFile(cacheFile, body)
+    }
     const type = upstream.headers.get('content-type')
     res.writeHead(upstream.status, type ? { 'content-type': type } : {})
     res.end(body)
@@ -163,7 +209,7 @@ class ClientServer {
           // fallback an un-pulled LFS checkout already uses below. Anything
           // without a recognised extension is a client-side route instead.
           if (this.origin && MIME[path.extname(file)]) {
-            proxy(req, res, this.origin)
+            proxyAndCache(req, res, this.origin, path.join(assetCacheRoot(), decoded))
             return
           }
           serveFile(res, path.join(root, 'index.html'))
@@ -177,7 +223,7 @@ class ClientServer {
                 `fetching them from ${this.origin} instead.`,
             )
           }
-          proxy(req, res, this.origin)
+          proxyAndCache(req, res, this.origin, path.join(assetCacheRoot(), decoded))
           return
         }
         serveFile(res, file)
