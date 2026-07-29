@@ -43,8 +43,10 @@ the sun is a turn you paid for and did not use.
   walk out a hundred metres or so and they will appear.
 - Fight one monster at a time, and always the nearest one you can reach.
 - attack walks you to the monster for you, but the chase gives up at 20 metres
-  and after about 15 seconds. Treat 18m as your limit — 21m reads as "close
-  enough" and is refused outright, wasting the whole turn.
+  and after about 15 seconds. So work out the distance first and let it pick
+  the action for you: under 18m, attack. 18m or more, the first action is a
+  move to that monster's coordinates — never an attack. Twenty-one metres
+  reads as "close enough" and is refused outright, costing the whole turn.
 - When the nearest monster is further than that, move to the coordinates the
   world state prints for it, then attack on the next turn. `target` only takes
   a player or NPC *name*: putting a monster id there fails every time.
@@ -95,10 +97,12 @@ Getting that backwards costs hundreds of metres, so prefer coordinates over
 compass directions whenever you know where you are going.
 
 The world state prints the Old Crypt entrance and how far off it is every
-turn. That is your road sign: it stands in the open a short walk from Rica,
-and the way there is always walkable. To go home, move to those exact
-coordinates in one move action carrying "x" and "z" — rather than stepping a
-hundred metres at a time in a direction you guessed. Once the town
+turn. That is your road sign: it stands in the open a short walk from Rica.
+To go home, move to those coordinates in one move action carrying "x" and
+"z" — rather than stepping a hundred metres at a time in a direction you
+guessed. If that move comes back with no route, the doorway itself is
+blocked: aim a few metres to the side and walk the rest, rather than sending
+the same failing move again. Once the town
 is around you, sell; the action walks the last stretch to Rica by itself.
 
 ## Selling
@@ -115,15 +119,19 @@ walk there is wasted: hunt through the dark and sell at dawn.
 - Carrying capacity is weight, not slots: STR x 15, against swords that weigh
   one or two each. Nothing prints either number, so a load worth carrying home
   is roughly twenty items, and a refused pickup means you left it too late.
-- A sell action names the "item" and the "merchant" — one item apiece, so
-  put several in `actions` to clear several pieces.
+- A sell action names the "item" and the "merchant" — one item apiece, so put
+  several in `actions` to clear several pieces. Count what you actually carry:
+  offering the same sword more times than you own it just fills the turn with
+  refusals.
 - Junk the merchant refuses (old_boot, clump_of_kelp, anything she declines)
   is dead weight — drop it rather than spending turns re-offering it.
 - Sell duplicate weapons and armour you are not wearing. Rough prices:
   iron_sword 10000c, leather_armor 6000c, wooden_shield 4000c,
   small_sword 2000c, goblin_sword 1500c.
 - Never sell: your worn_torch, anything else you are currently wearing, your
-  healing_potion, or your scroll_of_return. Anything named worn_ is
+  healing_potion, your fishing_rod, or your scroll_of_return. A bag holding
+  only those has nothing to sell — standing next to Rica is not a reason to
+  offer her one, and a sale you cannot back up spends the turn on a refusal. Anything named worn_ is
   unsellable anyway — do not waste turns offering it.
 - A scroll_of_return whisks you straight back to town — the way home when you
   are far out and loaded. Walk when town is already close; the scroll is worth

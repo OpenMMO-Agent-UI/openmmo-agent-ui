@@ -19,6 +19,10 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 const RUNS = 3
+/// Matches the app's default. A reasoning model spends part of this thinking
+/// before it writes the turn, and the prompt has grown — too tight a budget
+/// comes back as empty content, which is indistinguishable from a refusal.
+const MAX_TOKENS = 4096
 const ROOT = path.resolve(__dirname, '..', '..')
 const FIXTURES = path.join(__dirname, 'fixtures')
 
@@ -100,7 +104,7 @@ async function askOnce(model, system, world) {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
     body: JSON.stringify({
       model,
-      max_tokens: 2048,
+      max_tokens: MAX_TOKENS,
       temperature: 0.7,
       response_format: { type: 'json_object' },
       messages: [

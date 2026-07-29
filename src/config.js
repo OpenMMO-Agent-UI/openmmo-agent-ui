@@ -73,7 +73,7 @@ const DEFAULTS = {
   models: { codex: 'gpt-5.4-mini', claude: 'sonnet', openrouter: 'qwen/qwen3.7-flash', openai: '' },
   openaiBaseUrl: 'https://ollama.com/v1',
   reasoningEffort: 'none',
-  maxTokens: 1024,
+  maxTokens: 4096,
   temperature: 0.7,
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
