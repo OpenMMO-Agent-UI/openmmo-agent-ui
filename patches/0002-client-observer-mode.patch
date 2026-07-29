@@ -272,18 +272,22 @@ index e1bc10f6..3c72085c 100644
        }
      }
 diff --git c/client/src/lib/network/messageHandlers.ts w/client/src/lib/network/messageHandlers.ts
-index 5faed018..8d7b4464 100644
+index 5faed018..88d95993 100644
 --- c/client/src/lib/network/messageHandlers.ts
 +++ w/client/src/lib/network/messageHandlers.ts
-@@ -13,6 +13,7 @@ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
+@@ -13,6 +13,11 @@ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
  import { Vector3 } from 'three'
  import { remotePlayerManager } from '../managers/remotePlayerManager'
  import { FishingAnimationName } from '../types/animations'
-+import { isObserver, setObservedPlayerId } from '../stores/observerStore'
++import {
++  farEnoughToSnap,
++  isObserver,
++  setObservedPlayerId,
++} from '../stores/observerStore'
  import { playFishingSound } from '../managers/sfxManager'
  import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
  import { monsterManager } from '../managers/monsterManager'
-@@ -249,6 +250,16 @@ export function handleServerMessage(
+@@ -249,6 +254,16 @@ export function handleServerMessage(
          ...state,
          currentPlayer: player,
        }))
@@ -300,7 +304,7 @@ index 5faed018..8d7b4464 100644
        // Players who logged out inside a dungeon reconnect there.
        dungeonManager.syncFromFloorLevel(
          serverPlayer.floor_level ?? 0,
-@@ -344,7 +355,7 @@ export function handleServerMessage(
+@@ -344,7 +359,7 @@ export function handleServerMessage(
  
      case 'PlayerMoved': {
        const state = get(gameStore)
@@ -309,7 +313,41 @@ index 5faed018..8d7b4464 100644
          break
        }
        const deckY = bridgeManager.findDeckYAt(
-@@ -393,6 +404,13 @@ export function handleServerMessage(
+@@ -352,15 +367,24 @@ export function handleServerMessage(
+         data.position.z,
+         null
+       )
+-      remotePlayerManager.setTargetPosition(
+-        data.player_id,
+-        {
+-          x: data.position.x,
+-          y: deckY ?? data.position.y,
+-          z: data.position.z,
+-        },
+-        data.rotation
+-      )
++      const moveTo = {
++        x: data.position.x,
++        y: deckY ?? data.position.y,
++        z: data.position.z,
++      }
++      // A gap the walk cannot close is a desync, not a step — see
++      // farEnoughToSnap. Only for the watched character, whose positions are
++      // synthesized from its own outbound moves; everyone else here arrives
++      // exactly as they do in normal play.
++      const drawnAt =
++        isObserver && state.currentPlayer?.id === data.player_id
++          ? remotePlayerManager.players.get(data.player_id)?.position
++          : undefined
++      if (drawnAt && farEnoughToSnap(drawnAt, moveTo)) {
++        remotePlayerManager.teleportPlayer(data.player_id, moveTo, data.rotation)
++        break
++      }
++      remotePlayerManager.setTargetPosition(data.player_id, moveTo, data.rotation)
+       const existing = state.otherPlayers.get(data.player_id)
+       if (existing && existing.floorLevel !== data.floor_level) {
+         updatePlayer(data.player_id, { floorLevel: data.floor_level })
+@@ -393,6 +417,13 @@ export function handleServerMessage(
            data.position.z
          )
          requestCameraReset()
@@ -323,7 +361,7 @@ index 5faed018..8d7b4464 100644
          break
        }
        const tpDeckY = bridgeManager.findDeckYAt(
-@@ -477,6 +495,20 @@ export function handleServerMessage(
+@@ -477,6 +508,20 @@ export function handleServerMessage(
        gameStore.update((state) => {
          state.otherPlayers.clear()
          remotePlayerManager.reset()
@@ -344,7 +382,7 @@ index 5faed018..8d7b4464 100644
          // A list, not a map: player ids are numeric and the wasm serializer
          // rejects non-string map keys (see ServerMessage::GameState).
          const serverPlayers = data.players as ServerPlayer[]
-@@ -823,7 +855,11 @@ export function handleServerMessage(
+@@ -823,7 +868,11 @@ export function handleServerMessage(
  
      case 'PlayerInteractionChanged': {
        const state = get(gameStore)
