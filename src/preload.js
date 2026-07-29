@@ -31,4 +31,5 @@ contextBridge.exposeInMainWorld('agentApp', {
   onVitals: on('agent:vitals'),
   onViewReady: on('view:ready'),
   onViewError: on('view:error'),
+  onViewMemory: on('view:memory'),
 })

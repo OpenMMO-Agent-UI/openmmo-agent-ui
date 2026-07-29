@@ -319,6 +319,17 @@ function bindActions() {
   $('clearLog').addEventListener('click', () => ($('log').textContent = ''))
   $('clearFeed').addEventListener('click', () => ($('feed').textContent = ''))
 
+  // A 3D client left running all night grows; dropping the frame frees it
+  // without disturbing the agent, which lives in another process entirely.
+  $('reloadView').addEventListener('click', () => {
+    const frame = $('frame')
+    const url = frame.dataset.url
+    if (!url) return
+    frame.removeAttribute('src')
+    delete frame.dataset.url
+    requestAnimationFrame(() => applyView())
+  })
+
   for (const btn of document.querySelectorAll('.viewtoggle button')) {
     btn.addEventListener('click', () => {
       for (const other of document.querySelectorAll('.viewtoggle button')) other.classList.remove('on')
@@ -416,6 +427,10 @@ async function init() {
   api.onViewReady((urls) => {
     viewUrls = { ...viewUrls, ...urls }
     applyView()
+  })
+  api.onViewMemory((mb) => {
+    $('mem').textContent = mb ? `${mb} MB` : ''
+    $('mem').classList.toggle('high', mb > 1500)
   })
   api.onViewError((message) => {
     $('viewHint').textContent = message

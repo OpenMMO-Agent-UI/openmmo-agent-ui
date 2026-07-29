@@ -14,6 +14,14 @@
   box-sizing: border-box;
 }
 
+/* The UA rule for [hidden] is `display: none` at the lowest specificity, so
+   any author rule that sets display — #placeholder and #banner are flex, every
+   label is block — silently wins and the element stays on screen. Everything
+   here toggles visibility through the attribute, so state it once, loudly. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   height: 100vh;
@@ -398,5 +406,15 @@ section[data-panel='thoughts'] {
 }
 
 .k-combat .feed-body {
+  color: #f0b48a;
+}
+
+.mem {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.mem.high {
   color: #f0b48a;
 }

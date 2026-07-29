@@ -24,7 +24,7 @@ index 97303747..35a8ee36 100644
 +/client/src/lib/agent/
 +/agent-client/data/user_prompt.txt
 diff --git a/client/src/App.svelte b/client/src/App.svelte
-index a8fc1787..978806de 100644
+index a8fc1787..6dba8d1b 100644
 --- a/client/src/App.svelte
 +++ b/client/src/App.svelte
 @@ -3,6 +3,7 @@
@@ -43,19 +43,33 @@ index a8fc1787..978806de 100644
    import { createWebGPURenderer } from './lib/utils/renderer'
    import {
      networkManager,
-@@ -34,7 +36,10 @@
+@@ -34,7 +36,8 @@
      | 'waiting_dying'
      | 'dialog_open'
      | 'dialog_closed'
 -  let screen = $state<AppScreen>('login')
 +  let screen = $state<AppScreen>(isObserver ? 'game' : 'login')
 +  let observerError = $state('')
-+  /// Connected to the mirror but the agent has not entered the world yet.
-+  let observerWaiting = $derived(isObserver && !observerError && !currentPlayerHp)
    let serverUrl = $state('')
    let accountName = $state('')
    let accountCharacters = $state<AccountCharacter[]>([])
-@@ -79,6 +84,15 @@
+@@ -47,6 +50,15 @@
+   let isPlayerDead = $state(false)
+   let currentPlayerHp = $state<number | null>(null)
+   let currentPlayerMaxHp = $state<number | null>(null)
++
++  /// Connected to the mirror but the agent has not entered the world yet.
++  let observerWaiting = $derived(isObserver && !observerError && !currentPlayerHp)
++  /// Normal play only reaches the game screen after JoinSuccess, so the scene
++  /// mounts knowing where it is. A spectator opens straight onto 'game', and
++  /// building the world around the origin first — then restreaming every tile
++  /// once the real position arrives — keeps frame times over the threshold
++  /// that dismisses the loading dialog. Wait for the character instead.
++  let sceneCanMount = $derived(!isObserver || currentPlayerHp !== null)
+   let currentPlayerLevel = $state<number | null>(null)
+   let currentPlayerTotalXp = $state<number | null>(null)
+   let deathUiState = $state<DeathUiState>('alive')
+@@ -79,6 +91,15 @@
    // caps itself at 3s and normally finishes long before login completes.
    let showCanvas = $derived(screen !== 'login' && !gpuProbePending)
  
@@ -71,7 +85,16 @@ index a8fc1787..978806de 100644
    onMount(() => {
      if (!gpuProbePending) return
      void runGpuBenchmark()
-@@ -346,6 +360,12 @@
+@@ -334,7 +355,7 @@
+             characterClass={createSelectedClass}
+             gender={createSelectedGender}
+           />
+-        {:else if screen === 'game'}
++        {:else if screen === 'game' && sceneCanMount}
+           <GameScene
+             {serverUrl}
+             onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
+@@ -346,6 +367,12 @@
      </div>
    {/if}
  
@@ -84,7 +107,7 @@ index a8fc1787..978806de 100644
    <!-- UI overlays (outside Canvas) -->
    {#if screen === 'game'}
      <GameHud
-@@ -364,6 +384,9 @@
+@@ -364,6 +391,9 @@
        onCloseRespawnDialog={closeRespawnDialog}
        onOpenSettings={() => (showSettings = true)}
      />
@@ -94,7 +117,7 @@ index a8fc1787..978806de 100644
    {:else if screen === 'character-select'}
      <CharacterSelectScreen
        {accountName}
-@@ -482,4 +505,30 @@
+@@ -482,4 +512,30 @@
      width: 20px;
      height: 20px;
    }

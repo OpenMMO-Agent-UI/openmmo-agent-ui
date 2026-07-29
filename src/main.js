@@ -113,6 +113,32 @@ async function pollFeed(port) {
   })
 }
 
+/// The spectator view is a full 3D client left running for hours, so its
+/// renderer is the one process here that can grow without bound. Sample it
+/// rather than wait for the OOM crash to explain itself.
+const MEMORY_WARN_MB = 1500
+let memoryTimer = null
+let memoryWarned = false
+
+function startMemoryWatch() {
+  if (memoryTimer) return
+  memoryTimer = setInterval(() => {
+    const worst = app
+      .getAppMetrics()
+      .filter((m) => m.type === 'Tab' || m.type === 'Renderer')
+      .sort((a, b) => (b.memory?.workingSetSize ?? 0) - (a.memory?.workingSetSize ?? 0))[0]
+    const mb = Math.round((worst?.memory?.workingSetSize ?? 0) / 1024)
+    send('view:memory', mb)
+    if (mb > MEMORY_WARN_MB && !memoryWarned) {
+      memoryWarned = true
+      const message = `Spectator view is using ${mb} MB. Reload it from the header if it stalls.`
+      console.warn('[memory]', message)
+      agent.append('app', message)
+    }
+    if (mb < MEMORY_WARN_MB / 2) memoryWarned = false
+  }, 30000)
+}
+
 function startFeedPolling(port) {
   stopFeedPolling()
   if (!port) return
@@ -159,6 +185,7 @@ app.whenReady().then(() => {
     void openSpectatorView()
   })
 
+  startMemoryWatch()
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
