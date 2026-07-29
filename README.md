@@ -63,8 +63,18 @@ you.
 
 The server checks the wire protocol **exactly** and refuses anything else, so
 your checkout has to match what is deployed — which is not always upstream's
-tip. If start fails with `Protocol vN required, you sent vM`, move the game
-checkout to the commit whose `shared/src/lib.rs` has `PROTOCOL_VERSION = N`.
+tip. It has been both ahead of and behind this repo within a single day.
+
+Ask before you start, and it will name the commit to land on:
+
+```bash
+node openmmo-client/scripts/check-protocol.js
+# checkout speaks v9; asking wss://openmmo.to.nexus/ws ... accepted
+```
+
+Only the handshake is sent, so nothing enters the world. If start fails anyway,
+the app raises the same answer in its error bar rather than leaving it in the
+log.
 
 ## Why it needs a relay
 

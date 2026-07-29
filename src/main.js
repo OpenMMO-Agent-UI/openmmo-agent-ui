@@ -179,6 +179,7 @@ app.whenReady().then(() => {
     send('agent:state', state)
   })
   agent.on('device-code', (code) => send('agent:device-code', code))
+  agent.on('fatal', (message) => send('agent:fatal', message))
   agent.on('watch-ready', (url) => {
     send('watch:ready', url)
     startFeedPolling(settings.watchPort)

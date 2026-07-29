@@ -162,7 +162,7 @@ index cb8450e3..b5464643 100644
          'remoteInterpolation',
          performance.now() - remoteInterpolationStart
 diff --git a/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte b/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
-index b079e7b0..9c5e54de 100644
+index e29d9a88..85ac1755 100644
 --- a/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
 +++ b/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
 @@ -5,6 +5,7 @@
@@ -272,18 +272,18 @@ index e1bc10f6..3c72085c 100644
        }
      }
 diff --git a/client/src/lib/network/messageHandlers.ts b/client/src/lib/network/messageHandlers.ts
-index 03f19433..ada0eaa5 100644
+index 3adc217e..9ef3b470 100644
 --- a/client/src/lib/network/messageHandlers.ts
 +++ b/client/src/lib/network/messageHandlers.ts
-@@ -12,6 +12,7 @@ import {
- import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
+@@ -13,6 +13,7 @@ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
  import { Vector3 } from 'three'
  import { remotePlayerManager } from '../managers/remotePlayerManager'
+ import { FishingAnimationName } from '../types/animations'
 +import { isObserver, setObservedPlayerId } from '../stores/observerStore'
  import { playFishingSound } from '../managers/sfxManager'
  import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
  import { monsterManager } from '../managers/monsterManager'
-@@ -242,6 +243,16 @@ export function handleServerMessage(
+@@ -244,6 +245,16 @@ export function handleServerMessage(
          ...state,
          currentPlayer: player,
        }))
@@ -300,7 +300,7 @@ index 03f19433..ada0eaa5 100644
        // Players who logged out inside a dungeon reconnect there.
        dungeonManager.syncFromFloorLevel(
          serverPlayer.floor_level ?? 0,
-@@ -337,7 +348,7 @@ export function handleServerMessage(
+@@ -339,7 +350,7 @@ export function handleServerMessage(
  
      case 'PlayerMoved': {
        const state = get(gameStore)
@@ -309,7 +309,7 @@ index 03f19433..ada0eaa5 100644
          break
        }
        const deckY = bridgeManager.findDeckYAt(
-@@ -386,6 +397,13 @@ export function handleServerMessage(
+@@ -388,6 +399,13 @@ export function handleServerMessage(
            data.position.z
          )
          requestCameraReset()

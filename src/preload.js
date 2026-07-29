@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   onLog: on('agent:log'),
   onState: on('agent:state'),
   onDeviceCode: on('agent:device-code'),
+  onFatal: on('agent:fatal'),
   onWatchReady: on('watch:ready'),
   onFeed: on('agent:feed'),
   onVitals: on('agent:vitals'),

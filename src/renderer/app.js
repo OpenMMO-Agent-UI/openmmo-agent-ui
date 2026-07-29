@@ -442,6 +442,7 @@ async function init() {
   })
   api.onState(setStatus)
   api.onDeviceCode(showDeviceCode)
+  api.onFatal((message) => showErrors([message]))
   api.onWatchReady(showWatch)
 }
 

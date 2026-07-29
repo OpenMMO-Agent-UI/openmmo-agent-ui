@@ -81,6 +81,7 @@ class AgentProcess extends EventEmitter {
       if (this.log.length > LOG_CAP) this.log.shift()
       this.emit('log', item)
       this.scanForDeviceCode(line)
+      this.scanForProtocolRefusal(line)
     }
   }
 
@@ -96,6 +97,20 @@ class AgentProcess extends EventEmitter {
     if (this.deviceCode && this.deviceCode.url && this.deviceCode.code) {
       this.emit('device-code', this.deviceCode)
     }
+  }
+
+  /// The one refusal that cannot be waited out: the server compares wire
+  /// versions exactly, so a mismatch means moving the checkout. Lift it out of
+  /// the log, where it otherwise scrolls past as a single line among the
+  /// reconnect attempts it triggers.
+  scanForProtocolRefusal(line) {
+    const match = line.match(/Protocol v(\d+) required, you sent v(\d+)/)
+    if (!match) return
+    this.emit(
+      'fatal',
+      `The server speaks protocol v${match[1]}, this build speaks v${match[2]}. ` +
+        `Run "node openmmo-client/scripts/check-protocol.js" for the commit to move to.`,
+    )
   }
 
   async start(settings) {

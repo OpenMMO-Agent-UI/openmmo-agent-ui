@@ -9,7 +9,9 @@
     "start": "electron .",
     "dev": "electron . --inspect",
     "link": "bash scripts/link.sh",
-    "patches": "bash scripts/patches.sh"
+    "patches": "bash scripts/patches.sh",
+    "check": "node scripts/check-protocol.js",
+    "bench": "node scripts/bench-models.js"
   },
   "devDependencies": {
     "electron": "^43.0.0"
