@@ -48,6 +48,22 @@ dist="$checkout/client/dist"
     exit 1
 }
 
+# Our client-side behaviour lives in patches/ and overlay/, and none of it
+# reaches the app until the client is rebuilt — a dist older than either is a
+# client that silently predates it. Found the expensive way: a committed fix
+# for a spectator whose character never moved shipped inside an app whose
+# bundled client was built hours before the fix existed, and the app was the
+# only place anyone was looking.
+if [[ -z ${ALLOW_STALE_CLIENT:-} ]]; then
+    stale=$(find "$root/patches" "$root/overlay" -type f -newer "$dist/index.html" -print -quit 2>/dev/null || true)
+    [[ -z $stale ]] || {
+        echo "stale client build: ${stale#"$root/"} is newer than $dist/index.html" >&2
+        echo "rebuild it first: npm --prefix client run build (in $checkout), then re-run this" >&2
+        echo "or set ALLOW_STALE_CLIENT=1 to stage it anyway" >&2
+        exit 1
+    }
+fi
+
 rm -rf "$out"
 mkdir -p "$out/agent-client/data" "$out/client"
 
