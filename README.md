@@ -46,10 +46,9 @@ npm --prefix openmmo-client install
 npm --prefix openmmo-client start
 ```
 
-In the window: put your character's name under **Character**, an OpenRouter key
-under **Model**, then press **Start** and complete the Google sign-in from the
-banner. The character must already exist on your account, or it is created for
-you.
+In the window: point it at the `agent-client` binary if it isn't found
+automatically, sign in with Google, then choose an existing character or
+create one — up to 3 per account — and press **Play**.
 
 ### Requirements
 
@@ -230,12 +229,13 @@ never be exercised. It lives in the history if it is wanted back.
 
 ## Packaging a standalone build
 
-`npm start` needs the dev setup above — a nested OpenMMO checkout, `link.sh`,
-`patches.sh`, a built `agent-client` binary and a built `client/dist`. A
-packaged build needs none of that at runtime: it ships its own copy of the
-binary and the web client, and writes its runtime data (`config.toml`,
-`memory.txt`, the terrain tile cache) under the OS's app data directory
-instead of into the bundle, which is read-only once packaged.
+`npm start` needs the dev setup above — a built `agent-client` binary and a
+built `client/dist`, `link.sh` and `patches.sh` already applied to whatever
+OpenMMO checkout you're using. A packaged build needs none of that at
+runtime: it ships its own copy of the binary and the web client, and writes
+its runtime data (`config.toml`, `memory.txt`, the terrain tile cache) under
+the OS's app data directory instead of into the bundle, which is read-only
+once packaged.
 
 Building one still starts from a normal dev checkout with `agent-client` and
 `client/dist` already built (see Setup), then stages and packages it:
@@ -245,16 +245,31 @@ npm install
 OPENMMO_CHECKOUT=/path/to/OpenMMO npm run dist:mac    # or dist:win / dist:linux
 ```
 
-`scripts/package-resources.sh` copies the release binary, the built client,
-and only the fixed-content slice of `agent-client/data/` (prompts, templates,
-animation timings — not `config.toml`, `memory.txt`, or the tile cache) into
-`build/resources/`, which `electron-builder`'s `extraResources` bundles into
-the app. The output lands in `out/`.
+`OPENMMO_CHECKOUT` doesn't need to be nested inside this repo — `link.sh`,
+`patches.sh`, and this staging step all resolve the checkout from it (or,
+if it's unset, from `git rev-parse --show-toplevel`, so running them from
+inside the checkout works too), so a sibling directory is just as valid as
+the nested layout in Setup.
 
-Only `dist:mac` is verified — built and run on Apple Silicon. `dist:win` and
-`dist:linux` are configured but untested: `agent-client` is a native binary,
-so each needs its own build machine, and the build here produces an unsigned
-app (no Gatekeeper/SmartScreen exemption).
+`scripts/package-resources.sh` copies the release binary and the built
+client into `build/resources/`, which `electron-builder`'s `extraResources`
+bundles into the app — except the client's own `textures/`, `models/`,
+`bgm/`, `character_concepts/`, and `portraits/`. Those are the same
+hundreds of MB the official site already serves, so `server.js` proxies
+them from the configured terrain origin at runtime instead of shipping a
+copy, caching whatever it fetches to disk (`userData/asset-cache/`) so
+only the first time a given texture or model is needed costs the network
+round trip. Also staged: only the fixed-content slice of `agent-client/data/`
+(prompts, templates, animation timings — not `config.toml`, `memory.txt`, or
+the tile cache). The output lands in `out/`, around 130 MB zipped / 300 MB
+unpacked — almost all of that Electron itself.
+
+Only `dist:mac` is verified — built and run on Apple Silicon. Both it and
+the untested `dist:win` / `dist:linux` (each needs its own native build
+machine for `agent-client`) produce an unsigned app: macOS Gatekeeper
+refuses to open it from a double-click, so right-click → Open once, or run
+`xattr -cr "OpenMMO Agent.app"` from a terminal; Windows SmartScreen has an
+equivalent "Run anyway" prompt.
 
 ## Known limits
 
