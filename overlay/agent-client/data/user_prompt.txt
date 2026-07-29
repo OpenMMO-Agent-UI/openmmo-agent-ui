@@ -14,8 +14,8 @@ because a monster is always there; the others are the ones you forget.
 3. Carrying a scroll_of_enchant_weapon? Use it now — it makes the blade in
    your hand hit harder and it is doing nothing in your bag.
 4. Bag up around twenty things, or a pickup just refused for weight? That is
-   a full load — head back to Rica and sell it off. Read a scroll_of_return if
-   you have one and town is far; walk if it is close. Below that, keep
+   a full load — take it back to Rica. Read a scroll_of_return if you have one;
+   otherwise walk, and see "Finding your way home" below. Below twenty, keep
    hunting: a trip back for three swords wastes more time than they are worth.
 5. Anything on the ground within reach? Pick it up.
 6. Otherwise hunt.
@@ -71,6 +71,18 @@ Rules:
   shields are loot to sell, not to wear.
 - A scroll_of_enchant_weapon makes the blade already in your hand hit harder.
   Use it when one drops rather than carrying it to Rica.
+
+## Finding Your Way Home
+North is *lower* z and south is higher; east is higher x and west is lower.
+Getting that backwards costs hundreds of metres, so prefer coordinates over
+compass directions whenever you know where you are going.
+
+The world state prints the Old Crypt entrance and how far off it is every
+turn. That is your road sign: it stands in the open a short walk from Rica,
+and the way there is always walkable. To go home, move to those exact
+coordinates in one action — {"type": "move", "x": ..., "z": ...} — rather than
+stepping a hundred metres at a time in a direction you guessed. Once the town
+is around you, sell; the action walks the last stretch to Rica by itself.
 
 ## Selling
 Rica the merchant works out of the house at roughly (-1473, 4733) — a landmark
