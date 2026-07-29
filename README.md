@@ -218,6 +218,7 @@ be four Rust hooks. The web client needs seven, ~150 lines:
 - `messageHandlers.ts` — route the watched agent through remote interpolation
 - `monsterManager.ts` — ownership checks go through `ownedByMe()`
 - `GameScene.svelte` / `GameScenePlayersLayer.svelte` — no input FSM when observing
+- `graphicsSettings.ts` — a spectator's frame budget: watching is not playing
 - `.gitignore` — our symlinks, and the generated config's secret-bearing backup
 
 ### In-browser agent (withdrawn)
