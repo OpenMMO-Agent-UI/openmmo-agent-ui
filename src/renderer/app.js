@@ -589,7 +589,7 @@ function confirmAction(message, okLabel = 'Delete') {
 
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { worn: 'Equipment', bag: 'Bag', thoughts: 'Thoughts', log: 'Log', prompt: 'Personality' }
+  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality', thoughts: 'Thoughts', log: 'Log' }
   for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.drawer
