@@ -12,6 +12,18 @@ let viewUrls = { scene: null, panel: null }
 let activeView = 'scene'
 const feedHidden = new Set()
 
+// Pre-flight session state (ADR 0001): the character list fetched at sign-in,
+// and which one is chosen for this Play. Bumped on every sign-in attempt so
+// a stale device-flow poll (abandoned via "choose a different binary") can't
+// resolve later and yank the screen back.
+let characters = []
+let selectedCharacterId = null
+let signInGeneration = 0
+
+// A directive (ADR 0003): best-effort, so its reply is tracked and shown
+// right next to what was sent rather than assumed to have landed.
+let pendingDirective = null
+
 const FEED_KINDS = [
   'llm-prompt',
   'llm-response',
@@ -22,9 +34,9 @@ const FEED_KINDS = [
   'system',
 ]
 
-/// Plain settings fields; `model` and `apiKey` are per-backend and handled apart.
+/// Plain settings fields; `characterName` (Login screen), `model` and
+/// `apiKey` (per-backend) are handled apart from this generic map.
 const FIELDS = {
-  characterName: 'text',
   characterClass: 'text',
   gender: 'text',
   alwaysActive: 'bool',
@@ -38,6 +50,7 @@ const FIELDS = {
   server: 'text',
   terrain: 'text',
   authMode: 'text',
+  googleClientId: 'text',
   googleClientSecret: 'text',
   npcAccount: 'text',
   watchPort: 'int',
@@ -69,13 +82,23 @@ async function persist(patch) {
     dirtyWhileRunning = true
     $('restart').hidden = false
   }
-  showErrors(await api.validate({}))
 }
 
+/// One shared toast for whichever screen is showing — Play/Restart failures
+/// alike, so an error never depends on which screen happened to trigger it.
 function showErrors(errors) {
   const box = $('errors')
-  box.hidden = !errors || errors.length === 0
-  box.textContent = (errors || []).map((e) => `• ${e}`).join('\n')
+  const list = errors || []
+  box.hidden = list.length === 0
+  box.textContent = list.map((e) => `• ${e}`).join('\n')
+}
+
+/// Drives `body[data-screen]`, the single source of which screen is visible.
+function setScreen(name) {
+  document.body.dataset.screen = name
+  if (name === 'character') {
+    $('characterRecap').textContent = settings.characterName ? `Playing as ${settings.characterName}` : 'OpenMMO'
+  }
 }
 
 function renderClassOptions() {
@@ -122,12 +145,13 @@ function renderBackend() {
         : 'No LLM: the character connects and idles.'
 }
 
+/// Once running is false, whatever screen is showing bounces back to
+/// wherever restarting makes sense — Character for a session that was
+/// already playing, Binary for one that died before ever signing in.
 function setStatus(state) {
   running = state.running
   $('dot').className = `dot${running ? ' on' : ''}`
   $('status').textContent = running ? `running (pid ${state.pid})` : 'stopped'
-  $('start').hidden = running
-  $('stop').hidden = !running
   $('restart').hidden = !(running && dirtyWhileRunning)
   if (!running) {
     const frame = $('frame')
@@ -137,6 +161,7 @@ function setStatus(state) {
     viewUrls = { scene: null, panel: null }
     $('placeholder').hidden = false
     setVitals(null)
+    if (document.body.dataset.screen === 'game') setScreen('character')
   }
 }
 
@@ -150,11 +175,126 @@ function appendLog(item) {
   if ($('autoscroll').checked) pre.scrollTop = pre.scrollHeight
 }
 
+/// The Login screen's three mutually exclusive states (ADR 0001): checking
+/// the cache, a cached credential to continue with, or a fresh device code.
+function showLoginState(state) {
+  $('loginChecking').hidden = state !== 'checking'
+  $('loginContinue').hidden = state !== 'continue'
+  $('loginCode').hidden = state !== 'code'
+}
+
 function showDeviceCode(code) {
   if (!code || !code.code) return
-  $('banner').hidden = false
   $('banner-code').textContent = code.code
-  $('banner').dataset.url = code.url || 'https://www.google.com/device'
+  $('loginCode').dataset.url = code.url || 'https://www.google.com/device'
+  showLoginState('code')
+}
+
+/// Runs the device flow (main process does the actual OAuth, ADR 0001).
+/// Guarded by `signInGeneration` so a poll abandoned via "choose a different
+/// binary" can't resolve later and yank the screen back to Character.
+async function beginSignIn() {
+  showLoginState('checking')
+  const generation = ++signInGeneration
+  const res = await api.authSignIn()
+  if (generation !== signInGeneration) return
+  await afterSignIn(res)
+}
+
+async function enterLoginScreen() {
+  setScreen('login')
+  showLoginState('checking')
+  const status = await api.authStatus()
+  if (status.signedIn) showLoginState('continue')
+  else await beginSignIn()
+}
+
+/// Shared tail of Continue and the device flow: land on Character with
+/// whatever the pre-flight session found, or bounce back to Binary on
+/// failure — a protocol mismatch (ADR 0002) or a refused sign-in alike.
+async function afterSignIn(res) {
+  if (!res.ok) {
+    showErrors([res.error])
+    setScreen('binary')
+    return
+  }
+  characters = res.characters
+  selectedCharacterId = null
+  await persist({ characterName: '' })
+  renderCharacterList()
+  updateCreateVisibility()
+  updatePlayEnabled()
+  setScreen('character')
+}
+
+/// One row per existing character (max 3, server-enforced): pick it, or
+/// delete it. Pre-flight session fully owns this CRUD (ADR 0001) — nothing
+/// here talks to agent-client.
+function renderCharacterList() {
+  const box = $('characterList')
+  box.innerHTML = ''
+  if (!characters.length) {
+    const p = document.createElement('p')
+    p.className = 'character-empty'
+    p.textContent = 'No characters yet — create one below.'
+    box.appendChild(p)
+    return
+  }
+  for (const c of characters) {
+    const row = document.createElement('label')
+    row.className = `character-row${c.id === selectedCharacterId ? ' on' : ''}`
+    row.innerHTML =
+      '<input type="radio" name="characterPick" />' +
+      '<span class="character-info"><span class="character-name"></span><span class="character-meta"></span></span>' +
+      '<button type="button" class="ghost small">Delete</button>'
+    row.querySelector('input').checked = c.id === selectedCharacterId
+    row.querySelector('.character-name').textContent = c.name
+    row.querySelector('.character-meta').textContent = `${c.class} · ${c.gender} · Lv.${c.level}`
+    row.querySelector('input').addEventListener('change', () => selectCharacter(c.id))
+    row.querySelector('button').addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      deleteCharacterRow(c.id, c.name)
+    })
+    box.appendChild(row)
+  }
+}
+
+function selectCharacter(id) {
+  selectedCharacterId = id
+  renderCharacterList()
+  const chosen = characters.find((c) => c.id === id)
+  persist({ characterName: chosen ? chosen.name : '' })
+  updatePlayEnabled()
+}
+
+async function deleteCharacterRow(id, name) {
+  if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return
+  const res = await api.deleteCharacter(id)
+  if (!res.ok) {
+    showErrors([res.error])
+    return
+  }
+  characters = characters.filter((c) => c.id !== id)
+  if (selectedCharacterId === id) {
+    selectedCharacterId = null
+    await persist({ characterName: '' })
+  }
+  renderCharacterList()
+  updateCreateVisibility()
+  updatePlayEnabled()
+}
+
+/// Server enforces the cap (server/src/auth.rs) — this just keeps the form
+/// from being offered once it would only produce that refusal.
+function updateCreateVisibility() {
+  const atMax = characters.length >= 3
+  $('toggleNewCharacter').hidden = atMax
+  if (atMax) $('newCharacterFields').hidden = true
+}
+
+function updatePlayEnabled() {
+  $('play').disabled = !selectedCharacterId
 }
 
 function showWatch(url) {
@@ -180,8 +320,8 @@ function setAuthState(isSignedIn, note) {
   $('authState').textContent =
     note ??
     (isSignedIn
-      ? 'Signed in — Start connects without asking again.'
-      : 'Not signed in — Start shows a code to enter in your browser.')
+      ? 'Signed in — Play connects without asking again.'
+      : 'Not signed in — Play shows a code to enter in your browser.')
   $('signOut').disabled = !isSignedIn
 }
 
@@ -223,9 +363,25 @@ function appendFeed(items) {
     el.appendChild(body)
     el.addEventListener('click', () => el.classList.toggle('open'))
     box.appendChild(el)
+
+    // Best-effort, not guaranteed (ADR 0003): show the agent's next turn
+    // right next to the directive, so a player can see whether it landed
+    // instead of trusting it silently worked.
+    if (pendingDirective && (item.k === 'llm-response' || item.k === 'llm-error') && item.t >= pendingDirective.sentAt) {
+      $('directiveReply').textContent = item.m
+      pendingDirective = null
+    }
   }
   while (box.childElementCount > 400) box.removeChild(box.firstChild)
   if (atBottom) box.scrollTop = box.scrollHeight
+}
+
+/// Records what was sent so the reply (above) can be matched back to it.
+function trackDirective(text) {
+  pendingDirective = { text, sentAt: Date.now() }
+  $('directiveSent').textContent = text
+  $('directiveReply').textContent = 'waiting…'
+  $('directiveLog').hidden = false
 }
 
 function renderFeedFilters() {
@@ -248,16 +404,41 @@ function renderFeedFilters() {
   }
 }
 
-function bindTabs() {
-  for (const tab of document.querySelectorAll('#tabs button')) {
-    tab.addEventListener('click', () => {
-      for (const other of document.querySelectorAll('#tabs button')) other.classList.remove('on')
-      tab.classList.add('on')
-      for (const panel of document.querySelectorAll('section[data-panel]')) {
-        panel.hidden = panel.dataset.panel !== tab.dataset.tab
+function openSettings() {
+  $('settingsModal').hidden = false
+}
+
+function closeSettings() {
+  $('settingsModal').hidden = true
+}
+
+/// Rail icons open a slide-over drawer; clicking the open one again closes it.
+function bindRail() {
+  const titles = { thoughts: 'Thoughts', log: 'Log' }
+  for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.drawer
+      const drawer = $('drawer')
+      const isOpenSame = !drawer.hidden && drawer.dataset.kind === kind
+      for (const other of document.querySelectorAll('.rail [data-drawer]')) other.classList.remove('on')
+      if (isOpenSame) {
+        drawer.hidden = true
+        drawer.dataset.kind = ''
+        return
+      }
+      drawer.hidden = false
+      drawer.dataset.kind = kind
+      btn.classList.add('on')
+      $('drawerTitle').textContent = titles[kind]
+      for (const panel of document.querySelectorAll('[data-drawer-panel]')) {
+        panel.hidden = panel.dataset.drawerPanel !== kind
       }
     })
   }
+  $('drawerClose').addEventListener('click', () => {
+    $('drawer').hidden = true
+    for (const other of document.querySelectorAll('.rail [data-drawer]')) other.classList.remove('on')
+  })
 }
 
 function bindFields() {
@@ -283,13 +464,117 @@ function bindFields() {
   })
 }
 
+/// Toggles a collapsed section open/closed, flipping the trigger button's
+/// label between its closed and open text.
+function bindExpander(buttonId, fieldsId, closedLabel, openLabel) {
+  $(buttonId).addEventListener('click', () => {
+    const fields = $(fieldsId)
+    fields.hidden = !fields.hidden
+    $(buttonId).textContent = fields.hidden ? closedLabel : openLabel
+  })
+}
+
+/// A validation error naming a field inside a collapsed section is useless
+/// if the section is still closed — open both before showing it.
+function expandCharacterSections() {
+  $('newCharacterFields').hidden = false
+  $('toggleNewCharacter').textContent = 'Hide new character'
+  $('llmSettingsFields').hidden = false
+  $('toggleLlmSettings').textContent = 'Hide LLM & behavior settings'
+}
+
+/// Actually spawns the resolved binary (see agent.js's probeBinary) rather
+/// than just checking a file exists, so a picked .app bundle or wrong-arch
+/// build fails here instead of as a bare "spawn ENOEXEC" during Play.
+async function checkBinaryAndReport() {
+  const result = await api.checkBinary()
+  $('binaryInfo').textContent = result.ok
+    ? `Binary: ${result.path}`
+    : result.path
+      ? `Binary: ${result.path} — ${result.error}`
+      : result.error
+  return result.ok
+}
+
 function bindActions() {
-  $('start').addEventListener('click', async () => {
+  // No agent process to stop — sign-in never starts one (ADR 0001) — just
+  // abandon any in-flight device-flow poll and back out.
+  $('loginCancel').addEventListener('click', () => {
+    signInGeneration++
+    setScreen('binary')
+  })
+
+  $('continueSignIn').addEventListener('click', async () => {
+    $('continueSignIn').disabled = true
+    const res = await api.authContinue()
+    $('continueSignIn').disabled = false
+    await afterSignIn(res)
+  })
+
+  $('switchAccount').addEventListener('click', async () => {
+    await api.signOut()
+    await beginSignIn()
+  })
+
+  $('createCharacter').addEventListener('click', async () => {
     showErrors([])
-    const res = await api.start()
-    if (!res.ok) showErrors(res.errors)
+    const name = $('newCharacterName').value.trim()
+    if (!name) {
+      showErrors(['Character name is required'])
+      return
+    }
+    $('createCharacter').disabled = true
+    const res = await api.createCharacter(name, settings.characterClass, settings.gender)
+    $('createCharacter').disabled = false
+    if (!res.ok) {
+      showErrors([res.error])
+      return
+    }
+    characters.push(res.character)
+    $('newCharacterName').value = ''
+    $('newCharacterFields').hidden = true
+    $('toggleNewCharacter').textContent = 'Create a new character'
+    renderCharacterList()
+    updateCreateVisibility()
+    selectCharacter(res.character.id)
+  })
+
+  $('directiveForm').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const input = $('directiveInput')
+    const text = input.value.trim()
+    if (!text) return
+    input.value = ''
+    const res = await api.sendDirective(text)
+    if (!res.ok) {
+      showErrors([res.error])
+      return
+    }
+    trackDirective(text)
+  })
+
+  bindExpander('toggleNewCharacter', 'newCharacterFields', 'Create a new character', 'Hide new character')
+  bindExpander('toggleLlmSettings', 'llmSettingsFields', 'LLM & behavior settings', 'Hide LLM & behavior settings')
+  bindExpander('togglePersona', 'personaFields', 'Customize prompt', 'Hide prompt')
+
+  $('play').addEventListener('click', async () => {
+    showErrors([])
+    // Binary's Continue may already have started the agent to get the
+    // device code moving — Play only needs to (re)start it if settings
+    // changed since, otherwise the already-connected session is right here.
+    let res
+    if (!running) res = await api.start()
+    else if (dirtyWhileRunning) res = await api.restart()
     else {
+      setScreen('game')
+      return
+    }
+    if (!res.ok) {
+      expandCharacterSections()
+      showErrors(res.errors)
+    } else {
       dirtyWhileRunning = false
+      setScreen('game')
       setStatus(res.status)
     }
   })
@@ -301,7 +586,6 @@ function bindActions() {
 
   $('restart').addEventListener('click', async () => {
     showErrors([])
-    $('banner').hidden = true
     const res = await api.restart()
     if (!res.ok) showErrors(res.errors)
     else {
@@ -311,10 +595,9 @@ function bindActions() {
   })
 
   $('banner-open').addEventListener('click', () =>
-    api.open($('banner').dataset.url || 'https://www.google.com/device'),
+    api.open($('loginCode').dataset.url || 'https://www.google.com/device'),
   )
   $('banner-copy').addEventListener('click', () => navigator.clipboard.writeText($('banner-code').textContent))
-  $('banner-close').addEventListener('click', () => ($('banner').hidden = true))
 
   $('clearLog').addEventListener('click', () => ($('log').textContent = ''))
   $('clearFeed').addEventListener('click', () => ($('feed').textContent = ''))
@@ -370,22 +653,47 @@ function bindActions() {
       return
     }
     setAuthState(false, res.wasRunning
-      ? 'Signed out and stopped the agent. Press Start to sign in again.'
-      : 'Signed out. Press Start to sign in again.')
+      ? 'Signed out and stopped the agent. Play to sign in again.'
+      : 'Signed out. Play to sign in again.')
   })
 
   $('pickBinary').addEventListener('click', async () => {
     const picked = await api.pickBinary()
     if (picked) {
       settings.binaryPath = picked
-      $('binaryInfo').textContent = `Binary: ${picked}`
+      await checkBinaryAndReport()
     }
   })
 
-  $('openAgentDir').addEventListener('click', () => {
-    const dir = $('openAgentDir').dataset.path
-    if (dir) api.open(dir)
+  $('binaryContinue').addEventListener('click', async () => {
+    showErrors([])
+    $('binaryContinue').disabled = true
+    $('binaryContinue').textContent = 'Checking…'
+    const ok = await checkBinaryAndReport()
+    $('binaryContinue').disabled = false
+    $('binaryContinue').textContent = 'Continue'
+    if (!ok) {
+      showErrors(['agent-client is not runnable — choose a different binary.'])
+      return
+    }
+    // A session already running (app restarted mid-play) skips straight to
+    // Game; anything else goes through sign-in — agent-client itself never
+    // starts until a character is chosen and Play is pressed (ADR 0001).
+    if (running) {
+      setScreen('game')
+      return
+    }
+    await enterLoginScreen()
   })
+  $('openBinaryFromSettings').addEventListener('click', () => {
+    closeSettings()
+    setScreen('binary')
+  })
+
+  $('openSettingsFromLogin').addEventListener('click', openSettings)
+  $('openSettingsFromCharacter').addEventListener('click', openSettings)
+  $('openSettingsFromGame').addEventListener('click', openSettings)
+  $('settingsClose').addEventListener('click', closeSettings)
 }
 
 async function init() {
@@ -399,11 +707,10 @@ async function init() {
   renderClassOptions()
   renderBackend()
 
-  setAuthState(info.signedIn)
+  setAuthState((await api.authStatus()).signedIn)
   $('binaryInfo').textContent = info.binary
     ? `Binary: ${info.binary}`
     : `No agent-client binary found. Build it with "cargo build --release -p agent-client", or choose one below.`
-  $('openAgentDir').dataset.path = info.agentDir
 
   const prompt = await api.getPrompt()
   $('promptText').value = prompt.text
@@ -411,14 +718,19 @@ async function init() {
   $('promptFile').textContent = prompt.file
 
   for (const item of info.log) appendLog(item)
-  setStatus(info.status)
-  if (info.status.deviceCode) showDeviceCode(info.status.deviceCode)
-  if (info.status.watchUrl) showWatch(info.status.watchUrl)
-  showErrors(await api.validate({}))
 
-  bindTabs()
+  // Decide the starting screen before setStatus's auto-bounce-to-character
+  // rule can fire on a false `running` that just means "freshly opened."
+  // A session already running (app restarted mid-play) skips straight past
+  // the binary/login/character gates; anything else starts at Binary.
+  setScreen(info.status.running ? 'game' : 'binary')
+
+  setStatus(info.status)
+  if (info.status.watchUrl) showWatch(info.status.watchUrl)
+
   bindFields()
   bindActions()
+  bindRail()
 
   renderFeedFilters()
   api.onLog(appendLog)
@@ -443,7 +755,10 @@ async function init() {
   api.onState(setStatus)
   api.onDeviceCode(showDeviceCode)
   api.onFatal((message) => showErrors([message]))
-  api.onWatchReady(showWatch)
+  api.onWatchReady((url) => {
+    showWatch(url)
+    if (running) setScreen('game')
+  })
 }
 
 init()

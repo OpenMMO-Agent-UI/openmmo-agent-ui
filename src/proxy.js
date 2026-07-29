@@ -4,6 +4,7 @@ const http = require('node:http')
 const { WebSocket, WebSocketServer } = require('ws')
 
 const { encode, decode, variantOf, Float } = require('./msgpack')
+const { DIRECTIVE_SENDER } = require('./config')
 
 /// Sits between agent-client and the game server, on loopback:
 ///
@@ -227,6 +228,20 @@ class AgentProxy {
       this.onError(`agent socket: ${err.message}`)
       closeBoth()
     })
+  }
+
+  /// A directive (ADR 0003): forges a `WhisperMessage` toward agent-client,
+  /// as if the game server itself had sent it, addressed to the player's own
+  /// character. Whispers already carry agent-client's highest scheduling
+  /// priority and unconditional prompt inclusion — no agent-client patch
+  /// needed, just a wire frame we're already set up to hand-encode. Returns
+  /// false (rather than throwing) when there is nowhere to deliver it, so a
+  /// directive typed before the agent connects fails visibly instead of
+  /// silently vanishing.
+  sendDirective(characterName, text) {
+    if (!this.agentSocket || this.agentSocket.readyState !== WebSocket.OPEN) return false
+    this.agentSocket.send(encode({ WhisperMessage: [DIRECTIVE_SENDER, characterName, text] }))
+    return true
   }
 
   attachSpectator(ws) {

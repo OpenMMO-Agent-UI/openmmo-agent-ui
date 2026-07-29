@@ -5,7 +5,7 @@ const { execFile, spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 
-const { agentDir, repoRoot, writeConfig } = require('./config')
+const { agentDir, buildInfo, packagedSeedDir, repoRoot, writeConfig } = require('./config')
 
 const LOG_CAP = 600
 const READY_TIMEOUT_MS = 20000
@@ -34,7 +34,7 @@ function resolveLoginPath() {
 function candidateBinaries(override) {
   const list = []
   if (override) list.push(override)
-  if (process.resourcesPath) list.push(path.join(process.resourcesPath, 'agent-client', EXE))
+  if (process.resourcesPath) list.push(path.join(packagedSeedDir(), EXE))
   list.push(path.join(repoRoot(), 'target', 'release', EXE))
   list.push(path.join(repoRoot(), 'target', 'debug', EXE))
   return list
@@ -50,14 +50,47 @@ function resolveBinary(override) {
   })
 }
 
+/// `resolveBinary` only checks the path exists as a file — it would happily
+/// accept a picked .app bundle's directory, a wrong-arch build, or a
+/// corrupted download, all of which fail at spawn time with something like
+/// "spawn ENOEXEC" once the user is already mid-session. Node's `spawn`
+/// event only fires once the OS has actually exec'd the file, so it's the
+/// most direct way to catch that ahead of time — a failed exec emits
+/// `error` instead. Kill it the moment either fires; we only care whether
+/// it started, not what it does next.
+function probeBinary(binaryPath) {
+  return new Promise((resolve) => {
+    let child
+    try {
+      child = spawn(binaryPath, ['--version'], { stdio: 'ignore' })
+    } catch (err) {
+      resolve({ ok: false, error: err.message })
+      return
+    }
+    const timer = setTimeout(() => {
+      child.kill()
+      resolve({ ok: false, error: `${binaryPath} did not respond` })
+    }, 3000)
+    child.once('spawn', () => {
+      clearTimeout(timer)
+      child.kill()
+      resolve({ ok: true })
+    })
+    child.once('error', (err) => {
+      clearTimeout(timer)
+      resolve({ ok: false, error: err.message })
+    })
+  })
+}
+
 class AgentProcess extends EventEmitter {
   constructor() {
     super()
     this.child = null
     this.log = []
-    this.deviceCode = null
     this.watchUrl = null
     this.stopping = false
+    this.protocolWarned = false
   }
 
   get running() {
@@ -69,7 +102,6 @@ class AgentProcess extends EventEmitter {
       running: this.running,
       pid: this.child ? this.child.pid : null,
       watchUrl: this.watchUrl,
-      deviceCode: this.deviceCode,
     }
   }
 
@@ -80,35 +112,24 @@ class AgentProcess extends EventEmitter {
       this.log.push(item)
       if (this.log.length > LOG_CAP) this.log.shift()
       this.emit('log', item)
-      this.scanForDeviceCode(line)
-      this.scanForProtocolRefusal(line)
-    }
-  }
-
-  /// The device flow prints the URL and the code on separate lines; surface
-  /// them as a banner so nobody has to read the log to sign in.
-  scanForDeviceCode(line) {
-    const url = line.match(/\b(https?:\/\/\S+)/)
-    if (url && /open\s/.test(line)) {
-      this.deviceCode = { ...(this.deviceCode || {}), url: url[1] }
-    }
-    const code = line.match(/enter code\s+(\S+)/i)
-    if (code) this.deviceCode = { ...(this.deviceCode || {}), code: code[1] }
-    if (this.deviceCode && this.deviceCode.url && this.deviceCode.code) {
-      this.emit('device-code', this.deviceCode)
+      this.scanForProtocolMismatch(line)
     }
   }
 
   /// The one refusal that cannot be waited out: the server compares wire
-  /// versions exactly, so a mismatch means moving the checkout. Lift it out of
-  /// the log, where it otherwise scrolls past as a single line among the
-  /// reconnect attempts it triggers.
-  scanForProtocolRefusal(line) {
+  /// versions exactly, so a mismatch means moving the checkout. It otherwise
+  /// scrolls past as a single line among the reconnect attempts it triggers —
+  /// lift it out once per run, as a fatal error naming the commit to move to.
+  scanForProtocolMismatch(line) {
+    if (this.protocolWarned) return
     const match = line.match(/Protocol v(\d+) required, you sent v(\d+)/)
     if (!match) return
+    this.protocolWarned = true
+    const info = buildInfo()
+    const built = info ? ` This build is from commit ${info.commit} (protocol v${info.protocolVersion}).` : ''
     this.emit(
       'fatal',
-      `The server speaks protocol v${match[1]}, this build speaks v${match[2]}. ` +
+      `The server speaks protocol v${match[1]}, this build speaks v${match[2]}.${built} ` +
         `Run "node openmmo-client/scripts/check-protocol.js" for the commit to move to.`,
     )
   }
@@ -131,9 +152,9 @@ class AgentProcess extends EventEmitter {
 
     const configFile = writeConfig(settings)
     this.log = []
-    this.deviceCode = null
     this.watchUrl = null
     this.stopping = false
+    this.protocolWarned = false
 
     const env = {
       ...process.env,
@@ -218,4 +239,4 @@ class AgentProcess extends EventEmitter {
   }
 }
 
-module.exports = { AgentProcess, resolveBinary, candidateBinaries }
+module.exports = { AgentProcess, resolveBinary, candidateBinaries, probeBinary }

@@ -8,16 +8,19 @@
   --accent: #ffd76a;
   --ok: #5fd48a;
   --err: #e05252;
+  --display-font: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* The UA rule for [hidden] is `display: none` at the lowest specificity, so
-   any author rule that sets display — #placeholder and #banner are flex, every
-   label is block — silently wins and the element stays on screen. Everything
-   here toggles visibility through the attribute, so state it once, loudly. */
+/* An author rule that sets `display` on a selector always beats the
+   browser's default `[hidden] { display: none }`, no matter the specificity
+   or source order — so every `hidden`-toggled element in this file (modal,
+   drawer, drawer panels, placeholder) would otherwise ignore the attribute
+   entirely. One `!important` here is the standard fix, instead of hand-
+   patching each selector that happens to combine `hidden` with a display rule. */
 [hidden] {
   display: none !important;
 }
@@ -25,53 +28,15 @@
 body {
   margin: 0;
   height: 100vh;
-  display: flex;
-  flex-direction: column;
   background: var(--bg);
   color: var(--text);
   font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   overflow: hidden;
 }
 
-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
-  -webkit-app-region: drag;
-}
-
-header h1 {
-  margin: 0 8px 0 70px;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-header button {
-  -webkit-app-region: no-drag;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #545a68;
-}
-
-.dot.on {
-  background: var(--ok);
-  box-shadow: 0 0 8px rgba(95, 212, 138, 0.6);
-}
-
-.status {
-  color: var(--muted);
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button {
@@ -99,76 +64,48 @@ button.ghost {
   background: transparent;
 }
 
-#banner {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: #2b2718;
-  border-bottom: 1px solid #4a4127;
+button.block {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-top: 6px;
 }
 
-#banner p {
-  margin: 2px 0 0;
-  color: var(--muted);
-}
-
-#banner code {
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: #12141a;
-  color: var(--accent);
-  font-size: 16px;
-  letter-spacing: 0.1em;
-}
-
-#errors {
-  padding: 8px 14px;
-  background: #2b1a1a;
-  border-bottom: 1px solid #52302f;
-  color: #ffb4b4;
-  white-space: pre-wrap;
-}
-
-main {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-aside {
-  width: 380px;
-  display: flex;
-  flex-direction: column;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-  min-height: 0;
-}
-
-nav {
-  display: flex;
-  border-bottom: 1px solid var(--line);
-}
-
-nav button {
-  flex: 1;
+button.linklike {
+  display: block;
+  margin: 14px auto 0;
+  padding: 0;
   border: none;
-  border-radius: 0;
-  background: transparent;
+  background: none;
   color: var(--muted);
-  padding: 9px 4px;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-nav button.on {
+button.linklike:hover {
+  color: var(--accent);
+}
+
+button.linklike-inline {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+button.linklike-inline:hover {
   color: var(--text);
-  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-section {
-  flex: 1;
-  padding: 14px;
-  overflow-y: auto;
-  min-height: 0;
+button.ghost.small {
+  padding: 2px 8px;
+  font-size: 11px;
 }
 
 label {
@@ -203,7 +140,7 @@ input[type='checkbox'] {
 }
 
 textarea {
-  height: 260px;
+  height: 220px;
   resize: vertical;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
@@ -242,20 +179,6 @@ pre {
   overflow-y: auto;
 }
 
-section[data-panel='log'] {
-  display: flex;
-  flex-direction: column;
-}
-
-section[data-panel='log'] pre {
-  flex: 1;
-  min-height: 0;
-}
-
-#systemPrompt {
-  max-height: 300px;
-}
-
 .line-err {
   color: #ffb4b4;
 }
@@ -264,8 +187,329 @@ section[data-panel='log'] pre {
   color: var(--accent);
 }
 
+/* ---------- global error toast ---------- */
+
+.toast {
+  position: fixed;
+  z-index: 50;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 60ch;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #2b1a1a;
+  border: 1px solid #52302f;
+  color: #ffb4b4;
+  white-space: pre-wrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- screens ---------- */
+
+.screen {
+  display: none;
+}
+
+body[data-screen='binary'] #screen-binary,
+body[data-screen='login'] #screen-login,
+body[data-screen='character'] #screen-character {
+  display: flex;
+}
+
+body[data-screen='game'] #screen-game {
+  display: flex;
+}
+
+.screen-entry {
+  position: relative;
+  height: 100vh;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  -webkit-app-region: drag;
+}
+
+.screen-entry .glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(480px 320px at 50% 38%, rgba(255, 215, 106, 0.1), transparent 70%);
+  pointer-events: none;
+}
+
+.card {
+  -webkit-app-region: no-drag;
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin: 32px;
+  padding: 32px 36px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.card.wide {
+  max-width: 560px;
+}
+
+.wordmark {
+  margin: 0 0 18px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.display {
+  margin: 0 0 8px;
+  font-family: var(--display-font);
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.lede {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+.steps {
+  margin: 4px 0 16px;
+  padding-left: 22px;
+  color: var(--text);
+}
+
+.steps li {
+  margin-bottom: 10px;
+}
+
+.inline-code {
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: #0d0f14;
+  border: 1px solid #4a4127;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 14px rgba(255, 215, 106, 0.35);
+}
+
+.pulsing {
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pulsing {
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.character-list {
+  margin-bottom: 14px;
+}
+
+.character-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  cursor: pointer;
+}
+
+.character-row:hover {
+  border-color: #3d4454;
+}
+
+.character-row.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.character-row input[type='radio'] {
+  width: auto;
+  margin: 0;
+}
+
+.character-row .character-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.character-row .character-name {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.character-row .character-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.character-empty {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.expander {
+  margin: 4px 0 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.expander > div {
+  margin-top: 14px;
+}
+
+/* Nested expanders (Customize prompt, inside LLM & behavior settings) sit
+   flush with their parent's already-indented content instead of doubling
+   the top border. */
+.expander .expander {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* ---------- game screen ---------- */
+
+.screen-game {
+  height: 100vh;
+  flex-direction: column;
+}
+
+.gamebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+}
+
+.gamebar button {
+  -webkit-app-region: no-drag;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #545a68;
+}
+
+.dot.on {
+  background: var(--ok);
+  box-shadow: 0 0 8px rgba(95, 212, 138, 0.6);
+}
+
+.status {
+  color: var(--muted);
+}
+
+.vitals {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.viewtoggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.viewtoggle button {
+  border: none;
+  border-radius: 0;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.viewtoggle button.on {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.gameshell {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.rail {
+  width: 52px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 0;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+
+.rail button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.rail button:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+
+.rail button.on {
+  color: var(--accent);
+  background: var(--panel-2);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.rail-spacer {
+  flex: 1;
+}
+
 #view {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.gamesurface {
+  flex: 1;
+  min-height: 0;
   position: relative;
   background: #0d0f14;
 }
@@ -300,29 +544,99 @@ iframe {
   max-width: 46ch;
 }
 
-.vitals {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
+/* Always visible, docked below the game surface — not a rail drawer, and not
+   an overlay on top of the scene either (it used to be, and covered the
+   scene/HUD along the bottom edge). This is how a human overrides the
+   otherwise-autonomous agent, and ADR 0003 depends on the reply being seen
+   right next to what was sent, not found later in a log — but it earns that
+   visibility by taking its own space, not by floating over the view. */
+.directive-panel {
+  flex: none;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
 }
 
-.viewtoggle {
+.directive-log {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.directive-line {
   display: flex;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.directive-tag {
+  flex: none;
+  width: 42px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.directive-you span:last-child {
+  color: var(--text);
+}
+
+.directive-agent span:last-child {
+  color: var(--accent);
+}
+
+.directive-form {
+  display: flex;
+  gap: 8px;
+}
+
+.directive-form input {
+  margin-top: 0;
+}
+
+.drawer {
+  width: 340px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.drawer-body {
+  flex: 1;
+  min-height: 0;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+.drawer-body > [data-drawer-panel] {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.drawer-body pre,
+.drawer-body #feed {
+  flex: 1;
+  min-height: 0;
+}
+
+#feed {
+  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: 6px;
-  overflow: hidden;
-}
-
-.viewtoggle button {
-  border: none;
-  border-radius: 0;
-  padding: 4px 10px;
-  background: transparent;
-  color: var(--muted);
-}
-
-.viewtoggle button.on {
-  background: var(--panel-2);
-  color: var(--text);
+  background: #0d0f14;
+  padding: 6px;
 }
 
 #feedFilters {
@@ -343,21 +657,6 @@ iframe {
 .chip.on {
   opacity: 1;
   color: var(--text);
-}
-
-section[data-panel='thoughts'] {
-  display: flex;
-  flex-direction: column;
-}
-
-#feed {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #0d0f14;
-  padding: 6px;
 }
 
 .feed-item {
@@ -417,4 +716,46 @@ section[data-panel='thoughts'] {
 
 .mem.high {
   color: #f0b48a;
+}
+
+#systemPrompt {
+  max-height: 260px;
+}
+
+/* ---------- settings modal ---------- */
+
+.modal {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 9, 12, 0.6);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 460px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 18px;
+  overflow-y: auto;
 }

@@ -221,10 +221,40 @@ be four Rust hooks. The web client needs seven, ~150 lines:
 - `GameScene.svelte` / `GameScenePlayersLayer.svelte` — no input FSM when observing
 - `.gitignore` — our symlinks, and the generated config's secret-bearing backup
 
+### In-browser agent (withdrawn)
+
 An in-browser agent — the same loop running inside the web client, on your own
 key, with no second process — was built and then withdrawn: the client's Google
 sign-in needs a `VITE_GOOGLE_CLIENT_ID` this project does not ship, so it could
 never be exercised. It lives in the history if it is wanted back.
+
+## Packaging a standalone build
+
+`npm start` needs the dev setup above — a nested OpenMMO checkout, `link.sh`,
+`patches.sh`, a built `agent-client` binary and a built `client/dist`. A
+packaged build needs none of that at runtime: it ships its own copy of the
+binary and the web client, and writes its runtime data (`config.toml`,
+`memory.txt`, the terrain tile cache) under the OS's app data directory
+instead of into the bundle, which is read-only once packaged.
+
+Building one still starts from a normal dev checkout with `agent-client` and
+`client/dist` already built (see Setup), then stages and packages it:
+
+```bash
+npm install
+OPENMMO_CHECKOUT=/path/to/OpenMMO npm run dist:mac    # or dist:win / dist:linux
+```
+
+`scripts/package-resources.sh` copies the release binary, the built client,
+and only the fixed-content slice of `agent-client/data/` (prompts, templates,
+animation timings — not `config.toml`, `memory.txt`, or the tile cache) into
+`build/resources/`, which `electron-builder`'s `extraResources` bundles into
+the app. The output lands in `out/`.
+
+Only `dist:mac` is verified — built and run on Apple Silicon. `dist:win` and
+`dist:linux` are configured but untested: `agent-client` is a native binary,
+so each needs its own build machine, and the build here produces an unsigned
+app (no Gatekeeper/SmartScreen exemption).
 
 ## Known limits
 

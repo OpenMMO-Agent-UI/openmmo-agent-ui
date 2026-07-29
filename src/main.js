@@ -5,9 +5,11 @@ const path = require('node:path')
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
 
 const config = require('./config')
-const { AgentProcess, candidateBinaries, resolveBinary } = require('./agent')
+const { AgentProcess, candidateBinaries, resolveBinary, probeBinary } = require('./agent')
 const { ClientServer, distReady } = require('./server')
 const { AgentProxy } = require('./proxy')
+const googleAuth = require('./googleAuth')
+const characterSession = require('./characterSession')
 
 const agent = new AgentProcess()
 const clientServer = new ClientServer()
@@ -22,6 +24,14 @@ let feedTimer = null
 let feedSeq = null
 let settings = null
 let win = null
+// The pre-flight session (ADR 0001): open for the lifetime of the Character
+// screen, closed once Play launches agent-client or the app signs out.
+let preflightSession = null
+
+function closePreflightSession() {
+  if (preflightSession) preflightSession.close()
+  preflightSession = null
+}
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
@@ -170,6 +180,7 @@ async function openSpectatorView() {
 }
 
 app.whenReady().then(() => {
+  config.seedRuntimeData()
   settings = config.importExistingConfig(config.load())
   config.save(settings)
 
@@ -178,7 +189,6 @@ app.whenReady().then(() => {
     if (!state.running) stopFeedPolling()
     send('agent:state', state)
   })
-  agent.on('device-code', (code) => send('agent:device-code', code))
   agent.on('fatal', (message) => send('agent:fatal', message))
   agent.on('watch-ready', (url) => {
     send('watch:ready', url)
@@ -234,6 +244,9 @@ ipcMain.handle('config:preview', () => config.renderConfigToml(settings))
 async function startAgent() {
   const errors = config.validate(settings)
   if (errors.length) return { ok: false, errors }
+  // The pre-flight session already resolved the exact character agent-client
+  // is about to enter with (ADR 0001) — nothing left for it to do.
+  closePreflightSession()
   try {
     await proxy.start(settings.server)
     return { ok: true, status: await agent.start({ ...settings, server: proxy.agentUrl }) }
@@ -282,8 +295,94 @@ ipcMain.handle('prompt:system', () => {
 ipcMain.handle('auth:signout', async () => {
   const wasRunning = agent.running
   if (wasRunning) await agent.stopAndWait()
+  closePreflightSession()
   const removed = config.signOut()
+  // A new sign-in may be a different account; last session's chosen
+  // character shouldn't carry over silently.
+  settings = config.save({ ...settings, characterName: '' })
   return { removed, wasRunning, signedIn: config.signedIn() }
+})
+
+/// Cheap, no-network check: is there a cached Google credential for the
+/// currently configured client? Drives the Login screen's initial
+/// Continue-vs-sign-in state (ADR 0001).
+ipcMain.handle('auth:status', () => ({
+  signedIn: Boolean(googleAuth.cachedRefreshToken(settings.googleClientId)),
+}))
+
+/// Shared tail of both sign-in paths below: mint an id_token from the
+/// refresh token and open the pre-flight session on it.
+async function finishSignIn(refreshToken) {
+  const idToken = await googleAuth.mintIdToken(refreshToken, settings.googleClientId, settings.googleClientSecret)
+  closePreflightSession()
+  preflightSession = await characterSession.openSession(settings.server, idToken)
+  return {
+    ok: true,
+    email: googleAuth.peekEmail(idToken),
+    accountName: preflightSession.accountName,
+    characters: preflightSession.characters,
+  }
+}
+
+function signInError(err) {
+  const isProtocolMismatch = err instanceof characterSession.ProtocolMismatchError
+  return { ok: false, protocolMismatch: isProtocolMismatch, error: err.message }
+}
+
+/// A cached credential already exists — mint a fresh id_token from it and go
+/// straight to listing characters, no device flow shown.
+ipcMain.handle('auth:continue', async () => {
+  try {
+    const refreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
+    if (!refreshToken) throw new Error('No cached credential to continue with')
+    return await finishSignIn(refreshToken)
+  } catch (err) {
+    return signInError(err)
+  }
+})
+
+/// No cached credential: run the device flow, surfacing the url/code as soon
+/// as Google issues them (agent:device-code carries them to the Login
+/// screen), then continue exactly as `auth:continue` does.
+ipcMain.handle('auth:signin', async () => {
+  try {
+    const refreshToken = await googleAuth.runDeviceFlow(
+      settings.googleClientId,
+      settings.googleClientSecret,
+      (code) => send('auth:device-code', code),
+    )
+    return await finishSignIn(refreshToken)
+  } catch (err) {
+    return signInError(err)
+  }
+})
+
+ipcMain.handle('characters:create', async (_e, { name, characterClass, gender }) => {
+  if (!preflightSession) return { ok: false, error: 'Not signed in' }
+  try {
+    return { ok: true, character: await preflightSession.createCharacter(name, characterClass, gender) }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('characters:delete', async (_e, characterId) => {
+  if (!preflightSession) return { ok: false, error: 'Not signed in' }
+  try {
+    await preflightSession.deleteCharacter(characterId)
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+/// A directive (ADR 0003): best-effort, delivered as a relay-forged whisper.
+/// Only meaningful once agent-client is actually running and connected.
+ipcMain.handle('directive:send', (_e, text) => {
+  if (!agent.running) return { ok: false, error: 'Not running' }
+  const delivered = proxy.sendDirective(settings.characterName, text)
+  if (!delivered) return { ok: false, error: 'Not connected yet — try again in a moment' }
+  return { ok: true }
 })
 
 ipcMain.handle('binary:pick', async () => {
@@ -294,6 +393,16 @@ ipcMain.handle('binary:pick', async () => {
   if (res.canceled || !res.filePaths[0]) return null
   settings = config.save({ ...settings, binaryPath: res.filePaths[0] })
   return settings.binaryPath
+})
+
+/// Confirms the OS can actually exec the resolved binary — catches a picked
+/// .app bundle, wrong-arch build, or corrupted download before Play does,
+/// which otherwise surfaces as a bare "spawn ENOEXEC" deep in the log.
+ipcMain.handle('binary:check', async () => {
+  const binary = resolveBinary(settings.binaryPath)
+  if (!binary) return { ok: false, error: 'No agent-client binary found. Build it or choose one.' }
+  const probe = await probeBinary(binary)
+  return { ...probe, path: binary }
 })
 
 ipcMain.handle('shell:open', (_e, target) => {

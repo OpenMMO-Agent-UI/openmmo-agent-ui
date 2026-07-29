@@ -19,7 +19,20 @@ const { WebSocket } = require('ws')
 
 const { encode, decode, variantOf } = require('./../src/msgpack')
 
-const ROOT = path.resolve(__dirname, '..', '..')
+// `../..` from this script only finds the OpenMMO checkout when
+// openmmo-client is cloned *inside* it (the README's documented layout) —
+// checked out as siblings instead, it silently lands one directory too
+// shallow. See link.sh/patches.sh, which had the identical bug.
+function findRoot() {
+  if (process.env.OPENMMO_CHECKOUT) return process.env.OPENMMO_CHECKOUT
+  try {
+    return execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+  } catch {
+    throw new Error('Run this from inside the OpenMMO checkout, or set OPENMMO_CHECKOUT')
+  }
+}
+
+const ROOT = findRoot()
 const DEFAULT_URL = 'wss://openmmo.to.nexus/ws'
 const UPSTREAM = 'upstream/master'
 

@@ -10,8 +10,11 @@
 # the only ones a rebase can conflict on.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-patches="$root/openmmo-client/patches"
+# See link.sh for why these are two separate lookups, not one `../..`.
+self_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+patches="$self_root/patches"
+root="${OPENMMO_CHECKOUT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+[[ -n $root ]] || { echo "Run this from inside the OpenMMO checkout, or set OPENMMO_CHECKOUT" >&2; exit 1; }
 
 # Every upstream file we modify, grouped by the patch it belongs to.
 # agent-client is untouched: the spectator feed comes from src/proxy.js,

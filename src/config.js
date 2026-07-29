@@ -45,11 +45,26 @@ const BACKENDS = [
   { id: 'none', label: 'No LLM (idle)', kind: 'none', models: [] },
 ]
 
+/// Same default as agent-client's own `DEFAULT_CLIENT_ID` in google_auth.rs —
+/// a "TV and Limited Input" OAuth client registered in the same Google Cloud
+/// project as the web client. The pre-flight session (src/characterSession.js)
+/// and agent-client both sign in as this client by default, so they land in
+/// the same credential cache; a different client_id only works against a
+/// server whose own allowlist accepts it (see server/src/google_auth.rs).
+const DEFAULT_GOOGLE_CLIENT_ID =
+  '73507098079-cssj1h0eir5aj11d5hs81o9k7e466i55.apps.googleusercontent.com'
+
+/// Sender name on every relay-forged directive whisper (see proxy.js and
+/// ADR 0003). Fixed rather than the player's Google display name, so the
+/// shipped default prompt can name it literally.
+const DIRECTIVE_SENDER = 'Director'
+
 const DEFAULTS = {
   server: 'wss://openmmo.to.nexus/ws',
   terrain: 'https://openmmo.to.nexus',
   watchPort: 8808,
   authMode: 'google',
+  googleClientId: DEFAULT_GOOGLE_CLIENT_ID,
   npcAccount: '',
   characterName: '',
   characterClass: 'rogue',
@@ -85,16 +100,92 @@ function settingsPath() {
   return path.join(app.getPath('userData'), 'settings.json')
 }
 
+/// The OpenMMO checkout `agentDir()`/`clientDist()` (server.js) resolve
+/// `agent-client/` and `client/` against in dev. `OPENMMO_CHECKOUT` (the
+/// packaging scripts' own env var) wins when set; otherwise this assumes the
+/// README's documented layout — openmmo-client cloned *inside* the OpenMMO
+/// checkout — which only holds if the two are actually nested. Checked out
+/// as siblings instead (as common as nested in practice), this silently
+/// resolves to nonsense (a data/ or client/dist that was never there) —
+/// found testing Play itself, the same way protocolVersion()'s equivalent
+/// bug was found testing the pre-flight session.
 function repoRoot() {
+  if (process.env.OPENMMO_CHECKOUT) return process.env.OPENMMO_CHECKOUT
   return path.resolve(__dirname, '..', '..')
 }
 
+/// Where a packaged build ships the agent-client binary and its seed data.
+/// Read-only: once code-signed on macOS (or installed under Program Files on
+/// Windows), nothing here can be rewritten at runtime.
+function packagedSeedDir() {
+  return path.join(process.resourcesPath || '', 'agent-client')
+}
+
 /// Working directory for the child process: agent-client resolves every path
-/// in its config relative to cwd, so it must be the dir that holds `data/`.
+/// in its config relative to cwd, so it must be the dir that holds `data/` —
+/// and that dir has to be writable, since config.toml is rewritten every
+/// start and agent-client itself writes memory.txt and the terrain tile
+/// cache into it. A dev checkout is already writable; a packaged build's
+/// resources are not, so it gets a runtime dir under userData instead,
+/// seeded from the read-only bundle by seedRuntimeData().
 function agentDir() {
-  const packaged = path.join(process.resourcesPath || '', 'agent-client')
-  if (app.isPackaged && fs.existsSync(path.join(packaged, 'data'))) return packaged
+  if (app.isPackaged) return path.join(app.getPath('userData'), 'agent-runtime')
   return path.join(repoRoot(), 'agent-client')
+}
+
+/// The subset of data/ that is fixed content rather than runtime state —
+/// safe to ship read-only and copy into place once. Everything else
+/// (config.toml, memory.txt, data/cache/*) is either regenerated on every
+/// start or grows at runtime and has no business being in the bundle.
+const SEED_ENTRIES = ['system_prompt.txt', 'user_prompts', 'templates', 'animation_durations.json']
+
+/// Copies a seed entry into the runtime dir the first time it's missing.
+/// Never overwrites — a hand-edited user_prompts/ or a relaunch after the
+/// files already exist must leave them alone.
+function copySeedEntry(src, dest) {
+  if (!fs.existsSync(src) || fs.existsSync(dest)) return
+  fs.mkdirSync(path.dirname(dest), { recursive: true })
+  fs.cpSync(src, dest, { recursive: true })
+}
+
+function seedRuntimeData() {
+  if (!app.isPackaged) return
+  const seedData = path.join(packagedSeedDir(), 'data')
+  const runtimeData = path.join(agentDir(), 'data')
+  for (const entry of SEED_ENTRIES) {
+    copySeedEntry(path.join(seedData, entry), path.join(runtimeData, entry))
+  }
+}
+
+/// { commit, protocolVersion } of the OpenMMO checkout this build was staged
+/// from — written by scripts/package-resources.sh. Null outside a packaged
+/// build, or if a build predates this stamp.
+function buildInfo() {
+  if (!app.isPackaged) return null
+  try {
+    return JSON.parse(fs.readFileSync(path.join(packagedSeedDir(), 'build-info.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/// The wire protocol version `characterSession.js`'s hand-encoded messages
+/// were written against (ADR 0002's protocol guard sends this in
+/// `ClientInfo`). This is a fact about *this JS code* — which struct shapes
+/// it knows how to build — not about whatever `agent-client` binary the user
+/// has configured; those are independent and checked separately (agent.js's
+/// `scanForProtocolMismatch` catches a real agent-client at its own runtime).
+/// Deriving this from the configured binary/checkout was tried and found
+/// broken the moment the binary was a bare copy outside any checkout (e.g.
+/// `~/Downloads/agent-client`) — there's no directory to read
+/// `shared/src/lib.rs` from at all in that case, even though the binary
+/// itself may be perfectly current. A hand-updated constant has no such
+/// blind spot: bump it (and verify characterSession.js's message shapes
+/// still match) whenever `scripts/check-protocol.js` reports a new number.
+const CHARACTER_SESSION_PROTOCOL_VERSION = 9
+
+function protocolVersion() {
+  return CHARACTER_SESSION_PROTOCOL_VERSION
 }
 
 /// Where agent-client caches the Google refresh token — mirrors
@@ -193,6 +284,7 @@ function importExistingConfig(settings) {
   take('maxConcurrent', parsed.max_concurrent)
   take('requestTimeoutSecs', parsed.request_timeout_secs)
   take('authMode', parsed.auth && parsed.auth.mode)
+  take('googleClientId', parsed.auth && parsed.auth.client_id)
   take('googleClientSecret', parsed.auth && parsed.auth.client_secret)
   take('npcAccount', npc.account)
   take('characterName', npc.character_name)
@@ -238,8 +330,13 @@ function renderConfigToml(s) {
     '[auth]',
     `mode = ${tomlString(s.authMode)}`,
   ]
-  if (s.authMode === 'google' && s.googleClientSecret) {
-    lines.push(`client_secret = ${tomlString(s.googleClientSecret)}`)
+  if (s.authMode === 'google') {
+    // Must match whatever client_id the pre-flight session (characterSession.js)
+    // signed in as: agent-client only reuses the cached refresh token when the
+    // cache's client_id equals this one (google_auth.rs), so a mismatch here
+    // silently throws away the sign-in Login already did and re-prompts.
+    lines.push(`client_id = ${tomlString(s.googleClientId)}`)
+    if (s.googleClientSecret) lines.push(`client_secret = ${tomlString(s.googleClientSecret)}`)
   }
 
   lines.push('', '[claude]', `model = ${tomlString(s.models.claude)}`)
@@ -262,12 +359,12 @@ function renderConfigToml(s) {
   )
 
   lines.push('', '[[npcs]]', `llm = ${tomlString(s.llm)}`)
-  if (s.authMode === 'google') {
-    lines.push(`character_name = ${tomlString(s.characterName)}`)
-  } else {
-    lines.push(`account = ${tomlString(s.npcAccount)}`)
-    if (s.characterName) lines.push(`character_name = ${tomlString(s.characterName)}`)
-  }
+  if (s.authMode !== 'google') lines.push(`account = ${tomlString(s.npcAccount)}`)
+  // Google auth resolves the account from the id_token alone and hands back
+  // its whole character list — agent-client enters the first one if no name
+  // is given, or creates one if the name doesn't match. A name is only
+  // needed to pick among several characters or to create a new one.
+  if (s.characterName) lines.push(`character_name = ${tomlString(s.characterName)}`)
   lines.push(
     `character_class = ${tomlString(s.characterClass)}`,
     `gender = ${tomlString(s.gender)}`,
@@ -288,9 +385,6 @@ function validate(s) {
   const errors = []
   if (!/^wss?:\/\//.test(s.server)) errors.push('Server URL must start with ws:// or wss://')
   else if (!/\/ws\/?$/.test(s.server)) errors.push('Server URL must end in /ws')
-  if (s.authMode === 'google' && !s.characterName.trim()) {
-    errors.push('Google sign-in needs a character name (unique across the server)')
-  }
   if (s.authMode === 'npc_token' && !/^npc_/.test(s.npcAccount)) {
     errors.push('Token auth needs an account name starting with npc_')
   }
@@ -302,6 +396,12 @@ function validate(s) {
   const backend = BACKENDS.find((b) => b.id === s.llm)
   if (backend && backend.kind === 'http' && !s.models[s.llm]) {
     errors.push(`Pick a model for ${backend.label}`)
+  }
+  // Under Google auth, the pre-flight session (characterSession.js) always
+  // resolves an exact character before Play — agent-client should never fall
+  // back to its own characters.first()/auto-create guesswork (ADR 0001).
+  if (s.authMode === 'google' && !s.characterName) {
+    errors.push('Choose or create a character first')
   }
   if (s.llm === 'openai' && !s.openaiBaseUrl) errors.push('OpenAI-compatible mode needs a base URL')
   if (isLoopbackUrl(s.server)) {
@@ -330,7 +430,13 @@ module.exports = {
   signedIn,
   CLASSES,
   DEFAULTS,
+  DEFAULT_GOOGLE_CLIENT_ID,
+  DIRECTIVE_SENDER,
   agentDir,
+  packagedSeedDir,
+  seedRuntimeData,
+  buildInfo,
+  protocolVersion,
   importExistingConfig,
   load,
   renderConfigToml,

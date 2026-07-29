@@ -11,12 +11,43 @@
     "link": "bash scripts/link.sh",
     "patches": "bash scripts/patches.sh",
     "check": "node scripts/check-protocol.js",
-    "bench": "node scripts/bench-models.js"
+    "bench": "node scripts/bench-models.js",
+    "stage": "bash scripts/package-resources.sh",
+    "dist:mac": "npm run stage -- \"$OPENMMO_CHECKOUT\" && electron-builder --mac",
+    "dist:win": "npm run stage -- \"$OPENMMO_CHECKOUT\" && electron-builder --win",
+    "dist:linux": "npm run stage -- \"$OPENMMO_CHECKOUT\" && electron-builder --linux"
   },
   "devDependencies": {
-    "electron": "^43.0.0"
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "ws": "^8.21.1"
+  },
+  "build": {
+    "appId": "to.nexus.openmmo.agent",
+    "productName": "OpenMMO Agent",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "build/resources/agent-client", "to": "agent-client" },
+      { "from": "build/resources/client", "to": "client" }
+    ],
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [{ "target": "zip", "arch": ["arm64"] }]
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "linux": {
+      "category": "Game",
+      "target": [{ "target": "AppImage", "arch": ["x64"] }]
+    }
   }
 }
