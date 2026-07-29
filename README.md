@@ -106,7 +106,7 @@ same order. Being in the middle buys two things:
   false, so it draws the monster without adopting its brain.
 
 The proxy keeps a snapshot so a spectator that connects late is caught up
-before the live stream starts — and switching 3D ↔ Map *is* a late connect, so
+before the live stream starts — and reloading the view *is* a late connect, so
 whatever the snapshot misses is wrong until a live frame happens to correct it.
 `WorldSnapshot` therefore tracks the join frame and the join-time `GameState`
 baseline, every entity's latest position (the agent's own included, which the

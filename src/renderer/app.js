@@ -8,8 +8,9 @@ let backends = []
 let classes = []
 let running = false
 let dirtyWhileRunning = false
-let viewUrls = { scene: null, panel: null }
-let activeView = 'scene'
+/// The spectator scene's URL, once the relay is listening and the agent has a
+/// session to mirror. One view, so one URL: there is nothing to switch between.
+let sceneUrl = null
 const feedHidden = new Set()
 
 // Pre-flight session state (ADR 0001): the character list fetched at sign-in,
@@ -158,7 +159,7 @@ function setStatus(state) {
     frame.hidden = true
     frame.removeAttribute('src')
     delete frame.dataset.url
-    viewUrls = { scene: null, panel: null }
+    sceneUrl = null
     $('placeholder').hidden = false
     setVitals(null)
     if (document.body.dataset.screen === 'game') setScreen('character')
@@ -347,21 +348,27 @@ function updatePlayEnabled() {
   $('play').disabled = !selectedCharacterId
 }
 
-function showWatch(url) {
-  if (!viewUrls.panel) viewUrls.panel = url
-  if (activeView === 'panel') applyView()
-}
-
 function applyView() {
-  const url = viewUrls[activeView]
-  if (!url) return
+  if (!sceneUrl) return
   const frame = $('frame')
-  if (frame.dataset.url !== url) {
-    frame.dataset.url = url
-    frame.src = url
+  if (frame.dataset.url !== sceneUrl) {
+    frame.dataset.url = sceneUrl
+    frame.src = sceneUrl
   }
   frame.hidden = false
   $('placeholder').hidden = true
+}
+
+/// Back to the "nothing to watch" card, carrying why. The scene is the only
+/// view now, so a scene that cannot open has nothing to fall back to — saying
+/// so is better than an empty frame.
+function showViewProblem(message) {
+  $('viewHint').textContent = message
+  const frame = $('frame')
+  frame.hidden = true
+  frame.removeAttribute('src')
+  delete frame.dataset.url
+  $('placeholder').hidden = false
 }
 
 /// `note` overrides the resting description right after a sign-out, so the
@@ -787,15 +794,6 @@ function bindActions() {
     requestAnimationFrame(() => applyView())
   })
 
-  for (const btn of document.querySelectorAll('.viewtoggle button')) {
-    btn.addEventListener('click', () => {
-      for (const other of document.querySelectorAll('.viewtoggle button')) other.classList.remove('on')
-      btn.classList.add('on')
-      activeView = btn.dataset.view
-      applyView()
-    })
-  }
-
   $('signOut').addEventListener('click', async () => {
     const res = await api.signOut()
     if (!res.removed) {
@@ -870,7 +868,10 @@ async function init() {
   setScreen(info.status.running ? 'game' : 'binary')
 
   setStatus(info.status)
-  if (info.status.watchUrl) showWatch(info.status.watchUrl)
+  // A window reopened onto a session that never stopped gets no `view:ready`
+  // of its own — that fires once, when the agent's watch server comes up — so
+  // ask for the scene rather than sitting on the "nothing to watch" card.
+  if (info.status.running) void api.openView()
 
   bindFields()
   bindActions()
@@ -884,26 +885,20 @@ async function init() {
   api.onVitals(setVitals)
   api.onWorn(renderWorn)
   api.onViewReady((urls) => {
-    viewUrls = { ...viewUrls, ...urls }
+    if (urls && urls.scene) sceneUrl = urls.scene
     applyView()
   })
   api.onViewMemory((mb) => {
     $('mem').textContent = mb ? `${mb} MB` : ''
     $('mem').classList.toggle('high', mb > 1500)
   })
-  api.onViewError((message) => {
-    $('viewHint').textContent = message
-    activeView = 'panel'
-    for (const b of document.querySelectorAll('.viewtoggle button')) {
-      b.classList.toggle('on', b.dataset.view === 'panel')
-    }
-    applyView()
-  })
+  api.onViewError(showViewProblem)
   api.onState(setStatus)
   api.onDeviceCode(showDeviceCode)
   api.onFatal((message) => showErrors([message]))
-  api.onWatchReady((url) => {
-    showWatch(url)
+  // The watch server coming up is what says the session is live; main.js sends
+  // the scene URL off the same event.
+  api.onWatchReady(() => {
     if (running) setScreen('game')
   })
 }

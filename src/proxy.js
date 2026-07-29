@@ -515,10 +515,10 @@ class AgentProxy {
   /// The agent's own movement never comes back from the server, so a
   /// spectator would see a character that never walks. Turn each outbound
   /// PlayerMove into the PlayerMoved its neighbours receive — and record it
-  /// on the snapshot, or a spectator that (re)connects later (the view
-  /// toggle tears down and recreates the iframe, which is a reconnect) gets
-  /// replayed the position from JoinSuccess, stale the moment the agent
-  /// takes its first step.
+  /// on the snapshot, or a spectator that (re)connects later — the header's
+  /// reload drops the iframe and builds a new one, and a dropped mirror socket
+  /// comes back by itself — gets replayed the position from JoinSuccess, stale
+  /// the moment the agent takes its first step.
   onAgentFrame(frame) {
     const [name, body] = safeVariant(frame)
     if (!Array.isArray(body)) return

@@ -491,26 +491,6 @@ body[data-screen='game'] #screen-game {
   font-variant-numeric: tabular-nums;
 }
 
-.viewtoggle {
-  display: flex;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.viewtoggle button {
-  border: none;
-  border-radius: 0;
-  padding: 4px 10px;
-  background: transparent;
-  color: var(--muted);
-}
-
-.viewtoggle button.on {
-  background: var(--panel-2);
-  color: var(--text);
-}
-
 .gameshell {
   flex: 1;
   display: flex;

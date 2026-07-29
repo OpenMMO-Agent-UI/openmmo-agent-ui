@@ -174,16 +174,14 @@ function stopFeedPolling() {
 }
 
 /// The spectator view: the built web client, served locally, pointed at the
-/// agent's mirror socket instead of the game server.
+/// agent's mirror socket instead of the game server. The only view there is,
+/// so a failure here has nothing to fall back to and says so.
 async function openSpectatorView() {
   try {
     const base = await clientServer.start(settings.terrain)
     const mirror = proxy.mirrorUrl
     if (!mirror) throw new Error('The relay is not listening yet.')
-    send('view:ready', {
-      scene: `${base}/?observe=${encodeURIComponent(mirror)}`,
-      panel: `http://127.0.0.1:${settings.watchPort}/`,
-    })
+    send('view:ready', { scene: `${base}/?observe=${encodeURIComponent(mirror)}` })
   } catch (err) {
     send('view:error', err.message)
   }
@@ -440,6 +438,16 @@ ipcMain.handle('binary:check', async () => {
   if (!binary) return { ok: false, error: 'No agent-client binary found. Build it or choose one.' }
   const probe = await probeBinary(binary)
   return { ...probe, path: binary }
+})
+
+/// Re-hand the renderer the scene URL. `view:ready` is pushed once, when the
+/// agent's watch server comes up — but a window closed and reopened on macOS
+/// boots a fresh renderer with nothing to show, and the session it belongs to
+/// is still playing. So the panel asks for it on load.
+ipcMain.handle('view:open', async () => {
+  if (!agent.running) return { ok: false }
+  await openSpectatorView()
+  return { ok: true }
 })
 
 ipcMain.handle('shell:open', (_e, target) => {

@@ -87,8 +87,8 @@ function fakeSpectator() {
 test('a spectator reconnecting after the agent moved sees the current position, not the stale join-time one', () => {
   const proxy = new AgentProxy()
   proxy.onServerFrame(joinSuccessFrame(42, [-1504.3, 0.0, 4736.5]))
-  // Nobody is watching: switching 3D → Map tore the old /mirror socket down.
-  // The move still has to be recorded, or switching back replays stale data.
+  // Nobody is watching: a reload tore the old /mirror socket down. The move
+  // still has to be recorded, or the new one replays stale data.
   proxy.onAgentFrame(playerMoveFrame([-1588.3, 1.0, 4701.3]))
 
   assertNear(finalPosition(proxy.snapshot.frames()), [-1588.3, 1.0, 4701.3])

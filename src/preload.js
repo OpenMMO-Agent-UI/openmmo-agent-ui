@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('agentApp', {
     ipcRenderer.invoke('characters:create', { name, characterClass, gender }),
   deleteCharacter: (characterId) => ipcRenderer.invoke('characters:delete', characterId),
   sendDirective: (text) => ipcRenderer.invoke('directive:send', text),
+  openView: () => ipcRenderer.invoke('view:open'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),
   onState: on('agent:state'),
