@@ -36,6 +36,47 @@ const ADD_PLAYER = new Set(['PlayerAppeared', 'PlayerJoined'])
 const DROP_PLAYER = new Set(['PlayerDisappeared', 'PlayerLeft'])
 const ADD_MONSTER = new Set(['MonsterSpawned'])
 const DROP_MONSTER = new Set(['MonsterRemoved', 'MonsterDead'])
+const ADD_GROUND_ITEM = new Set(['GroundItemSpawned', 'GroundItemAppeared'])
+
+/// Movement, as distinct from first sighting. An `ADD_*` frame carries a
+/// position that was only current at the moment the entity came into view, so
+/// replaying those alone shows a spectator the world's first-sighting layout —
+/// monsters back at their spawn points, players back where they walked in.
+/// Field 0 of each of these is the entity id, same as the `ADD_*`/`DROP_*` sets.
+const MOVE_PLAYER = new Set(['PlayerMoved', 'PlayerTeleported'])
+const MOVE_MONSTER = new Set(['MonsterMoved'])
+
+/// Per-entity state where only the latest frame matters. Messages that are
+/// mutually exclusive share a slot, so a respawn replaces the death before it
+/// instead of both being replayed; ones that are independent (how hurt you
+/// are vs. whether your torch is lit) get their own.
+const ENTITY_STATE_SLOT = new Map([
+  ['PlayerDead', 'life'],
+  ['PlayerRespawned', 'life'],
+  ['PlayerHealthUpdate', 'health'],
+  ['PlayerTorchToggled', 'torch'],
+  ['PlayerInteractionChanged', 'interaction'],
+])
+
+/// Truly one-of-a-kind state: one gold total, one bag, one clock.
+const SINGLETON = new Set(['GoldUpdate', 'InventoryState', 'GameTimeSync'])
+
+/// `PlayerRespawned` carries a whole `Player` (so the id is nested at [0][0]);
+/// every other per-entity state message carries the id directly at [0].
+function entityStateId(name, body) {
+  if (name === 'PlayerRespawned') return Array.isArray(body[0]) ? body[0][0] : null
+  return body[0]
+}
+
+/// Location-scoped state — not one-of-a-kind (a shop per merchant, doors per
+/// dungeon entrance, props per entrance *and* depth), so keyed by the place it
+/// describes rather than by message name.
+function placeKey(name, body) {
+  if (name === 'ShopState') return `shop#${body[0]}`
+  if (name === 'DungeonDoorsState') return `doors#${body[0]}`
+  if (name === 'DungeonPropsState') return `props#${body[0]}#${body[1]}`
+  return null
+}
 
 /// What a spectator needs replayed to draw a world it joined late.
 class WorldSnapshot {
@@ -45,11 +86,44 @@ class WorldSnapshot {
 
   reset() {
     this.selfPlayerId = null
+    this.selfPosition = null
+    this.selfRotation = 0
     this.selfFloor = 0
     this.join = null
+    /// The one `GameState` the server sends at join (server's add_player): a
+    /// bulk baseline of everything already nearby. Always older than any
+    /// incremental frame, so it is replayed first and everything below
+    /// corrects it.
+    this.baseline = null
     this.players = new Map()
     this.monsters = new Map()
+    this.groundItems = new Map()
+    // Ids we could replay an introduction for — from our own sightings *and*
+    // from the baseline, since a correction for an entity seen only there
+    // would otherwise be dropped by the guards in observe().
+    this.knownPlayers = new Set()
+    this.knownMonsters = new Set()
+    // Departures we cannot express by simply forgetting: the entity was
+    // introduced by the baseline frame, which is replayed verbatim and cannot
+    // be edited, so the drop has to be replayed after it.
+    this.playerDrops = new Map()
+    this.monsterDrops = new Map()
+    this.groundItemDrops = new Map()
+    // Latest movement per entity, kept apart from the sighting frame above:
+    // the sighting carries name/class/health, the movement carries where it
+    // actually is now, and a spectator needs both.
+    this.playerMoves = new Map()
+    this.monsterMoves = new Map()
+    this.entityState = new Map()
+    this.places = new Map()
     this.singletons = new Map()
+  }
+
+  /// True for an entity we can replay an introduction for, so a correction
+  /// referring to it will land rather than naming an id the spectator has
+  /// never heard of. The agent itself counts: it is introduced by `join`.
+  knowsPlayer(id) {
+    return id === this.selfPlayerId || this.knownPlayers.has(id)
   }
 
   /// Record a server frame. `raw` is kept as-is so the replay is the very
@@ -57,42 +131,179 @@ class WorldSnapshot {
   observe(name, body, raw) {
     if (name === 'JoinSuccess') {
       const player = body && body[0]
-      if (Array.isArray(player)) this.selfPlayerId = player[0]
+      if (Array.isArray(player)) {
+        this.selfPlayerId = player[0]
+        // Player is a positional struct (shared/entity.rs): [id, name,
+        // position, rotation, ...] — index 2/3 regardless of what else is in it.
+        if (Array.isArray(player[2])) this.selfPosition = player[2]
+        if (typeof player[3] === 'number') this.selfRotation = player[3]
+      }
       this.join = raw
+      this.baseline = null
       this.players.clear()
       this.monsters.clear()
+      this.groundItems.clear()
+      this.knownPlayers.clear()
+      this.knownMonsters.clear()
+      this.playerDrops.clear()
+      this.monsterDrops.clear()
+      this.groundItemDrops.clear()
+      this.playerMoves.clear()
+      this.monsterMoves.clear()
+      this.entityState.clear()
+      this.places.clear()
+      return
+    }
+    if (name === 'GameState') {
+      this.baseline = raw
+      for (const player of body[0] || []) {
+        if (Array.isArray(player) && player[0] !== this.selfPlayerId) this.knownPlayers.add(player[0])
+      }
+      // `monsters` is a HashMap on the wire, so it decodes to an object keyed
+      // by monster id; `ground_items` is a plain list.
+      for (const id of Object.keys(body[1] || {})) this.knownMonsters.add(id)
+      for (const item of body[2] || []) {
+        if (Array.isArray(item)) this.groundItemDrops.delete(item[0])
+      }
       return
     }
     if (ADD_PLAYER.has(name)) {
       const player = body && body[0]
       if (Array.isArray(player) && player[0] !== this.selfPlayerId) {
         this.players.set(player[0], raw)
+        this.knownPlayers.add(player[0])
+        this.playerDrops.delete(player[0])
       }
       return
     }
     if (DROP_PLAYER.has(name)) {
-      this.players.delete(body && body[0])
+      const id = body && body[0]
+      this.knownPlayers.delete(id)
+      this.playerMoves.delete(id)
+      for (const slot of ['life', 'health', 'torch', 'interaction']) this.entityState.delete(`${slot}#${id}`)
+      // Forgetting our own sighting is enough; a baseline-introduced entity
+      // needs the departure replayed instead.
+      if (!this.players.delete(id)) this.playerDrops.set(id, raw)
       return
     }
     if (ADD_MONSTER.has(name)) {
       const monster = body && body[0]
-      if (Array.isArray(monster)) this.monsters.set(monster[0], raw)
+      if (Array.isArray(monster)) {
+        this.monsters.set(monster[0], raw)
+        this.knownMonsters.add(monster[0])
+        this.monsterDrops.delete(monster[0])
+      }
       return
     }
     if (DROP_MONSTER.has(name)) {
-      this.monsters.delete(body && body[0])
+      const id = body && body[0]
+      this.knownMonsters.delete(id)
+      this.monsterMoves.delete(id)
+      if (!this.monsters.delete(id)) this.monsterDrops.set(id, raw)
       return
     }
-    // One-of-a-kind state where only the latest matters.
-    if (name === 'GoldUpdate' || name === 'InventoryState' || name === 'GameTimeSync') {
-      this.singletons.set(name, raw)
+    if (ADD_GROUND_ITEM.has(name)) {
+      const item = body && body[0]
+      if (Array.isArray(item)) {
+        this.groundItems.set(item[0], raw)
+        this.groundItemDrops.delete(item[0])
+      }
+      return
     }
+    if (name === 'GroundItemRemoved') {
+      const id = body && body[0]
+      if (!this.groundItems.delete(id)) this.groundItemDrops.set(id, raw)
+      return
+    }
+    if (MOVE_PLAYER.has(name)) {
+      const id = body && body[0]
+      // The agent's own movement is tracked separately (onAgentFrame sees the
+      // outbound PlayerMove the server never echoes) — but a *teleport* does
+      // come back from the server, and it's the one way self position changes
+      // without an outbound move, so take it here.
+      if (id !== null && id === this.selfPlayerId) this.takeSelfPosition(body[1], body[2], body[3])
+      else if (this.knownPlayers.has(id)) this.playerMoves.set(id, raw)
+      return
+    }
+    if (MOVE_MONSTER.has(name)) {
+      const id = body && body[0]
+      if (this.knownMonsters.has(id)) this.monsterMoves.set(id, raw)
+      return
+    }
+    // Addressed to the agent alone and carrying no id: the server overriding
+    // where it thinks the agent is, which no outbound PlayerMove will report.
+    if (name === 'PositionCorrected') {
+      this.takeSelfPosition(body[0], body[1], body[2])
+      return
+    }
+    const slot = ENTITY_STATE_SLOT.get(name)
+    if (slot) {
+      const id = entityStateId(name, body)
+      // A respawn re-states position too, and supersedes any earlier move.
+      if (name === 'PlayerRespawned' && Array.isArray(body[0])) {
+        if (id === this.selfPlayerId) this.takeSelfPosition(body[0][2], body[0][3], body[0][11])
+        else this.playerMoves.delete(id)
+      }
+      if (this.knowsPlayer(id)) this.entityState.set(`${slot}#${id}`, raw)
+      return
+    }
+    const place = placeKey(name, body)
+    if (place) {
+      this.places.set(place, raw)
+      return
+    }
+    if (SINGLETON.has(name)) this.singletons.set(name, raw)
   }
 
+  takeSelfPosition(position, rotation, floorLevel) {
+    if (Array.isArray(position)) this.selfPosition = position
+    if (typeof rotation === 'number') this.selfRotation = rotation
+    if (typeof floorLevel === 'number') this.selfFloor = floorLevel
+  }
+
+  /// The agent's own movement never comes back from the server (see
+  /// AgentProxy.onAgentFrame), so it's the one piece of self state that isn't
+  /// just "the last raw frame we saw" — synthesized fresh from tracked
+  /// position/rotation/floor instead. Used both for that live broadcast and
+  /// here, to correct a (re)connecting spectator past the join snapshot's
+  /// position, which is only ever current at the moment of joining.
+  selfPlayerMovedFrame() {
+    if (this.selfPlayerId === null || !this.selfPosition) return null
+    return encode({
+      PlayerMoved: [
+        this.selfPlayerId,
+        this.selfPosition.map((n) => new Float(n)),
+        new Float(this.selfRotation),
+        this.selfFloor,
+      ],
+    })
+  }
+
+  /// Order is load-bearing, oldest state first so newer frames correct it:
+  ///
+  ///   1. join, then the join-time bulk baseline
+  ///   2. departures since that baseline — remove what is already gone
+  ///   3. introductions we saw ourselves
+  ///   4. positions, then per-entity state, for everything introduced above
+  ///   5. place- and world-scoped state
+  ///
+  /// An entity has to be introduced before any frame that repositions or
+  /// re-states it, or the client drops a message naming an id it has never
+  /// seen — which is why 3 precedes 4 rather than being interleaved.
   frames() {
     const out = []
     if (this.join) out.push(this.join)
-    out.push(...this.players.values(), ...this.monsters.values(), ...this.singletons.values())
+    if (this.baseline) out.push(this.baseline)
+
+    out.push(...this.playerDrops.values(), ...this.monsterDrops.values(), ...this.groundItemDrops.values())
+    out.push(...this.players.values(), ...this.monsters.values(), ...this.groundItems.values())
+
+    const selfMoved = this.selfPlayerMovedFrame()
+    if (selfMoved) out.push(selfMoved)
+    out.push(...this.playerMoves.values(), ...this.monsterMoves.values())
+    out.push(...this.entityState.values())
+
+    out.push(...this.places.values(), ...this.singletons.values())
     return out
   }
 }
@@ -270,25 +481,21 @@ class AgentProxy {
 
   /// The agent's own movement never comes back from the server, so a
   /// spectator would see a character that never walks. Turn each outbound
-  /// PlayerMove into the PlayerMoved its neighbours receive.
+  /// PlayerMove into the PlayerMoved its neighbours receive — and record it
+  /// on the snapshot, or a spectator that (re)connects later (the view
+  /// toggle tears down and recreates the iframe, which is a reconnect) gets
+  /// replayed the position from JoinSuccess, stale the moment the agent
+  /// takes its first step.
   onAgentFrame(frame) {
     const [name, body] = safeVariant(frame)
     if (name !== 'PlayerMove' || !Array.isArray(body)) return
     const [position, rotation, floorLevel] = body
     if (!Array.isArray(position) || this.snapshot.selfPlayerId === null) return
+    this.snapshot.selfPosition = position
+    this.snapshot.selfRotation = typeof rotation === 'number' ? rotation : 0
     this.snapshot.selfFloor = typeof floorLevel === 'number' ? floorLevel : this.snapshot.selfFloor
     if (this.spectators.size === 0) return
-
-    this.broadcast(
-      encode({
-        PlayerMoved: [
-          this.snapshot.selfPlayerId,
-          position.map((n) => new Float(n)),
-          new Float(typeof rotation === 'number' ? rotation : 0),
-          this.snapshot.selfFloor,
-        ],
-      }),
-    )
+    this.broadcast(this.snapshot.selfPlayerMovedFrame())
   }
 
   stop() {

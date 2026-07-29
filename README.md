@@ -101,12 +101,20 @@ same order. Being in the middle buys two things:
   never walks. Each outgoing `PlayerMove` becomes the `PlayerMoved` the agent's
   neighbours receive.
 
-The proxy keeps a small snapshot — last `JoinSuccess`, live players and
-monsters, gold, inventory, clock — so a spectator that connects late is caught
-up before the live stream starts. Messages that belong to the owning connection
-(`MonsterAssigned`, `SpawnMonsterRequest`, auth and character management) are
-never forwarded: a spectator that adopted monsters would run a second AI for
-creatures the agent already drives.
+The proxy keeps a snapshot so a spectator that connects late is caught up
+before the live stream starts — and switching 3D ↔ Map *is* a late connect, so
+whatever the snapshot misses is wrong until a live frame happens to correct it.
+`WorldSnapshot` therefore tracks the join frame and the join-time `GameState`
+baseline, every entity's latest position (the agent's own included, which the
+server never echoes back), health, torch, alive-or-dead, ground items, shop and
+dungeon state, gold, inventory and the clock. Monster health is the one thing it
+cannot carry: it arrives only inside `MonsterSpawned` and the protocol has no
+`MonsterHealthUpdate` to update it afterwards.
+
+Messages that belong to the owning connection (`MonsterAssigned`,
+`SpawnMonsterRequest`, auth and character management) are never forwarded: a
+spectator that adopted monsters would run a second AI for creatures the agent
+already drives.
 
 Doing this in the proxy rather than inside agent-client is what keeps
 `agent-client/` at **zero modifications**.
