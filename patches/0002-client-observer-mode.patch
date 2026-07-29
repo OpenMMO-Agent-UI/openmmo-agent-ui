@@ -1,7 +1,7 @@
-diff --git a/.gitignore b/.gitignore
+diff --git c/.gitignore w/.gitignore
 index 97303747..514abd8a 100644
---- a/.gitignore
-+++ b/.gitignore
+--- c/.gitignore
++++ w/.gitignore
 @@ -96,3 +96,18 @@ agent-client/data/cache/
  !.codex/config.toml
  !.codex/skills/
@@ -21,10 +21,10 @@ index 97303747..514abd8a 100644
 +/agent-client/src/mirror.rs
 +/client/src/lib/stores/observerStore.ts
 +/agent-client/data/user_prompt.txt
-diff --git a/client/src/App.svelte b/client/src/App.svelte
+diff --git c/client/src/App.svelte w/client/src/App.svelte
 index a8fc1787..545b3534 100644
---- a/client/src/App.svelte
-+++ b/client/src/App.svelte
+--- c/client/src/App.svelte
++++ w/client/src/App.svelte
 @@ -10,6 +10,7 @@
    import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
    import RenderFrameLimiter from './lib/components/RenderFrameLimiter.svelte'
@@ -128,10 +128,10 @@ index a8fc1787..545b3534 100644
 +    font-size: 14px;
 +  }
  </style>
-diff --git a/client/src/lib/components/GameScene.svelte b/client/src/lib/components/GameScene.svelte
+diff --git c/client/src/lib/components/GameScene.svelte w/client/src/lib/components/GameScene.svelte
 index cb8450e3..b5464643 100644
---- a/client/src/lib/components/GameScene.svelte
-+++ b/client/src/lib/components/GameScene.svelte
+--- c/client/src/lib/components/GameScene.svelte
++++ w/client/src/lib/components/GameScene.svelte
 @@ -54,6 +54,7 @@
    import ObjectOverlay from './map-editor/ObjectOverlay.svelte'
    import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
@@ -161,10 +161,10 @@ index cb8450e3..b5464643 100644
        loopProfiler.record(
          'remoteInterpolation',
          performance.now() - remoteInterpolationStart
-diff --git a/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte b/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
+diff --git c/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte w/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
 index e29d9a88..85ac1755 100644
---- a/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
-+++ b/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
+--- c/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
++++ w/client/src/lib/components/game-scene/GameScenePlayersLayer.svelte
 @@ -5,6 +5,7 @@
    import { SvelteMap } from 'svelte/reactivity'
    import PlayerModel from '../PlayerModel.svelte'
@@ -184,10 +184,10 @@ index e29d9a88..85ac1755 100644
    <PlayerControl
      bind:this={playerControl}
      {waterSurfaceAt}
-diff --git a/client/src/lib/managers/monsterManager.ts b/client/src/lib/managers/monsterManager.ts
+diff --git c/client/src/lib/managers/monsterManager.ts w/client/src/lib/managers/monsterManager.ts
 index e1bc10f6..3c72085c 100644
---- a/client/src/lib/managers/monsterManager.ts
-+++ b/client/src/lib/managers/monsterManager.ts
+--- c/client/src/lib/managers/monsterManager.ts
++++ w/client/src/lib/managers/monsterManager.ts
 @@ -15,6 +15,7 @@ import {
  } from '../data/materialImpactSounds'
  import { deathDropDelayQueue } from './deathDropDelay'
@@ -271,10 +271,10 @@ index e1bc10f6..3c72085c 100644
          ai_apply_authoritative_position(id, position.x, position.y, position.z)
        }
      }
-diff --git a/client/src/lib/network/messageHandlers.ts b/client/src/lib/network/messageHandlers.ts
-index 3adc217e..248a9866 100644
---- a/client/src/lib/network/messageHandlers.ts
-+++ b/client/src/lib/network/messageHandlers.ts
+diff --git c/client/src/lib/network/messageHandlers.ts w/client/src/lib/network/messageHandlers.ts
+index 5faed018..8d7b4464 100644
+--- c/client/src/lib/network/messageHandlers.ts
++++ w/client/src/lib/network/messageHandlers.ts
 @@ -13,6 +13,7 @@ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
  import { Vector3 } from 'three'
  import { remotePlayerManager } from '../managers/remotePlayerManager'
@@ -283,7 +283,7 @@ index 3adc217e..248a9866 100644
  import { playFishingSound } from '../managers/sfxManager'
  import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
  import { monsterManager } from '../managers/monsterManager'
-@@ -244,6 +245,16 @@ export function handleServerMessage(
+@@ -249,6 +250,16 @@ export function handleServerMessage(
          ...state,
          currentPlayer: player,
        }))
@@ -300,7 +300,7 @@ index 3adc217e..248a9866 100644
        // Players who logged out inside a dungeon reconnect there.
        dungeonManager.syncFromFloorLevel(
          serverPlayer.floor_level ?? 0,
-@@ -339,7 +350,7 @@ export function handleServerMessage(
+@@ -344,7 +355,7 @@ export function handleServerMessage(
  
      case 'PlayerMoved': {
        const state = get(gameStore)
@@ -309,7 +309,7 @@ index 3adc217e..248a9866 100644
          break
        }
        const deckY = bridgeManager.findDeckYAt(
-@@ -388,6 +399,13 @@ export function handleServerMessage(
+@@ -393,6 +404,13 @@ export function handleServerMessage(
            data.position.z
          )
          requestCameraReset()
@@ -323,7 +323,7 @@ index 3adc217e..248a9866 100644
          break
        }
        const tpDeckY = bridgeManager.findDeckYAt(
-@@ -433,6 +451,20 @@ export function handleServerMessage(
+@@ -477,6 +495,20 @@ export function handleServerMessage(
        gameStore.update((state) => {
          state.otherPlayers.clear()
          remotePlayerManager.reset()
@@ -344,10 +344,23 @@ index 3adc217e..248a9866 100644
          // A list, not a map: player ids are numeric and the wasm serializer
          // rejects non-string map keys (see ServerMessage::GameState).
          const serverPlayers = data.players as ServerPlayer[]
-diff --git a/client/src/lib/network/socket.ts b/client/src/lib/network/socket.ts
-index eeb5f26b..d607022e 100644
---- a/client/src/lib/network/socket.ts
-+++ b/client/src/lib/network/socket.ts
+@@ -823,7 +855,11 @@ export function handleServerMessage(
+ 
+     case 'PlayerInteractionChanged': {
+       const state = get(gameStore)
+-      if (state.currentPlayer?.id === data.player_id) {
++      // The local player animates its own interactions through the movement
++      // FSM, so upstream drops the echo — but a spectator has no FSM, and the
++      // watched character's pickup crouch, bench sit and forge swing arrive
++      // here or nowhere.
++      if (!isObserver && state.currentPlayer?.id === data.player_id) {
+         break
+       }
+       const ft: string | null = data.object_type ?? null
+diff --git c/client/src/lib/network/socket.ts w/client/src/lib/network/socket.ts
+index afcf1735..de56d569 100644
+--- c/client/src/lib/network/socket.ts
++++ w/client/src/lib/network/socket.ts
 @@ -22,6 +22,7 @@ import initWasm, {
    protocol_version,
    close_code_protocol_mismatch,
@@ -380,7 +393,7 @@ index eeb5f26b..d607022e 100644
      if (!this.isConnected()) return false
      this.ensureHandshake()
      const bytes = serializeClientMessage(msg)
-@@ -634,7 +638,7 @@ class NetworkManager {
+@@ -643,7 +647,7 @@ class NetworkManager {
    /// and the first send resolve as separate promise continuations, and losing
    /// that race got the connection dropped.
    private ensureHandshake() {
@@ -389,7 +402,7 @@ index eeb5f26b..d607022e 100644
      this.handshakeSent = true
      const bytes = serializeClientMessage({
        ClientInfo: {
-@@ -867,6 +871,23 @@ class NetworkManager {
+@@ -876,6 +880,23 @@ class NetworkManager {
      )
    }
  
@@ -413,10 +426,10 @@ index eeb5f26b..d607022e 100644
    // --- Connection management ---
  
    disconnect() {
-diff --git a/client/vite.config.ts b/client/vite.config.ts
+diff --git c/client/vite.config.ts w/client/vite.config.ts
 index 6015a5f8..9e9f4049 100644
---- a/client/vite.config.ts
-+++ b/client/vite.config.ts
+--- c/client/vite.config.ts
++++ w/client/vite.config.ts
 @@ -44,6 +44,10 @@ export default defineConfig(({ mode }) => {
  
    return {
