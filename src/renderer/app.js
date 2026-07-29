@@ -219,12 +219,44 @@ async function afterSignIn(res) {
     return
   }
   characters = res.characters
-  selectedCharacterId = null
-  await persist({ characterName: '' })
-  renderCharacterList()
   updateCreateVisibility()
-  updatePlayEnabled()
+  if (characters.length) {
+    // Already has a character worth playing — pick it and wait for Play,
+    // rather than making a returning player re-choose every time.
+    selectCharacter(characters[0].id)
+    setCharacterTab('pick')
+  } else {
+    selectedCharacterId = null
+    renderCharacterList()
+    await persist({ characterName: '' })
+    updatePlayEnabled()
+    setCharacterTab('create')
+  }
   setScreen('character')
+}
+
+/// The four Character-screen tabs. "connection" isn't a panel of its own —
+/// it opens the settings modal shared with Login/Game — so it never becomes
+/// the active tab.
+function setCharacterTab(name) {
+  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
+    btn.classList.toggle('on', btn.dataset.tab === name)
+  }
+  for (const panel of document.querySelectorAll('[data-tab-panel]')) {
+    panel.hidden = panel.dataset.tabPanel !== name
+  }
+}
+
+function bindCharacterTabs() {
+  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tab === 'connection') {
+        openSettings()
+        return
+      }
+      setCharacterTab(btn.dataset.tab)
+    })
+  }
 }
 
 /// One row per existing character (max 3, server-enforced): pick it, or
@@ -236,7 +268,7 @@ function renderCharacterList() {
   if (!characters.length) {
     const p = document.createElement('p')
     p.className = 'character-empty'
-    p.textContent = 'No characters yet — create one below.'
+    p.textContent = 'No characters yet — create one from the Create a new character tab.'
     box.appendChild(p)
     return
   }
@@ -266,10 +298,26 @@ function selectCharacter(id) {
   const chosen = characters.find((c) => c.id === id)
   persist({ characterName: chosen ? chosen.name : '' })
   updatePlayEnabled()
+  void loadInstancePrompt()
+}
+
+/// Individual personality for whichever character is selected — reloaded on
+/// every switch, since it's per-character rather than shared like
+/// user_prompt.txt.
+async function loadInstancePrompt() {
+  const name = settings.characterName
+  $('instanceCharacterName').textContent = name || 'this character'
+  if (!name) {
+    $('instanceText').value = ''
+    $('instanceFile').textContent = ''
+    return
+  }
+  $('instanceText').value = await api.getInstancePrompt(name)
+  $('instanceFile').textContent = `data/npcs/${name}/instance.txt`
 }
 
 async function deleteCharacterRow(id, name) {
-  if (!window.confirm(`Delete ${name}? This cannot be undone.`)) return
+  if (!(await confirmAction(`Delete ${name}? This cannot be undone.`))) return
   const res = await api.deleteCharacter(id)
   if (!res.ok) {
     showErrors([res.error])
@@ -283,14 +331,16 @@ async function deleteCharacterRow(id, name) {
   renderCharacterList()
   updateCreateVisibility()
   updatePlayEnabled()
+  if (!characters.length) setCharacterTab('create')
 }
 
-/// Server enforces the cap (server/src/auth.rs) — this just keeps the form
+/// Server enforces the cap (server/src/auth.rs) — this just keeps the tab
 /// from being offered once it would only produce that refusal.
 function updateCreateVisibility() {
   const atMax = characters.length >= 3
-  $('toggleNewCharacter').hidden = atMax
-  if (atMax) $('newCharacterFields').hidden = true
+  const tab = document.querySelector('#characterTabs [data-tab="create"]')
+  tab.hidden = atMax
+  if (atMax && tab.classList.contains('on')) setCharacterTab('pick')
 }
 
 function updatePlayEnabled() {
@@ -328,6 +378,7 @@ function setAuthState(isSignedIn, note) {
 function setVitals(v) {
   if (!v || !v.self) {
     $('vitals').textContent = ''
+    renderBag([])
     return
   }
   const s = v.self
@@ -337,6 +388,48 @@ function setVitals(v) {
       : ''
   const gold = v.gold == null ? '' : ` · ${v.gold}g`
   $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}`
+  renderBag(v.bag)
+}
+
+/// item_def_id is a snake_case identifier ("healing_potion") — turn it into
+/// words, with the enchant level prefixed the way the game names enchanted
+/// gear ("+2 Iron Sword").
+function itemLabel(id, enchant) {
+  const words = id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  return enchant ? `+${enchant} ${words}` : words
+}
+
+/// agent-client keeps each pickup as its own bag instance rather than
+/// merging stacks, so raw entries repeat the same item many times over —
+/// grouped by item + enchant here into one line each, with a total count.
+function renderBag(bag) {
+  const box = $('bagList')
+  box.innerHTML = ''
+  const grouped = new Map()
+  for (const item of bag || []) {
+    const key = `${item.item_def_id}#${item.enchant || 0}`
+    grouped.set(key, (grouped.get(key) || 0) + (item.quantity || 1))
+  }
+  const rows = [...grouped.entries()]
+    .map(([key, quantity]) => {
+      const [id, enchant] = key.split('#')
+      return { label: itemLabel(id, Number(enchant)), quantity }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label))
+
+  $('bagEmpty').hidden = rows.length > 0
+  for (const row of rows) {
+    const el = document.createElement('div')
+    el.className = 'bag-row'
+    const name = document.createElement('span')
+    name.className = 'bag-name'
+    name.textContent = row.label
+    const qty = document.createElement('span')
+    qty.className = 'bag-qty'
+    qty.textContent = `×${row.quantity}`
+    el.append(name, qty)
+    box.appendChild(el)
+  }
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -382,6 +475,11 @@ function trackDirective(text) {
   $('directiveSent').textContent = text
   $('directiveReply').textContent = 'waiting…'
   $('directiveLog').hidden = false
+  // The one deliberate animation moment (see style.css) — a brief ember
+  // pulse marking that word was actually sent.
+  const panel = $('directivePanel')
+  panel.classList.add('sent')
+  setTimeout(() => panel.classList.remove('sent'), 900)
 }
 
 function renderFeedFilters() {
@@ -412,9 +510,29 @@ function closeSettings() {
   $('settingsModal').hidden = true
 }
 
+/// A destructive action's one guard: resolves true only if Delete is
+/// clicked, false for Cancel or dismissing any other way.
+function confirmAction(message, okLabel = 'Delete') {
+  return new Promise((resolve) => {
+    $('confirmMessage').textContent = message
+    $('confirmOk').textContent = okLabel
+    $('confirmModal').hidden = false
+    const finish = (result) => {
+      $('confirmModal').hidden = true
+      $('confirmOk').removeEventListener('click', onOk)
+      $('confirmCancel').removeEventListener('click', onCancel)
+      resolve(result)
+    }
+    const onOk = () => finish(true)
+    const onCancel = () => finish(false)
+    $('confirmOk').addEventListener('click', onOk)
+    $('confirmCancel').addEventListener('click', onCancel)
+  })
+}
+
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { thoughts: 'Thoughts', log: 'Log' }
+  const titles = { thoughts: 'Thoughts', log: 'Log', prompt: 'Personality', bag: 'Bag' }
   for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.drawer
@@ -464,23 +582,12 @@ function bindFields() {
   })
 }
 
-/// Toggles a collapsed section open/closed, flipping the trigger button's
-/// label between its closed and open text.
-function bindExpander(buttonId, fieldsId, closedLabel, openLabel) {
-  $(buttonId).addEventListener('click', () => {
-    const fields = $(fieldsId)
-    fields.hidden = !fields.hidden
-    $(buttonId).textContent = fields.hidden ? closedLabel : openLabel
-  })
-}
-
-/// A validation error naming a field inside a collapsed section is useless
-/// if the section is still closed — open both before showing it.
+/// A validation error naming a field on a tab that isn't showing is useless —
+/// land on Create, the tab most validation failures (no character chosen, a
+/// class/gender mismatch) actually belong to. LLM/connection errors still
+/// read fine from the shared toast regardless of which tab is up.
 function expandCharacterSections() {
-  $('newCharacterFields').hidden = false
-  $('toggleNewCharacter').textContent = 'Hide new character'
-  $('llmSettingsFields').hidden = false
-  $('toggleLlmSettings').textContent = 'Hide LLM & behavior settings'
+  setCharacterTab('create')
 }
 
 /// Actually spawns the resolved binary (see agent.js's probeBinary) rather
@@ -532,11 +639,10 @@ function bindActions() {
     }
     characters.push(res.character)
     $('newCharacterName').value = ''
-    $('newCharacterFields').hidden = true
-    $('toggleNewCharacter').textContent = 'Create a new character'
     renderCharacterList()
     updateCreateVisibility()
     selectCharacter(res.character.id)
+    setCharacterTab('pick')
   })
 
   $('directiveForm').addEventListener('submit', async (e) => {
@@ -553,9 +659,27 @@ function bindActions() {
     trackDirective(text)
   })
 
-  bindExpander('toggleNewCharacter', 'newCharacterFields', 'Create a new character', 'Hide new character')
-  bindExpander('toggleLlmSettings', 'llmSettingsFields', 'LLM & behavior settings', 'Hide LLM & behavior settings')
-  bindExpander('togglePersona', 'personaFields', 'Customize prompt', 'Hide prompt')
+  $('saveInstance').addEventListener('click', async () => {
+    if (!settings.characterName) return
+    showErrors([])
+    const res = await api.saveInstancePrompt(settings.characterName, $('instanceText').value)
+    if (!running) {
+      $('instanceFile').textContent = `Saved to ${res.file}`
+      return
+    }
+    // Only prompt customization here — restarting takes agent-client with
+    // it, same as clicking Apply & restart, just without the extra click.
+    $('instanceFile').textContent = 'Saved — applying…'
+    const restarted = await api.restart()
+    if (!restarted.ok) {
+      showErrors(restarted.errors)
+      $('instanceFile').textContent = `Saved to ${res.file} — restart failed`
+      return
+    }
+    dirtyWhileRunning = false
+    setStatus(restarted.status)
+    $('instanceFile').textContent = `Saved to ${res.file} — applied`
+  })
 
   $('play').addEventListener('click', async () => {
     showErrors([])
@@ -622,30 +746,6 @@ function bindActions() {
     })
   }
 
-  $('loadPreset').addEventListener('click', async () => {
-    const res = await api.loadPreset($('preset').value)
-    if (res.ok) $('promptText').value = res.text
-  })
-
-  $('savePrompt').addEventListener('click', async () => {
-    const res = await api.savePrompt($('promptText').value)
-    $('promptFile').textContent = `Saved to ${res.file}${running ? ' — restart to apply' : ''}`
-    if (running) {
-      dirtyWhileRunning = true
-      $('restart').hidden = false
-    }
-  })
-
-  $('showSystem').addEventListener('click', async () => {
-    const pre = $('systemPrompt')
-    if (!pre.hidden) {
-      pre.hidden = true
-      return
-    }
-    pre.textContent = await api.systemPrompt()
-    pre.hidden = false
-  })
-
   $('signOut').addEventListener('click', async () => {
     const res = await api.signOut()
     if (!res.removed) {
@@ -691,7 +791,6 @@ function bindActions() {
   })
 
   $('openSettingsFromLogin').addEventListener('click', openSettings)
-  $('openSettingsFromCharacter').addEventListener('click', openSettings)
   $('openSettingsFromGame').addEventListener('click', openSettings)
   $('settingsClose').addEventListener('click', closeSettings)
 }
@@ -712,11 +811,6 @@ async function init() {
     ? `Binary: ${info.binary}`
     : `No agent-client binary found. Build it with "cargo build --release -p agent-client", or choose one below.`
 
-  const prompt = await api.getPrompt()
-  $('promptText').value = prompt.text
-  $('preset').innerHTML = prompt.presets.map((p) => `<option value="${p}">${p}</option>`).join('')
-  $('promptFile').textContent = prompt.file
-
   for (const item of info.log) appendLog(item)
 
   // Decide the starting screen before setStatus's auto-bounce-to-character
@@ -731,6 +825,7 @@ async function init() {
   bindFields()
   bindActions()
   bindRail()
+  bindCharacterTabs()
 
   renderFeedFilters()
   api.onLog(appendLog)

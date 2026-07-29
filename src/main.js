@@ -37,41 +37,6 @@ function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
 }
 
-function promptPaths() {
-  const data = path.join(config.agentDir(), 'data')
-  return {
-    user: path.join(data, 'user_prompt.txt'),
-    presets: path.join(data, 'user_prompts'),
-    system: path.join(data, 'system_prompt.txt'),
-  }
-}
-
-function readPrompt() {
-  const p = promptPaths()
-  let presets = []
-  try {
-    presets = fs
-      .readdirSync(p.presets)
-      .filter((f) => f.endsWith('.txt'))
-      .map((f) => f.replace(/\.txt$/, ''))
-  } catch {
-    presets = []
-  }
-
-  let text = ''
-  try {
-    text = fs.readFileSync(p.user, 'utf8')
-  } catch {
-    // No user prompt yet: agent-client falls back to newcomer, so show that.
-    try {
-      text = fs.readFileSync(path.join(p.presets, 'newcomer.txt'), 'utf8')
-    } catch {
-      text = ''
-    }
-  }
-  return { text, presets, file: p.user }
-}
-
 function createWindow() {
   win = new BrowserWindow({
     width: 1500,
@@ -120,6 +85,7 @@ async function pollFeed(port) {
     self: body.self || null,
     gold: body.gold ?? null,
     time: body.time || null,
+    bag: body.bag || [],
   })
 }
 
@@ -247,6 +213,11 @@ async function startAgent() {
   // The pre-flight session already resolved the exact character agent-client
   // is about to enter with (ADR 0001) — nothing left for it to do.
   closePreflightSession()
+  // agent-client hard-errors on a configured prompt file that doesn't exist —
+  // guarantee both before every start, not just when the player opens the
+  // personality-prompt editor.
+  config.ensureUserPrompt()
+  if (settings.characterName) config.ensureInstancePrompt(settings.characterName)
   try {
     await proxy.start(settings.server)
     return { ok: true, status: await agent.start({ ...settings, server: proxy.agentUrl }) }
@@ -264,30 +235,24 @@ ipcMain.handle('agent:restart', async () => {
   return startAgent()
 })
 
-ipcMain.handle('prompt:get', () => readPrompt())
-
-ipcMain.handle('prompt:save', (_e, text) => {
-  const p = promptPaths()
-  fs.mkdirSync(path.dirname(p.user), { recursive: true })
-  fs.writeFileSync(p.user, text)
-  return { ok: true, file: p.user }
-})
-
-ipcMain.handle('prompt:preset', (_e, name) => {
-  const file = path.join(promptPaths().presets, `${name}.txt`)
+/// The personality prompt — the only prompt editor in the app. Per-character
+/// (ADR: see config.js's instancePromptPath), layered on top of the fixed
+/// general persona in user_prompt.txt, since it's meant to be individual, not
+/// shared across the account's 3 characters.
+ipcMain.handle('instance:get', (_e, characterName) => {
+  if (!characterName) return ''
   try {
-    return { ok: true, text: fs.readFileSync(file, 'utf8') }
-  } catch (err) {
-    return { ok: false, error: err.message }
+    return fs.readFileSync(config.instancePromptPath(characterName), 'utf8')
+  } catch {
+    return ''
   }
 })
 
-ipcMain.handle('prompt:system', () => {
-  try {
-    return fs.readFileSync(promptPaths().system, 'utf8')
-  } catch (err) {
-    return `(unreadable: ${err.message})`
-  }
+ipcMain.handle('instance:save', (_e, characterName, text) => {
+  const file = config.instancePromptPath(characterName)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, text)
+  return { ok: true, file }
 })
 
 /// Signing out has to take the agent with it: it holds a live session on the

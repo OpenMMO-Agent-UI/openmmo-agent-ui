@@ -15,7 +15,15 @@
 # (config.toml, memory.txt, data/cache/*, data/npcs/, data/prompts/) is
 # runtime state or server-side-only content, seeded or generated at run time
 # instead. See config.js's seedRuntimeData() / writeConfig().
+#
+# client/dist's own public/ assets (textures, models, bgm, character art —
+# the same files the official site already serves, and hundreds of MB) are
+# skipped the same way: server.js proxies any missing asset with a real
+# extension to the configured terrain origin instead, so the packaged app
+# streams them at runtime rather than shipping a copy.
 set -euo pipefail
+
+CLIENT_ASSET_EXCLUDES=(--exclude=/textures --exclude=/models --exclude=/bgm --exclude=/character_concepts --exclude=/portraits)
 
 checkout="${1:?usage: package-resources.sh <path-to-OpenMMO-checkout>}"
 checkout="$(cd "$checkout" && pwd)"
@@ -53,7 +61,7 @@ for entry in system_prompt.txt user_prompts templates animation_durations.json; 
     cp -R "$src" "$out/agent-client/data/$entry"
 done
 
-cp -R "$dist/." "$out/client/"
+rsync -a "${CLIENT_ASSET_EXCLUDES[@]}" "$dist/" "$out/client/"
 
 # So a stale packaged build fails loudly instead of mysteriously: agent.js
 # matches the server's protocol-refusal message and restates it with the

@@ -374,9 +374,58 @@ function renderConfigToml(s) {
     // Without this the `memory_update` the model writes every turn is thrown
     // away, and the agent relearns the same town from scratch on each restart.
     'memory_file = "data/memory.txt"',
-    '',
   )
+  // agent-client hard-errors on a configured prompt file that doesn't exist
+  // (load_system_prompt), unlike memory_file's own missing-file tolerance —
+  // so this is only ever written once ensureInstancePrompt() below has
+  // guaranteed the file is actually there.
+  if (s.characterName) lines.push(`instance_prompt = ${tomlString(instancePromptRelativePath(s.characterName))}`)
+  lines.push('')
   return lines.join('\n')
+}
+
+const NPC_DATA_DIR = 'data/npcs'
+
+function instancePromptRelativePath(characterName) {
+  return `${NPC_DATA_DIR}/${characterName}/instance.txt`
+}
+
+/// Absolute path to a character's own instance prompt — the personality
+/// prompt players actually edit, layered on top of the fixed general persona
+/// in user_prompt.txt, mirroring agent-client's own per-registry-NPC
+/// instance.txt convention (main.rs), just keyed by character name instead
+/// of registry id.
+function instancePromptPath(characterName) {
+  return path.join(agentDir(), instancePromptRelativePath(characterName))
+}
+
+/// Guarantees the file renderConfigToml() is about to reference actually
+/// exists — never overwrites existing content.
+function ensureInstancePrompt(characterName) {
+  const file = instancePromptPath(characterName)
+  if (fs.existsSync(file)) return
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, '')
+}
+
+/// user_prompt.txt has no editor in the app any more — the personality
+/// prompt (instance.txt, above) is the only thing players write. Without
+/// this, a character who never had one created (nothing in the UI does that
+/// any more) would get no persona role layer at all: agent-client only
+/// includes user_prompt.txt in the prompt if the file exists (orchestrator.rs
+/// build_system_prompt), it doesn't fall back to a preset on its own.
+function ensureUserPrompt() {
+  const dir = path.join(agentDir(), 'data')
+  const file = path.join(dir, 'user_prompt.txt')
+  if (fs.existsSync(file)) return
+  const preset = path.join(dir, 'user_prompts', 'newcomer.txt')
+  try {
+    fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(preset, file)
+  } catch {
+    // No newcomer preset to seed from (unusual layout) — the character just
+    // runs on the shared system prompt and its own instance.txt instead.
+  }
 }
 
 /// Refuse to start on the mistakes agent-client would only report after the
@@ -433,6 +482,9 @@ module.exports = {
   DEFAULT_GOOGLE_CLIENT_ID,
   DIRECTIVE_SENDER,
   agentDir,
+  instancePromptPath,
+  ensureInstancePrompt,
+  ensureUserPrompt,
   packagedSeedDir,
   seedRuntimeData,
   buildInfo,

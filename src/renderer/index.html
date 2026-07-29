@@ -62,67 +62,52 @@
       <div class="glow"></div>
       <div class="card wide">
         <p class="wordmark" id="characterRecap">OpenMMO</p>
-        <h1 class="display">Choose your character</h1>
-        <p class="lede">Pick a character to play, or create a new one — up to 3 per account.</p>
 
-        <div id="characterList" class="character-list"></div>
-
-        <div class="expander">
-          <button id="toggleNewCharacter" class="linklike">Create a new character</button>
-          <div id="newCharacterFields" hidden>
-            <label>Character name<input id="newCharacterName" placeholder="unique across the server" /></label>
-            <div class="row">
-              <label>Class<select id="characterClass"></select></label>
-              <label>Gender<select id="gender"></select></label>
-            </div>
-            <p class="hint" id="genderHint"></p>
-            <button id="createCharacter" class="ghost">Create</button>
-          </div>
+        <div class="tabs" id="characterTabs" role="tablist">
+          <button class="tab on" data-tab="pick" role="tab">Choose your character</button>
+          <button class="tab" data-tab="create" role="tab">Create a new character</button>
+          <button class="tab" data-tab="llm" role="tab">LLM &amp; behavior settings</button>
+          <button class="tab" data-tab="connection" role="tab">Advanced connection settings</button>
         </div>
 
-        <div class="expander">
-          <button id="toggleLlmSettings" class="linklike">LLM &amp; behavior settings</button>
-          <div id="llmSettingsFields" hidden>
-            <label class="check"><input type="checkbox" id="alwaysActive" /> Keep thinking with nobody around</label>
-            <div class="row">
-              <label>Think every (s)<input type="number" id="minIntervalSecs" min="1" /></label>
-              <label>Idle every (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
-            </div>
-            <p class="hint">Shorter intervals mean more LLM calls. Idle applies when no chat or combat has happened recently.</p>
-
-            <label>Backend<select id="llm"></select></label>
-            <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
-            <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
-            <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted, sent as an env var" /></label>
-            <label data-for="openai">Reasoning effort<select id="reasoningEffort">
-                <option value="none">none</option>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-                <option value="">(omit)</option>
-              </select></label>
-            <p class="hint" id="backendHint"></p>
-
-            <div class="expander">
-              <button id="togglePersona" class="linklike">Customize prompt</button>
-              <div id="personaFields" hidden>
-                <div class="row">
-                  <label>Preset<select id="preset"></select></label>
-                  <button id="loadPreset" class="ghost">Load</button>
-                </div>
-                <textarea id="promptText" spellcheck="false"></textarea>
-                <div class="row">
-                  <button id="savePrompt" class="ghost">Save prompt</button>
-                  <button id="showSystem" class="ghost">System prompt</button>
-                </div>
-                <p class="hint" id="promptFile"></p>
-                <pre id="systemPrompt" hidden></pre>
-              </div>
-            </div>
-          </div>
+        <div data-tab-panel="pick">
+          <p class="lede">Pick a character to play — up to 3 per account.</p>
+          <div id="characterList" class="character-list"></div>
         </div>
 
-        <button id="openSettingsFromCharacter" class="linklike">Advanced connection settings</button>
+        <div data-tab-panel="create" hidden>
+          <p class="lede">Create a new character — up to 3 per account.</p>
+          <label>Character name<input id="newCharacterName" placeholder="unique across the server" /></label>
+          <div class="row">
+            <label>Class<select id="characterClass"></select></label>
+            <label>Gender<select id="gender"></select></label>
+          </div>
+          <p class="hint" id="genderHint"></p>
+          <button id="createCharacter" class="ghost">Create</button>
+        </div>
+
+        <div data-tab-panel="llm" hidden>
+          <label class="check"><input type="checkbox" id="alwaysActive" /> Keep thinking with nobody around</label>
+          <div class="row">
+            <label>Think every (s)<input type="number" id="minIntervalSecs" min="1" /></label>
+            <label>Idle every (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
+          </div>
+          <p class="hint">Shorter intervals mean more LLM calls. Idle applies when no chat or combat has happened recently.</p>
+
+          <label>Backend<select id="llm"></select></label>
+          <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
+          <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
+          <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted, sent as an env var" /></label>
+          <label data-for="openai">Reasoning effort<select id="reasoningEffort">
+              <option value="none">none</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="">(omit)</option>
+            </select></label>
+          <p class="hint" id="backendHint"></p>
+        </div>
+
         <button id="play" class="primary block" disabled>Play</button>
       </div>
     </section>
@@ -152,6 +137,12 @@
           <button data-drawer="log" title="Log" aria-label="Log">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
           </button>
+          <button data-drawer="prompt" title="Personality" aria-label="Personality">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h9l5 5v11H5z" /><path d="M14 4v5h5" /><path d="M8 13h8M8 17h5" /></svg>
+          </button>
+          <button data-drawer="bag" title="Bag" aria-label="Bag">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V6a5 5 0 0 1 10 0v2" /><path d="M5 8h14l1 12H4z" /><path d="M9 11v2M15 11v2" /></svg>
+          </button>
           <span class="rail-spacer"></span>
           <button id="openSettingsFromGame" title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M8 17h12" /><circle cx="16" cy="7" r="2" /><circle cx="6" cy="17" r="2" /></svg>
@@ -174,12 +165,13 @@
                game surface, not an overlay on top of it — so it never covers
                the scene or its HUD. -->
           <div class="directive-panel" id="directivePanel">
+            <p class="directive-label">Dispatch</p>
             <div class="directive-log" id="directiveLog" hidden>
               <div class="directive-line directive-you"><span class="directive-tag">You</span><span id="directiveSent"></span></div>
               <div class="directive-line directive-agent"><span class="directive-tag">Agent</span><span id="directiveReply">waiting…</span></div>
             </div>
             <form id="directiveForm" class="directive-form">
-              <input id="directiveInput" placeholder="Tell your character what to do…" autocomplete="off" />
+              <input id="directiveInput" placeholder="Send word to your character…" autocomplete="off" />
               <button type="submit" class="ghost">Send</button>
             </form>
           </div>
@@ -205,6 +197,16 @@
                 <button id="clearLog" class="ghost">Clear</button>
               </div>
               <pre id="log"></pre>
+            </div>
+            <div data-drawer-panel="prompt" hidden>
+              <p class="hint">How <span id="instanceCharacterName">this character</span> plays — its own personality, on top of the shared rules.</p>
+              <textarea id="instanceText" spellcheck="false"></textarea>
+              <button id="saveInstance" class="ghost">Save</button>
+              <p class="hint" id="instanceFile"></p>
+            </div>
+            <div data-drawer-panel="bag" hidden>
+              <div id="bagList" class="bag-list"></div>
+              <p class="hint" id="bagEmpty">Nothing carried yet.</p>
             </div>
           </div>
         </aside>
@@ -241,6 +243,23 @@
               </select></label>
           </div>
           <button id="openBinaryFromSettings" class="linklike">Change agent-client binary</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reusable confirm dialog — a destructive action (character delete)
+         should never go through on one click alone. -->
+    <div id="confirmModal" class="modal" hidden>
+      <div class="modal-card">
+        <div class="modal-head">
+          <span id="confirmTitle">Are you sure?</span>
+        </div>
+        <div class="modal-body">
+          <p id="confirmMessage"></p>
+          <div class="row confirm-actions">
+            <button id="confirmCancel" class="ghost">Cancel</button>
+            <button id="confirmOk" class="danger">Delete</button>
+          </div>
         </div>
       </div>
     </div>

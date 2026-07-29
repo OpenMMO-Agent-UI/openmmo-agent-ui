@@ -1,14 +1,20 @@
+/* Guild Dispatch: a ranger's-guild night-desk, not a generic dark dashboard.
+   --accent stays brass (guild insignia) since it's threaded through most of
+   the file already; --ember is the one warm, slightly urgent color, spent
+   only on the Dispatch panel and destructive actions — everywhere else
+   stays quiet on purpose. */
 :root {
-  --bg: #12141a;
-  --panel: #1a1d26;
-  --panel-2: #21252f;
-  --line: #2c313d;
-  --text: #dfe3ec;
-  --muted: #8b93a5;
-  --accent: #ffd76a;
-  --ok: #5fd48a;
-  --err: #e05252;
-  --display-font: ui-serif, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --bg: #14171c;
+  --panel: #1b2029;
+  --panel-2: #232a34;
+  --line: #333b47;
+  --text: #ece6d6;
+  --muted: #9c9686;
+  --accent: #c9a24a;
+  --ember: #c1553b;
+  --verdigris: #5e9078;
+  --err: #d1495b;
+  --display-font: 'Big Caslon', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 }
 
 * {
@@ -42,7 +48,7 @@ body {
 button {
   padding: 5px 12px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--panel-2);
   color: var(--text);
   font: inherit;
@@ -56,7 +62,17 @@ button:hover {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #2a2410;
+  color: #211a0c;
+  font-weight: 600;
+}
+
+/* Reserved for destructive actions (delete character) — ember rather than
+   brass, so "this one is different" is communicated by color, not just
+   copy. */
+button.danger {
+  background: var(--ember);
+  border-color: var(--ember);
+  color: #2a120c;
   font-weight: 600;
 }
 
@@ -128,7 +144,7 @@ textarea {
   margin-top: 4px;
   padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 5px;
   background: var(--panel-2);
   color: var(--text);
   font: inherit;
@@ -230,10 +246,12 @@ body[data-screen='game'] #screen-game {
   -webkit-app-region: drag;
 }
 
+/* Lamplight on a desk, not a generic UI glow — sits high and warm, like the
+   card is lit from a lantern just above it. */
 .screen-entry .glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(480px 320px at 50% 38%, rgba(255, 215, 106, 0.1), transparent 70%);
+  background: radial-gradient(520px 360px at 50% 18%, rgba(201, 162, 74, 0.12), transparent 70%);
   pointer-events: none;
 }
 
@@ -244,8 +262,8 @@ body[data-screen='game'] #screen-game {
   max-width: 420px;
   margin: 32px;
   padding: 32px 36px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: 1px solid rgba(201, 162, 74, 0.16);
+  border-radius: 10px;
   background: var(--panel);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
@@ -254,21 +272,25 @@ body[data-screen='game'] #screen-game {
   max-width: 560px;
 }
 
+/* A letterhead, not a badge: the rule underneath is what makes it read as
+   the top of a page rather than a floating label. */
 .wordmark {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(201, 162, 74, 0.25);
   color: var(--accent);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
 }
 
 .display {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-family: var(--display-font);
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
 }
 
 .lede {
@@ -288,14 +310,14 @@ body[data-screen='game'] #screen-game {
 
 .inline-code {
   padding: 3px 9px;
-  border-radius: 6px;
+  border-radius: 5px;
   background: #0d0f14;
-  border: 1px solid #4a4127;
+  border: 1px solid #4a3f24;
   color: var(--accent);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.1em;
-  text-shadow: 0 0 14px rgba(255, 215, 106, 0.35);
+  text-shadow: 0 0 14px rgba(201, 162, 74, 0.35);
 }
 
 .pulsing {
@@ -365,10 +387,44 @@ body[data-screen='game'] #screen-game {
   font-size: 12px;
 }
 
+/* Same ember-for-destructive language as the confirm dialog's Delete
+   button, just quieter until you actually reach for it. */
+.character-row button:hover {
+  border-color: var(--ember);
+  color: var(--ember);
+}
+
 .character-empty {
   margin: 0 0 14px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs .tab {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tabs .tab:hover {
+  color: var(--text);
+}
+
+.tabs .tab.on {
+  color: var(--accent);
+  background: var(--panel-2);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .expander {
@@ -422,8 +478,8 @@ body[data-screen='game'] #screen-game {
 }
 
 .dot.on {
-  background: var(--ok);
-  box-shadow: 0 0 8px rgba(95, 212, 138, 0.6);
+  background: var(--verdigris);
+  box-shadow: 0 0 8px rgba(94, 144, 120, 0.6);
 }
 
 .status {
@@ -549,12 +605,37 @@ iframe {
    scene/HUD along the bottom edge). This is how a human overrides the
    otherwise-autonomous agent, and ADR 0003 depends on the reply being seen
    right next to what was sent, not found later in a log — but it earns that
-   visibility by taking its own space, not by floating over the view. */
+   visibility by taking its own space, not by floating over the view.
+
+   This is the signature moment: a directive reads as sending word to your
+   character, not typing into a chat box. "You" sits in ember (it's the
+   outgoing dispatch); the reply sits in brass. Everywhere else in this file
+   stays quiet so this is the one place attention lands. */
 .directive-panel {
   flex: none;
   padding: 10px 14px;
   background: var(--panel);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(201, 162, 74, 0.22);
+  transition: border-color 0.5s ease, box-shadow 0.5s ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Toggled briefly by app.js on send — the one deliberate animation moment
+     in the whole app. */
+  .directive-panel.sent {
+    border-top-color: rgba(193, 85, 59, 0.55);
+    box-shadow: inset 0 1px 18px -6px rgba(193, 85, 59, 0.35);
+  }
+}
+
+.directive-label {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.85;
 }
 
 .directive-log {
@@ -571,16 +652,26 @@ iframe {
 .directive-tag {
   flex: none;
   width: 42px;
-  color: var(--muted);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.directive-you .directive-tag {
+  color: var(--ember);
 }
 
 .directive-you span:last-child {
   color: var(--text);
 }
 
-.directive-agent span:last-child {
+.directive-agent .directive-tag {
   color: var(--accent);
+}
+
+.directive-agent span:last-child {
+  color: var(--text);
 }
 
 .directive-form {
@@ -590,6 +681,16 @@ iframe {
 
 .directive-form input {
   margin-top: 0;
+}
+
+.directive-form button[type='submit'] {
+  border-color: rgba(193, 85, 59, 0.4);
+  color: var(--ember);
+}
+
+.directive-form button[type='submit']:hover {
+  border-color: var(--ember);
+  background: rgba(193, 85, 59, 0.1);
 }
 
 .drawer {
@@ -626,7 +727,8 @@ iframe {
 }
 
 .drawer-body pre,
-.drawer-body #feed {
+.drawer-body #feed,
+.drawer-body .bag-list {
   flex: 1;
   min-height: 0;
 }
@@ -718,8 +820,29 @@ iframe {
   color: #f0b48a;
 }
 
-#systemPrompt {
-  max-height: 260px;
+/* ---------- bag ---------- */
+
+.bag-list {
+  overflow-y: auto;
+}
+
+.bag-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bag-name {
+  color: var(--text);
+}
+
+.bag-qty {
+  flex: none;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- settings modal ---------- */
@@ -758,4 +881,9 @@ iframe {
 .modal-body {
   padding: 18px;
   overflow-y: auto;
+}
+
+.confirm-actions {
+  justify-content: flex-end;
+  margin-bottom: 0;
 }

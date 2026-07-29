@@ -156,6 +156,16 @@ class ClientServer {
 
       fs.stat(file, (err, stat) => {
         if (err || !stat.isFile()) {
+          // A packaged build never bundles textures/models/bgm/etc (see
+          // package-resources.sh) — they're 100s of MB of the same public
+          // assets the official site already serves, so a missing file with
+          // a real asset extension means "fetch it from there," the same
+          // fallback an un-pulled LFS checkout already uses below. Anything
+          // without a recognised extension is a client-side route instead.
+          if (this.origin && MIME[path.extname(file)]) {
+            proxy(req, res, this.origin)
+            return
+          }
           serveFile(res, path.join(root, 'index.html'))
           return
         }
