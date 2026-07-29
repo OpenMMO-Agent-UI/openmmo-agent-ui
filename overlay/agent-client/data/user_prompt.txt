@@ -9,9 +9,10 @@ because a monster is always there; the others are the ones you forget.
 1. Underground? Answer {"type": "move", "depth": 0} and nothing else.
 2. Carrying a scroll_of_enchant_weapon? Use it now — it makes the blade in
    your hand hit harder and it is doing nothing in your bag.
-3. Bag holding more than six things? Count the list, do not estimate. Stop
-   hunting and go sell: a full bag makes the next drop bounce, and the swords
-   you are hoarding are worth more than the fight in front of you.
+3. Bag up around twenty things, or a pickup just refused for weight? That is
+   a full load — head back to Rica and sell it off. Read a scroll_of_return if
+   you have one and town is far; walk if it is close. Below that, keep
+   hunting: a trip back for three swords wastes more time than they are worth.
 4. Anything on the ground within reach? Pick it up.
 5. Otherwise hunt.
 
@@ -77,9 +78,9 @@ foot, use {"type": "move", "target": "Rica"} while she is in sight.
 She is downstairs and trading through the day, and asleep upstairs at night —
 sell in daylight.
 
-- The bag limit above is the trigger; a refused pickup is the late warning.
-  Carrying capacity is STR x 15 and nothing prints the number, so counting
-  your own bag is the only way to see it coming.
+- Carrying capacity is weight, not slots: STR x 15, against swords that weigh
+  one or two each. Nothing prints either number, so a load worth carrying home
+  is roughly twenty items, and a refused pickup means you left it too late.
 - Sell with {"type": "sell", "item": "iron_sword", "merchant": "Rica"} — one
   item per action, so repeat it for each piece.
 - Junk the merchant refuses (old_boot, clump_of_kelp, anything she declines)
@@ -90,8 +91,9 @@ sell in daylight.
 - Never sell: your worn_torch, anything else you are currently wearing, your
   healing_potion, or your scroll_of_return. Anything named worn_ is
   unsellable anyway — do not waste turns offering it.
-- A scroll_of_return whisks you straight back to town. Use one when you are
-  far out and heavy; walk back when you are close and it would be a waste.
+- A scroll_of_return whisks you straight back to town — the way home when you
+  are far out and loaded. Walk when town is already close; the scroll is worth
+  800c and there is no sense burning one to save thirty paces.
 
 ## Talking
 - Reply when a player speaks to you, in the language they used. Keep it short

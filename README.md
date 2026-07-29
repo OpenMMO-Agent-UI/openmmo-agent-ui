@@ -160,18 +160,6 @@ One trap worth naming: `openai/gpt-oss-20b:free` answered in **51 seconds** and
 timed out repeatedly, while the same model on paid routing answers in 0.5s. A
 `:free` suffix measures the queue, not the model.
 
-## In-browser agent mode
-
-The same idea also runs inside the web client itself, with no agent-client and
-no second process: a panel in the corner of the game, your key in your browser,
-your character. `overlay/client/src/lib/agent/` builds the world state from what
-the client already knows, asks the model, and dispatches the reply through the
-very controls a mouse click uses — so pathfinding, chasing and range checks
-stay in one place and the agent can do nothing a player could not.
-
-Closing the tab stops it, which is the honest difference from the desktop
-agent: one plays while you watch, the other plays while the page is open.
-
 ## Staying rebaseable
 
 Our changes come in two shapes, kept apart on purpose.
@@ -182,9 +170,8 @@ it. Upstream has no file at those paths, so an update cannot conflict with
 them. This is where the bulk of the work lives:
 
 ```
+overlay/agent-client/data/user_prompt.txt             who the character is
 overlay/client/src/lib/stores/observerStore.ts        spectator mode flag
-overlay/client/src/lib/agent/                         in-browser agent loop
-overlay/client/src/lib/components/AgentPanel.svelte   its UI
 ```
 
 **`patches/` — the few upstream files we must reach into.** The only places an
@@ -213,15 +200,21 @@ does not, that is the loop.
 ### What the patch does
 
 `agent-client/` needs no patch at all — the relay replaces what would otherwise
-be four Rust hooks. The web client needs seven, ~140 lines:
+be four Rust hooks. The web client needs seven, ~150 lines:
 
 - `vite.config.ts` — `preserveSymlinks`, or the overlay's relative imports break
-- `App.svelte` — spectator entry path, agent panel mount
+- `App.svelte` — spectator entry path, and holding the scene back until the
+  watched character exists
 - `socket.ts` — send-silent in spectator mode, `observe()`
 - `messageHandlers.ts` — route the watched agent through remote interpolation
 - `monsterManager.ts` — ownership checks go through `ownedByMe()`
 - `GameScene.svelte` / `GameScenePlayersLayer.svelte` — no input FSM when observing
 - `.gitignore` — our symlinks, and the generated config's secret-bearing backup
+
+An in-browser agent — the same loop running inside the web client, on your own
+key, with no second process — was built and then withdrawn: the client's Google
+sign-in needs a `VITE_GOOGLE_CLIENT_ID` this project does not ship, so it could
+never be exercised. It lives in the history if it is wanted back.
 
 ## Known limits
 

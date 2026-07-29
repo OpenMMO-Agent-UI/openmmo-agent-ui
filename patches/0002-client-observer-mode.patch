@@ -1,8 +1,8 @@
 diff --git a/.gitignore b/.gitignore
-index 97303747..35a8ee36 100644
+index 97303747..514abd8a 100644
 --- a/.gitignore
 +++ b/.gitignore
-@@ -96,3 +96,20 @@ agent-client/data/cache/
+@@ -96,3 +96,18 @@ agent-client/data/cache/
  !.codex/config.toml
  !.codex/skills/
  !.codex/skills/**
@@ -20,22 +20,12 @@ index 97303747..35a8ee36 100644
 +# The real files live in openmmo-client/overlay/ so a rebase never touches them.
 +/agent-client/src/mirror.rs
 +/client/src/lib/stores/observerStore.ts
-+/client/src/lib/components/AgentPanel.svelte
-+/client/src/lib/agent/
 +/agent-client/data/user_prompt.txt
 diff --git a/client/src/App.svelte b/client/src/App.svelte
-index a8fc1787..6dba8d1b 100644
+index a8fc1787..545b3534 100644
 --- a/client/src/App.svelte
 +++ b/client/src/App.svelte
-@@ -3,6 +3,7 @@
-   import { Canvas } from '@threlte/core'
-   import GameScene from './lib/components/GameScene.svelte'
-   import GameHud from './lib/components/GameHud.svelte'
-+  import AgentPanel from './lib/components/AgentPanel.svelte'
-   import LoginScreen from './lib/components/LoginScreen.svelte'
-   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
-   import CharacterSelectScene from './lib/components/CharacterSelectScene.svelte'
-@@ -10,6 +11,7 @@
+@@ -10,6 +10,7 @@
    import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
    import RenderFrameLimiter from './lib/components/RenderFrameLimiter.svelte'
    import { gameStore } from './lib/stores/gameStore'
@@ -43,7 +33,7 @@ index a8fc1787..6dba8d1b 100644
    import { createWebGPURenderer } from './lib/utils/renderer'
    import {
      networkManager,
-@@ -34,7 +36,8 @@
+@@ -34,7 +35,8 @@
      | 'waiting_dying'
      | 'dialog_open'
      | 'dialog_closed'
@@ -53,7 +43,7 @@ index a8fc1787..6dba8d1b 100644
    let serverUrl = $state('')
    let accountName = $state('')
    let accountCharacters = $state<AccountCharacter[]>([])
-@@ -47,6 +50,15 @@
+@@ -47,6 +49,15 @@
    let isPlayerDead = $state(false)
    let currentPlayerHp = $state<number | null>(null)
    let currentPlayerMaxHp = $state<number | null>(null)
@@ -69,7 +59,7 @@ index a8fc1787..6dba8d1b 100644
    let currentPlayerLevel = $state<number | null>(null)
    let currentPlayerTotalXp = $state<number | null>(null)
    let deathUiState = $state<DeathUiState>('alive')
-@@ -79,6 +91,15 @@
+@@ -79,6 +90,15 @@
    // caps itself at 3s and normally finishes long before login completes.
    let showCanvas = $derived(screen !== 'login' && !gpuProbePending)
  
@@ -85,7 +75,7 @@ index a8fc1787..6dba8d1b 100644
    onMount(() => {
      if (!gpuProbePending) return
      void runGpuBenchmark()
-@@ -334,7 +355,7 @@
+@@ -334,7 +354,7 @@
              characterClass={createSelectedClass}
              gender={createSelectedGender}
            />
@@ -94,7 +84,7 @@ index a8fc1787..6dba8d1b 100644
            <GameScene
              {serverUrl}
              onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
-@@ -346,6 +367,12 @@
+@@ -346,6 +366,12 @@
      </div>
    {/if}
  
@@ -107,17 +97,7 @@ index a8fc1787..6dba8d1b 100644
    <!-- UI overlays (outside Canvas) -->
    {#if screen === 'game'}
      <GameHud
-@@ -364,6 +391,9 @@
-       onCloseRespawnDialog={closeRespawnDialog}
-       onOpenSettings={() => (showSettings = true)}
-     />
-+    {#if !isObserver}
-+      <AgentPanel />
-+    {/if}
-   {:else if screen === 'character-select'}
-     <CharacterSelectScreen
-       {accountName}
-@@ -482,4 +512,30 @@
+@@ -482,4 +508,30 @@
      width: 20px;
      height: 20px;
    }
@@ -149,28 +129,18 @@ index a8fc1787..6dba8d1b 100644
 +  }
  </style>
 diff --git a/client/src/lib/components/GameScene.svelte b/client/src/lib/components/GameScene.svelte
-index cb8450e3..312b6544 100644
+index cb8450e3..b5464643 100644
 --- a/client/src/lib/components/GameScene.svelte
 +++ b/client/src/lib/components/GameScene.svelte
-@@ -54,6 +54,8 @@
+@@ -54,6 +54,7 @@
    import ObjectOverlay from './map-editor/ObjectOverlay.svelte'
    import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
    import { type PlayerState } from '../utils/movementUtils'
 +  import { isObserver } from '../stores/observerStore'
-+  import { drainAgentEvents } from '../agent/actions'
    import {
      SUN_MAX_INTENSITY,
      computeSunLightSnapshot,
-@@ -493,7 +495,7 @@
-       // Movement runs in map/housing editor so right-click-to-move works.
-       const playerControlStart = performance.now()
-       if (playerControl) {
--        const events = pendingPlayerControlEvents
-+        const events = pendingPlayerControlEvents.concat(drainAgentEvents())
-         pendingPlayerControlEvents = []
-         playerControl.updatePlayerControl(deltaTime, {
-           editorMode: $mapEditorMode || $housingEditorMode,
-@@ -537,6 +539,20 @@
+@@ -537,6 +538,20 @@
        // Update remote player interpolation
        const remoteInterpolationStart = performance.now()
        remotePlayerManager.update(deltaTime)

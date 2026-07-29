@@ -35,7 +35,7 @@ extract)
     base="${2:-HEAD}"
     mkdir -p "$patches"
     cd "$root"
-    git diff "$base" -- "${CLIENT_FILES[@]}" > "$patches/0002-client-observer-and-agent-mode.patch"
+    git diff "$base" -- "${CLIENT_FILES[@]}" > "$patches/0002-client-observer-mode.patch"
     for f in "$patches"/*.patch; do
         if [[ -s $f ]]; then
             echo "wrote $(basename "$f") ($(grep -c '^+' "$f") added lines)"
