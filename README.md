@@ -1,18 +1,19 @@
 # OpenMMO Client
 
 A desktop client for playing [OpenMMO](https://openmmo.to.nexus) with an LLM at
-the controls. Pick a model, write who your character is, press start — and
-watch it live in the real 3D game client while it plays.
+the controls. Pick a model, write who your character is, press **Play** — and
+watch it live in the real 3D game client while it plays, sending it word when
+you want something done.
 
 ```
 ┌──────────────┬──────────────────────────────┐
-│ Character    │                              │
-│ Model        │   the game, rendered from    │
-│ Prompt       │   the agent's own session    │
 │ Thoughts     │                              │
-│ Connection   │                              │
-│ Log          │                              │
-└──────────────┴──────────────────────────────┘
+│ Log          │   the game, rendered from    │
+│ Personality  │   the agent's own session    │
+│ Bag          │                              │
+├──────────────┴──────────────────────────────┤
+│ Dispatch: send word to your character…      │
+└─────────────────────────────────────────────┘
 ```
 
 It drives the official `agent-client` binary and adds what that binary has no
@@ -115,14 +116,30 @@ refuses any observe target that is not loopback.
 
 ## What the panel controls
 
+Two screens. You set the run up before pressing **Play**, and watch it after.
+
+Before — tabs on the character screen:
+
 | Tab | What it does |
 |---|---|
-| Character | Name, class, gender, how often the agent thinks |
-| Model | Backend (Codex / Claude CLI / OpenRouter / any OpenAI-compatible endpoint), model id, API key |
-| Prompt | `agent-client/data/user_prompt.txt` — who the character is |
+| Choose your character | The account's characters (3 max). Pick one to play, or delete one. Already have one? It is selected for you and **Play** is ready. |
+| Create a new character | Name, class, gender. Stats are rolled and accepted for you |
+| LLM & behavior settings | Backend (Codex / Claude CLI / OpenRouter / any OpenAI-compatible endpoint), model id, API key, and how often the agent thinks |
+| Advanced connection settings | Opens the same settings dialog as the rail's Settings icon |
+
+After — the rail down the left of the game screen:
+
+| Icon | What it opens |
+|---|---|
 | Thoughts | Every prompt sent and every reply, with timings |
-| Connection | Server, terrain origin, Google sign-in, ports, binary location |
 | Log | The agent process's own stdout/stderr |
+| Personality | `data/npcs/<character>/instance.txt` — how *this* character plays, on top of the shared rules. Saving restarts the agent so it takes effect |
+| Bag | What the character is carrying, one line per item |
+| Settings | A dialog: server, terrain origin, Google sign-in and client id/secret, ports, log level, binary location |
+
+**Dispatch**, docked under the game view, is the one control that reaches a
+running agent: type an instruction and it arrives as the character's next turn.
+Best-effort by design — see [ADR 0003](docs/adr/0003-directives-are-best-effort-whispers.md).
 
 API keys are encrypted with the OS keychain (Electron `safeStorage`) and handed
 to the agent as environment variables — never written into `config.toml`, so a
