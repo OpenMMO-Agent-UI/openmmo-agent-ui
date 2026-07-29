@@ -272,7 +272,7 @@ index e1bc10f6..3c72085c 100644
        }
      }
 diff --git a/client/src/lib/network/messageHandlers.ts b/client/src/lib/network/messageHandlers.ts
-index 3adc217e..9ef3b470 100644
+index 3adc217e..248a9866 100644
 --- a/client/src/lib/network/messageHandlers.ts
 +++ b/client/src/lib/network/messageHandlers.ts
 @@ -13,6 +13,7 @@ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
@@ -323,6 +323,27 @@ index 3adc217e..9ef3b470 100644
          break
        }
        const tpDeckY = bridgeManager.findDeckYAt(
+@@ -433,6 +451,20 @@ export function handleServerMessage(
+       gameStore.update((state) => {
+         state.otherPlayers.clear()
+         remotePlayerManager.reset()
++        // That reset drops the spectator's own registration (see JoinSuccess),
++        // and the loop below re-registers everyone *except* the local id —
++        // right for a player, who drives their own movement, wrong for a
++        // spectator whose character is the one being interpolated. The server
++        // sends this baseline immediately after JoinSuccess, so without it the
++        // watched agent stands at its join position for the whole session
++        // while its PlayerMoved frames update a target nothing reads.
++        if (isObserver && state.currentPlayer) {
++          remotePlayerManager.initPlayer(
++            state.currentPlayer.id,
++            state.currentPlayer.position,
++            state.currentPlayer.rotation
++          )
++        }
+         // A list, not a map: player ids are numeric and the wasm serializer
+         // rejects non-string map keys (see ServerMessage::GameState).
+         const serverPlayers = data.players as ServerPlayer[]
 diff --git a/client/src/lib/network/socket.ts b/client/src/lib/network/socket.ts
 index eeb5f26b..d607022e 100644
 --- a/client/src/lib/network/socket.ts
