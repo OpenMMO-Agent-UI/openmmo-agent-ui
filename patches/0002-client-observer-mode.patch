@@ -1,8 +1,8 @@
 diff --git c/.gitignore w/.gitignore
-index 97303747..514abd8a 100644
+index 97303747..029b1a8d 100644
 --- c/.gitignore
 +++ w/.gitignore
-@@ -96,3 +96,18 @@ agent-client/data/cache/
+@@ -96,3 +96,19 @@ agent-client/data/cache/
  !.codex/config.toml
  !.codex/skills/
  !.codex/skills/**
@@ -20,6 +20,7 @@ index 97303747..514abd8a 100644
 +# The real files live in openmmo-client/overlay/ so a rebase never touches them.
 +/agent-client/src/mirror.rs
 +/client/src/lib/stores/observerStore.ts
++/client/src/lib/managers/observedPath.ts
 +/agent-client/data/user_prompt.txt
 diff --git c/client/src/App.svelte w/client/src/App.svelte
 index a8fc1787..545b3534 100644
@@ -129,18 +130,19 @@ index a8fc1787..545b3534 100644
 +  }
  </style>
 diff --git c/client/src/lib/components/GameScene.svelte w/client/src/lib/components/GameScene.svelte
-index cb8450e3..b5464643 100644
+index cb8450e3..29b1c690 100644
 --- c/client/src/lib/components/GameScene.svelte
 +++ w/client/src/lib/components/GameScene.svelte
-@@ -54,6 +54,7 @@
+@@ -54,6 +54,8 @@
    import ObjectOverlay from './map-editor/ObjectOverlay.svelte'
    import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
    import { type PlayerState } from '../utils/movementUtils'
 +  import { isObserver } from '../stores/observerStore'
++  import { nextLeg } from '../managers/observedPath'
    import {
      SUN_MAX_INTENSITY,
      computeSunLightSnapshot,
-@@ -537,6 +538,20 @@
+@@ -537,6 +539,33 @@
        // Update remote player interpolation
        const remoteInterpolationStart = performance.now()
        remotePlayerManager.update(deltaTime)
@@ -150,6 +152,19 @@ index cb8450e3..b5464643 100644
 +      if (isObserver && currentPlayer) {
 +        const observed = remotePlayerManager.players.get(currentPlayer.id)
 +        if (observed) {
++          // A leg of a route around an obstacle (observedPath) ends like any
++          // other arrival, so hand over the next one here — the same job
++          // PlayerControl's movement substrate does for the local player.
++          if (observed.state === 'idle') {
++            const leg = nextLeg(currentPlayer.id)
++            if (leg) {
++              remotePlayerManager.setTargetPosition(
++                currentPlayer.id,
++                leg,
++                observed.rotation
++              )
++            }
++          }
 +          currentPlayer.position.set(
 +            observed.position.x,
 +            observed.position.y,
@@ -272,12 +287,14 @@ index e1bc10f6..3c72085c 100644
        }
      }
 diff --git c/client/src/lib/network/messageHandlers.ts w/client/src/lib/network/messageHandlers.ts
-index 5faed018..88d95993 100644
+index 5faed018..e00caec9 100644
 --- c/client/src/lib/network/messageHandlers.ts
 +++ w/client/src/lib/network/messageHandlers.ts
-@@ -13,6 +13,11 @@ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
+@@ -12,7 +12,13 @@ import {
+ import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
  import { Vector3 } from 'three'
  import { remotePlayerManager } from '../managers/remotePlayerManager'
++import { clearRoute, routeObserved } from '../managers/observedPath'
  import { FishingAnimationName } from '../types/animations'
 +import {
 +  farEnoughToSnap,
@@ -287,7 +304,7 @@ index 5faed018..88d95993 100644
  import { playFishingSound } from '../managers/sfxManager'
  import { FISHING_CAST_SWING_DELAY_MS } from '../data/combatTiming'
  import { monsterManager } from '../managers/monsterManager'
-@@ -249,6 +254,16 @@ export function handleServerMessage(
+@@ -249,6 +255,16 @@ export function handleServerMessage(
          ...state,
          currentPlayer: player,
        }))
@@ -304,7 +321,7 @@ index 5faed018..88d95993 100644
        // Players who logged out inside a dungeon reconnect there.
        dungeonManager.syncFromFloorLevel(
          serverPlayer.floor_level ?? 0,
-@@ -344,7 +359,7 @@ export function handleServerMessage(
+@@ -344,7 +360,7 @@ export function handleServerMessage(
  
      case 'PlayerMoved': {
        const state = get(gameStore)
@@ -313,7 +330,7 @@ index 5faed018..88d95993 100644
          break
        }
        const deckY = bridgeManager.findDeckYAt(
-@@ -352,15 +367,24 @@ export function handleServerMessage(
+@@ -352,15 +368,31 @@ export function handleServerMessage(
          data.position.z,
          null
        )
@@ -340,14 +357,21 @@ index 5faed018..88d95993 100644
 +          ? remotePlayerManager.players.get(data.player_id)?.position
 +          : undefined
 +      if (drawnAt && farEnoughToSnap(drawnAt, moveTo)) {
++        clearRoute(data.player_id)
 +        remotePlayerManager.teleportPlayer(data.player_id, moveTo, data.rotation)
 +        break
 +      }
-+      remotePlayerManager.setTargetPosition(data.player_id, moveTo, data.rotation)
++      // A straight line to the next position is only right when nothing stands
++      // in it — see observedPath, which routes around what does and leaves a
++      // clear line alone.
++      const leg = drawnAt
++        ? routeObserved(data.player_id, drawnAt, moveTo, data.floor_level ?? 0)
++        : moveTo
++      remotePlayerManager.setTargetPosition(data.player_id, leg, data.rotation)
        const existing = state.otherPlayers.get(data.player_id)
        if (existing && existing.floorLevel !== data.floor_level) {
          updatePlayer(data.player_id, { floorLevel: data.floor_level })
-@@ -393,6 +417,13 @@ export function handleServerMessage(
+@@ -393,6 +425,13 @@ export function handleServerMessage(
            data.position.z
          )
          requestCameraReset()
@@ -361,7 +385,7 @@ index 5faed018..88d95993 100644
          break
        }
        const tpDeckY = bridgeManager.findDeckYAt(
-@@ -477,6 +508,20 @@ export function handleServerMessage(
+@@ -477,6 +516,20 @@ export function handleServerMessage(
        gameStore.update((state) => {
          state.otherPlayers.clear()
          remotePlayerManager.reset()
@@ -382,7 +406,7 @@ index 5faed018..88d95993 100644
          // A list, not a map: player ids are numeric and the wasm serializer
          // rejects non-string map keys (see ServerMessage::GameState).
          const serverPlayers = data.players as ServerPlayer[]
-@@ -823,7 +868,11 @@ export function handleServerMessage(
+@@ -823,7 +876,11 @@ export function handleServerMessage(
  
      case 'PlayerInteractionChanged': {
        const state = get(gameStore)
