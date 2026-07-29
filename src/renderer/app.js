@@ -478,13 +478,15 @@ function renderBag(bag) {
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
-/// clipped and open on click.
+/// clipped and open on click — except the agent's own replies, which are the
+/// reason the panel exists and are short enough to read in full. Click still
+/// collapses them.
 function appendFeed(items) {
   const box = $('feed')
-  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40
   for (const item of items) {
     const el = document.createElement('div')
     el.className = `feed-item k-${item.k}`
+    if (item.k === 'llm-response') el.classList.add('open')
     el.dataset.kind = item.k
     el.hidden = feedHidden.has(item.k)
 
@@ -511,7 +513,10 @@ function appendFeed(items) {
     }
   }
   while (box.childElementCount > 400) box.removeChild(box.firstChild)
-  if (atBottom) box.scrollTop = box.scrollHeight
+  // Same contract as the Log pane's Follow: while it is on, the newest turn is
+  // always in view, and turning it off holds the scroll position so a turn can
+  // be read while the agent keeps going.
+  if ($('feedFollow').checked) box.scrollTop = box.scrollHeight
 }
 
 /// Records what was sent so the reply (above) can be matched back to it.
