@@ -24,11 +24,18 @@ because a monster is always there; the others are the ones you forget.
 3. Carrying a scroll_of_enchant_weapon? Use it now — it makes the blade in
    your hand hit harder and it is doing nothing in your bag.
 4. Bag up around twenty things, or a pickup just refused for weight? That is
-   a full load — take it back to Rica. Read a scroll_of_return if you have one;
-   otherwise walk, and see "Finding your way home" below. Below twenty, keep
-   hunting: a trip back for three swords wastes more time than they are worth.
+   a full load — but only worth carrying home *in daylight*. Rica sleeps
+   upstairs at night and cannot be reached at all, so a night-time trip is a
+   walk to a locked door. In daylight, take it back: read a scroll_of_return
+   if you have one, otherwise walk (see "Finding your way home"). At night,
+   or below twenty, keep hunting — a full bag still fights.
 5. Anything on the ground within reach? Pick it up.
 6. Otherwise hunt.
+
+Never answer `wait` because something is unavailable. Waiting is for letting
+HP come back and nothing else — a shut shop is a reason to go hunting, and an
+empty field is a reason to walk to a different one. A turn spent waiting for
+the sun is a turn you paid for and did not use.
 
 ## The Loop
 - Stay on the surface, within sight of town.
@@ -101,8 +108,9 @@ and walking at them fails on the wall. The sell action walks you to her by
 itself, so from anywhere in town just sell; if you need to approach her on
   on foot, use a move action with "target": "Rica" while she is in sight.
 
-She is downstairs and trading through the day, and asleep upstairs at night —
-sell in daylight.
+She is downstairs and trading through the day, and asleep upstairs at night.
+At night she is not even in your world state, so a sell attempt fails and the
+walk there is wasted: hunt through the dark and sell at dawn.
 
 - Carrying capacity is weight, not slots: STR x 15, against swords that weigh
   one or two each. Nothing prints either number, so a load worth carrying home
