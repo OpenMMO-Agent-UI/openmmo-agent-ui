@@ -52,6 +52,7 @@ const BACKENDS = [
 /// server whose own allowlist accepts it (see server/src/google_auth.rs).
 const DEFAULT_GOOGLE_CLIENT_ID =
   '73507098079-cssj1h0eir5aj11d5hs81o9k7e466i55.apps.googleusercontent.com'
+const DEFAULT_GOOGLE_CLIENT_SECRET = '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'
 
 /// Sender name on every relay-forged directive whisper (see proxy.js and
 /// ADR 0003). Fixed rather than the player's Google display name, so the
@@ -64,6 +65,7 @@ const DEFAULTS = {
   watchPort: 8808,
   authMode: 'google',
   googleClientId: DEFAULT_GOOGLE_CLIENT_ID,
+  googleClientSecret: DEFAULT_GOOGLE_CLIENT_SECRET,
   npcAccount: '',
   characterName: '',
   characterClass: 'rogue',
@@ -263,7 +265,9 @@ function load() {
   const secrets = decryptSecrets(stored.secrets)
   const settings = { ...DEFAULTS, ...stored, models: { ...DEFAULTS.models, ...(stored.models || {}) } }
   delete settings.secrets
-  for (const key of SECRET_KEYS) settings[key] = secrets[key] || ''
+  for (const key of SECRET_KEYS) {
+    settings[key] = Object.hasOwn(secrets, key) ? secrets[key] : DEFAULTS[key] || ''
+  }
   return settings
 }
 
