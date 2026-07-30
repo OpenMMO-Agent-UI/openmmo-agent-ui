@@ -35,8 +35,11 @@ git lfs pull                                   # models, textures, music
 git clone git@github.com:Daky/openmmo-client.git
 
 ./openmmo-client/scripts/link.sh               # our sources into the game tree
-./openmmo-client/scripts/patches.sh apply      # our hooks into upstream's files
 ```
+
+Our edits to upstream's *own* files are commits, on a branch in the game
+checkout — check that branch out before building (see
+[Carrying our changes](#carrying-our-changes)).
 
 Then build and run:
 
@@ -199,7 +202,7 @@ One trap worth naming: `openai/gpt-oss-20b:free` answered in **51 seconds** and
 timed out repeatedly, while the same model on paid routing answers in 0.5s. A
 `:free` suffix measures the queue, not the model.
 
-## Staying rebaseable
+## Carrying our changes
 
 Our changes come in two shapes, kept apart on purpose.
 
@@ -213,33 +216,38 @@ overlay/agent-client/data/user_prompt.txt             who the character is
 overlay/client/src/lib/stores/observerStore.ts        spectator mode flag
 ```
 
-**`patches/` — the few upstream files we must reach into.** The only places an
-update can conflict, so they are kept as small as possible:
+**A branch in the game checkout — the upstream files we must reach into.** The
+only places an update can conflict, so they are kept as small as possible, and
+they live as ordinary commits on a spectator branch in the OpenMMO checkout.
 
-```bash
-./openmmo-client/scripts/patches.sh list      # which upstream files we touch
-./openmmo-client/scripts/patches.sh extract   # working tree -> patches/
-./openmmo-client/scripts/patches.sh apply     # patches/ -> working tree
-```
+This used to be a `patches/` directory in this repo, re-applied with
+`git apply -3`. Two things were wrong with it. Re-applying a patch onto a moved
+upstream is exactly the situation that produces conflicts, and `git apply -3` is
+a worse tool for it than the rebase git already has. And the file list was a
+hardcoded bash array someone had to remember to extend — by the time it was
+removed it had already fallen behind the real work, silently dropping the
+`ChatPanel.svelte` and `GameHud.svelte` changes from every patch it recorded.
+
+A branch has neither problem: `git rebase` handles a moved upstream with real
+conflict resolution and `rerere`, and it cannot lose a file, because nothing
+enumerates them.
 
 ### Updating the game underneath us
 
 ```bash
-git checkout -- $(./openmmo-client/scripts/patches.sh list)   # drop our hooks
-git fetch upstream && git merge --ff-only upstream/master     # take the update
+git fetch origin
+git rebase origin/master <your-spectator-branch>
 ./openmmo-client/scripts/link.sh
-./openmmo-client/scripts/patches.sh apply                     # put them back
 ```
 
-If `apply` reports a conflict, resolve it in the file and re-record the result
-with `patches.sh extract`. This has survived a 16-commit jump that reworked the
-fishing system and the movement FSM without a single conflict — but the day it
-does not, that is the loop.
+`link.sh` is idempotent and repoints existing symlinks, so it is safe to re-run
+after any rebase. The overlay files stay gitignored in the checkout, which is
+what keeps them out of the branch and out of the rebase entirely.
 
-### What the patch does
+### What the branch changes
 
-`agent-client/` needs no patch at all — the relay replaces what would otherwise
-be four Rust hooks. The web client needs seven, ~150 lines:
+`agent-client/` needs no change at all — the relay replaces what would otherwise
+be four Rust hooks. The web client needs nine files, +344/−161:
 
 - `vite.config.ts` — `preserveSymlinks`, or the overlay's relative imports break
 - `App.svelte` — spectator entry path, and holding the scene back until the
@@ -248,8 +256,13 @@ be four Rust hooks. The web client needs seven, ~150 lines:
 - `messageHandlers.ts` — route the watched agent through remote interpolation
 - `monsterManager.ts` — ownership checks go through `ownedByMe()`
 - `GameScene.svelte` / `GameScenePlayersLayer.svelte` — no input FSM when observing
-- `graphicsSettings.ts` — a spectator's frame budget: watching is not playing
+- `GameHud.svelte` / `ChatPanel.svelte` — hide the player-action HUD when there is
+  no player to act
 - `.gitignore` — our symlinks, and the generated config's secret-bearing backup
+
+Run `git diff origin/master...<your-spectator-branch> -- client/` for the current
+list rather than trusting this one; the last time it was written down by hand it
+went stale without anyone noticing.
 
 ### In-browser agent (withdrawn)
 
@@ -260,31 +273,30 @@ never be exercised. It lives in the history if it is wanted back.
 
 ## Packaging a standalone build
 
-`npm start` needs the dev setup above — a built `agent-client` binary and a
-built `client/dist`, `link.sh` and `patches.sh` already applied to whatever
-OpenMMO checkout you're using. A packaged build needs none of that at
+`npm start` needs the dev setup above — a built `agent-client` binary, a built
+`client/dist`, `link.sh` already run, and the OpenMMO checkout on its spectator
+branch. A packaged build needs none of that at
 runtime: it ships its own copy of the binary and the web client, and writes
 its runtime data (`config.toml`, `memory.txt`, the terrain tile cache) under
 the OS's app data directory instead of into the bundle, which is read-only
 once packaged.
 
-Building one takes a plain OpenMMO checkout — nothing built, patches not
-applied — and does the rest in one command:
+Building one takes an OpenMMO checkout on its spectator branch, nothing else
+built, and does the rest in one command:
 
 ```bash
 npm install
 OPENMMO_CHECKOUT=/path/to/OpenMMO npm run dist:mac    # or dist:win / dist:linux
 ```
 
-`scripts/build-resources.sh` runs `link.sh`, `patches.sh apply`, the release
-`cargo build`, and the client build, then stages and packages the result. It is
-one command on purpose: applying the patches leaves the checkout dirty, so any
-`git checkout`/`reset` between that and the client build silently reverts
-observer mode, and the client rebuilt afterwards is stock upstream with every
-overlay file still symlinked into it and unreferenced. The staging step now
-greps the built bundle for observer mode and refuses to package a client
-without it, because the staleness guard next to it compares mtimes and cannot
-see this at all.
+`scripts/build-resources.sh` runs `link.sh`, the release `cargo build`, and the
+client build, then stages and packages the result. It cannot put the spectator
+commits into the checkout — that is a branch you check out — so it checks for
+them first, in upstream's own `App.svelte`, and refuses to spend a release build
+on a tree that would produce a stock upstream client. Staging then greps the
+built bundle for observer mode as a backstop, because the staleness guard beside
+it compares mtimes and a branch switch can leave a newer dist built from an
+older tree, which no mtime can see.
 
 Check the protocol first, though — the deployed server is not always at the
 checkout's version, and it refuses anything that is not an exact match:
@@ -299,8 +311,8 @@ it is built from: `package-resources.sh` stamps the checkout's
 so the pre-flight session and the bundled `agent-client` always agree
 (see [ADR 0002](docs/adr/0002-protocol-guard-fails-closed.md)).
 
-`OPENMMO_CHECKOUT` doesn't need to be nested inside this repo — `link.sh`,
-`patches.sh`, and this staging step all resolve the checkout from it (or,
+`OPENMMO_CHECKOUT` doesn't need to be nested inside this repo — `link.sh` and
+this staging step both resolve the checkout from it (or,
 if it's unset, from `git rev-parse --show-toplevel`, so running them from
 inside the checkout works too), so a sibling directory is just as valid as
 the nested layout in Setup.
@@ -349,8 +361,7 @@ src/server.js     serves client/dist, proxies /api and LFS-pointer assets
 src/toml.js       just enough TOML to import an existing config
 src/renderer/     the panel (plain HTML/CSS/JS, no build step)
 overlay/          our source, symlinked into the game tree
-patches/          our edits to the game's own files
-scripts/          link.sh, patches.sh
+scripts/          link.sh, build-resources.sh, package-resources.sh
 ```
 
 ## License

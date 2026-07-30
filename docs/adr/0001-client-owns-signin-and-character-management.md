@@ -17,16 +17,16 @@ msgpack codec (`src/msgpack.js`) — to list, create, and delete characters.
 exact, already-existing match, so its own auto-create/auto-delete logic never
 activates.
 
-This keeps `agent-client` at zero source modifications (no new file under
-`patches/` to keep in sync across upstream rebuilds), at the cost of the
+This keeps `agent-client` at zero source modifications (nothing to carry across
+upstream rebuilds), at the cost of the
 Electron app now hand-encoding a small, deliberately narrow corner of the wire
 protocol (`ClientInfo`, `Authenticate`, `AuthSuccess`, `CreateCharacter`,
 `DeleteCharacter`, `CharacterCreated/Deleted/Error`) — chosen because this
 corner is far more stable than the gameplay protocol (movement, combat,
 inventory), which the client never touches.
 
-**Considered and rejected:** patching `agent-client`'s orchestrator to add a
+**Considered and rejected:** modifying `agent-client`'s orchestrator to add a
 pause-and-ask point after auth. Rejected because it reintroduces exactly the
-merge-conflict-on-upstream-update risk the project's `patches/` strategy
-exists to minimize, for a feature (character selection) that turned out to
-be achievable without it.
+merge-conflict-on-upstream-update risk the project's whole
+keep-upstream-edits-minimal strategy exists to reduce, for a feature (character
+selection) that turned out to be achievable without it.

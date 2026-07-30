@@ -22,7 +22,7 @@ const { encode, decode, variantOf } = require('./../src/msgpack')
 // `../..` from this script only finds the OpenMMO checkout when
 // openmmo-client is cloned *inside* it (the README's documented layout) —
 // checked out as siblings instead, it silently lands one directory too
-// shallow. See link.sh/patches.sh, which had the identical bug.
+// shallow. See link.sh, which had the identical bug.
 function findRoot() {
   if (process.env.OPENMMO_CHECKOUT) return process.env.OPENMMO_CHECKOUT
   try {
@@ -173,15 +173,15 @@ async function main() {
   console.error(
     [
       '',
-      `Move the game checkout to the newest commit that speaks v${required}:`,
+      `The newest commit that speaks v${required} is:`,
       `  ${subject}`,
       '',
-      'From the repo root:',
-      `  git checkout -- $(./openmmo-client/scripts/patches.sh list)`,
-      `  git merge --ff-only ${target}   # or: git reset --hard ${target}`,
-      '  ./openmmo-client/scripts/link.sh',
-      '  ./openmmo-client/scripts/patches.sh apply',
-      '  cargo build --release -p agent-client && npm --prefix client run build',
+      'The spectator work is a branch, so rebase it onto that rather than moving',
+      'the checkout out from under it:',
+      `  git rebase --onto ${git('rev-parse', '--short', target)} <old-base> <your-spectator-branch>`,
+      '',
+      'Then rebuild and package in one step:',
+      `  OPENMMO_CHECKOUT=${ROOT} npm run dist:mac`,
     ].join('\n'),
   )
   process.exit(1)
