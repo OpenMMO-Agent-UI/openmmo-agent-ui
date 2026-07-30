@@ -4,6 +4,7 @@ const { EventEmitter } = require('node:events')
 const { execFile, spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
+const { app } = require('electron')
 
 const { agentDir, buildInfo, packagedSeedDir, repoRoot, writeConfig } = require('./config')
 
@@ -31,12 +32,22 @@ function resolveLoginPath() {
   })
 }
 
-function candidateBinaries(override) {
-  const list = []
-  if (override) list.push(override)
-  if (process.resourcesPath) list.push(path.join(packagedSeedDir(), EXE))
-  list.push(path.join(repoRoot(), 'target', 'release', EXE))
-  list.push(path.join(repoRoot(), 'target', 'debug', EXE))
+function candidateBinaries(
+  override,
+  packaged = Boolean(app?.isPackaged),
+  resourcesPath = process.resourcesPath,
+  root = repoRoot(),
+) {
+  // A packaged app's build-info.json describes the binary shipped beside it.
+  // Letting a legacy binaryPath setting replace that binary makes the fatal
+  // protocol diagnostic combine metadata from one build with the handshake
+  // from another. Packaged builds are self-contained; overrides are a dev-only
+  // escape hatch.
+  if (packaged) return [path.join(resourcesPath || '', 'agent-client', EXE)]
+
+  const list = override ? [override] : []
+  list.push(path.join(root, 'target', 'release', EXE))
+  list.push(path.join(root, 'target', 'debug', EXE))
   return list
 }
 
@@ -247,4 +258,4 @@ class AgentProcess extends EventEmitter {
   }
 }
 
-module.exports = { AgentProcess }
+module.exports = { AgentProcess, candidateBinaries }
