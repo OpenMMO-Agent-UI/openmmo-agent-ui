@@ -184,15 +184,21 @@ function stopFeedPolling() {
   feedTimer = null
 }
 
-/// The spectator view: the built web client, served locally, pointed at the
-/// agent's mirror socket instead of the game server. The only view there is,
-/// so a failure here has nothing to fall back to and says so.
+/// The spectator view's URL: the built web client, served locally, pointed at
+/// the agent's mirror socket instead of the game server — never the agent's
+/// own raw watch-panel port, which speaks a JSON API, not the game UI.
+async function spectatorSceneUrl() {
+  const base = await clientServer.start(settings.terrain)
+  const mirror = proxy.mirrorUrl
+  if (!mirror) throw new Error('The relay is not listening yet.')
+  return `${base}/?observe=${encodeURIComponent(mirror)}`
+}
+
+/// The only view there is, so a failure here has nothing to fall back to and
+/// says so.
 async function openSpectatorView() {
   try {
-    const base = await clientServer.start(settings.terrain)
-    const mirror = proxy.mirrorUrl
-    if (!mirror) throw new Error('The relay is not listening yet.')
-    send('view:ready', { scene: `${base}/?observe=${encodeURIComponent(mirror)}` })
+    send('view:ready', { scene: await spectatorSceneUrl() })
   } catch (err) {
     send('view:error', err.message)
   }
@@ -369,7 +375,11 @@ function createPlaySession() {
           ready.cancel()
           throw new Error(result.errors.join('\n'))
         }
-        return { viewUrl: await ready }
+        // `ready` only signals that the agent's watch panel is up — its
+        // resolved value is that panel's own raw URL, not a place to point
+        // the spectator iframe at.
+        await ready
+        return { viewUrl: await spectatorSceneUrl() }
       },
       stop: stopAiController,
       cancelPending: async () => {},
@@ -679,6 +689,7 @@ async function ensurePreflightSession() {
   if (!refreshToken) return { ok: false, error: 'Not signed in' }
   try {
     await reopenPreflightSession(refreshToken)
+    currentCharacters = preflightSession.characters
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err.message }

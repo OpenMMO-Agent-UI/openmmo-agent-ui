@@ -101,9 +101,6 @@ function showErrors(errors) {
 /// Drives `body[data-screen]`, the single source of which screen is visible.
 function setScreen(name) {
   document.body.dataset.screen = name
-  if (name === 'character') {
-    $('characterRecap').textContent = settings.characterName ? `Playing as ${settings.characterName}` : 'OpenMMO'
-  }
 }
 
 function renderClassOptions() {
@@ -366,7 +363,7 @@ function renderCharacterList() {
     return
   }
   for (const c of characters) {
-    const row = document.createElement('label')
+    const row = document.createElement('div')
     row.className = `character-row${c.id === selectedCharacterId ? ' on' : ''}`
     row.innerHTML =
       '<span class="character-info"><span class="character-name"></span><span class="character-meta"></span></span>' +

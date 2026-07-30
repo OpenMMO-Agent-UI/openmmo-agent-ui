@@ -536,16 +536,9 @@ body[data-screen='game'] #screen-game {
 }
 
 .mode-overlay {
-  position: fixed;
-  z-index: 35;
-  top: 8px;
-  right: 10px;
   display: flex;
+  align-items: center;
   gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(20, 23, 28, 0.9);
   -webkit-app-region: no-drag;
 }
 
@@ -574,11 +567,35 @@ body[data-screen='game'] #screen-game {
   border-color: rgba(201, 162, 74, 0.35);
 }
 
-body[data-mode='manual'] .gamebar,
 body[data-mode='manual'] .rail,
 body[data-mode='manual'] .directive-panel,
 body[data-mode='manual'] .drawer {
   display: none !important;
+}
+
+/* Manual mode drops every other header control and floats just the mode
+   switcher over the fullscreen spectator view, so switching back out of
+   Manual play never depends on a header the game area has taken over. */
+body[data-mode='manual'] .gamebar {
+  position: fixed;
+  top: 8px;
+  right: 10px;
+  z-index: 35;
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+  -webkit-app-region: no-drag;
+}
+
+body[data-mode='manual'] .gamebar > *:not(.mode-overlay) {
+  display: none;
+}
+
+body[data-mode='manual'] .mode-overlay {
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(20, 23, 28, 0.9);
 }
 
 body[data-mode='manual'] .gameshell,

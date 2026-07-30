@@ -73,7 +73,7 @@
     <section id="screen-character" class="screen screen-entry">
       <div class="glow"></div>
       <div class="card wide">
-        <p class="wordmark" id="characterRecap">OpenMMO</p>
+        <p class="wordmark">Character Selection</p>
         <div class="account-line"><span id="accountName"></span><button id="switchAccount" class="linklike-inline">Switch account</button></div>
 
         <div class="tabs" id="characterTabs" role="tablist">
@@ -102,17 +102,6 @@
 
     <!-- GAME -->
     <section id="screen-game" class="screen screen-game">
-      <div class="mode-overlay" aria-label="Play mode">
-        <button id="modeManual" class="mode-button" title="Manual play" aria-label="Manual play">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v5-3a1.5 1.5 0 0 1 3 0v6c0 5-3 8-8 8h-1c-3 0-5-1-7-4l-2-3a1.7 1.7 0 0 1 2.8-1.9L7 15Z"/></svg>
-        </button>
-        <button id="modeAi" class="mode-button on" title="AI automatic play" aria-label="AI automatic play">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 7V4h6v3M8 13h.01M16 13h.01M9 17h6"/></svg>
-        </button>
-        <button id="modeSettings" class="mode-button" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M8 17h12"/><circle cx="16" cy="7" r="2"/><circle cx="6" cy="17" r="2"/></svg>
-        </button>
-      </div>
       <header class="gamebar">
         <span class="dot" id="dot"></span>
         <span class="status" id="status">stopped</span>
@@ -121,6 +110,17 @@
         <span class="mem" id="mem"></span>
         <button id="reloadView" class="ghost" title="Reload the spectator view">↻</button>
         <button id="restart" class="ghost" hidden>Apply &amp; restart</button>
+        <div class="mode-overlay" aria-label="Play mode">
+          <button id="modeManual" class="mode-button" title="Manual play" aria-label="Manual play">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v5-3a1.5 1.5 0 0 1 3 0v6c0 5-3 8-8 8h-1c-3 0-5-1-7-4l-2-3a1.7 1.7 0 0 1 2.8-1.9L7 15Z"/></svg>
+          </button>
+          <button id="modeAi" class="mode-button on" title="AI automatic play" aria-label="AI automatic play">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 7V4h6v3M8 13h.01M16 13h.01M9 17h6"/></svg>
+          </button>
+          <button id="modeSettings" class="mode-button" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M8 17h12"/><circle cx="16" cy="7" r="2"/><circle cx="6" cy="17" r="2"/></svg>
+          </button>
+        </div>
         <button id="changeCharacter" class="ghost">Change character</button>
         <button id="changeServer" class="ghost">Change server</button>
       </header>
