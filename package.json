@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --inspect",
-    "test": "node --test",
+    "test": "node scripts/run-tests.js",
     "link": "bash scripts/link.sh",
     "check": "node scripts/check-protocol.js",
     "bench": "node scripts/bench-models.js",
