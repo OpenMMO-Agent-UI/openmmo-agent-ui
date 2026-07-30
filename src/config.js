@@ -174,23 +174,47 @@ function buildInfo() {
   }
 }
 
-/// The wire protocol version `characterSession.js`'s hand-encoded messages
-/// were written against (ADR 0002's protocol guard sends this in
-/// `ClientInfo`). This is a fact about *this JS code* — which struct shapes
-/// it knows how to build — not about whatever `agent-client` binary the user
-/// has configured; those are independent and checked separately (agent.js's
-/// `scanForProtocolMismatch` catches a real agent-client at its own runtime).
-/// Deriving this from the configured binary/checkout was tried and found
-/// broken the moment the binary was a bare copy outside any checkout (e.g.
-/// `~/Downloads/agent-client`) — there's no directory to read
-/// `shared/src/lib.rs` from at all in that case, even though the binary
-/// itself may be perfectly current. A hand-updated constant has no such
-/// blind spot: bump it (and verify characterSession.js's message shapes
-/// still match) whenever `scripts/check-protocol.js` reports a new number.
-const CHARACTER_SESSION_PROTOCOL_VERSION = 9
+/// The last version `characterSession.js`'s hand-encoded message shapes were
+/// verified against by hand. No longer what we send — see `protocolVersion()`
+/// below — but still the floor when nothing else is readable, and the baseline
+/// `scripts/package-resources.sh` warns against once OpenMMO moves past it, so
+/// someone re-reads those shapes before trusting a build.
+const SHAPES_VERIFIED_AGAINST = 9
 
+/// PROTOCOL_VERSION as written in a checkout's `shared/src/lib.rs`, or null if
+/// there is no checkout to read (a packaged app's own directory, for one).
+function protocolVersionInCheckout(root) {
+  try {
+    const lib = fs.readFileSync(path.join(root, 'shared', 'src', 'lib.rs'), 'utf8')
+    const match = lib.match(/PROTOCOL_VERSION: u32 = (\d+)/)
+    return match ? Number(match[1]) : null
+  } catch {
+    return null
+  }
+}
+
+/// What the pre-flight session puts in `ClientInfo` (ADR 0002's guard). This
+/// follows OpenMMO instead of being hand-maintained, because the two can only
+/// ever be wrong together: the version travels with the binary and the client
+/// we bundle, all three staged from one checkout by
+/// `scripts/package-resources.sh`, and the server refuses anything that is not
+/// an exact match (connection.rs). A number that lagged the bundle by a commit
+/// meant the pre-flight was refused while the agent we shipped alongside it
+/// would have been fine.
+///
+/// Two sources, in order: the number stamped into `build-info.json` at stage
+/// time (the packaged case — there is no checkout inside a .app to read), then
+/// the checkout itself (`npm start` in dev). ADR 0002 originally rejected
+/// deriving this at all, but for a case that no longer applies: it was reading
+/// from `settings.binaryPath`, which could point at a bare binary outside any
+/// checkout (`~/Downloads/agent-client`) with no `shared/src/lib.rs` anywhere
+/// near it. Neither source here can land in that state — the stamp is written
+/// by the script that had the checkout in hand, and both fall through to
+/// `SHAPES_VERIFIED_AGAINST` rather than guessing.
 function protocolVersion() {
-  return CHARACTER_SESSION_PROTOCOL_VERSION
+  const stamped = buildInfo()
+  if (stamped && Number.isInteger(stamped.protocolVersion)) return stamped.protocolVersion
+  return protocolVersionInCheckout(repoRoot()) ?? SHAPES_VERIFIED_AGAINST
 }
 
 /// Where agent-client caches the Google refresh token — mirrors

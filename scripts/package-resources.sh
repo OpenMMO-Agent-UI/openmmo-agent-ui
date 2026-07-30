@@ -92,4 +92,18 @@ cat > "$out/agent-client/build-info.json" <<JSON
 }
 JSON
 
+# Following the checkout is right for the *version number*, but the hand-encoded
+# message shapes in characterSession.js are a separate question that no version
+# can answer — a bump that reorders `Character`'s fields would sail through the
+# handshake and quietly mis-read the character list. So say something when the
+# checkout has moved past the last version those shapes were read against.
+# A warning, not a gate: the whole point of one command is that it completes.
+verified="$(grep -o 'SHAPES_VERIFIED_AGAINST = [0-9]*' "$root/src/config.js" | grep -o '[0-9]*$' || true)"
+if [[ -n $verified && -n ${protocol//null/} ]] && ((protocol > verified)); then
+    echo "note: this checkout speaks v$protocol; characterSession.js's message shapes were" >&2
+    echo "      last verified against v$verified. The app will send v$protocol regardless." >&2
+    echo "      Worth re-reading ClientInfo/Authenticate/Character in shared/ against" >&2
+    echo "      src/characterSession.js, then bumping SHAPES_VERIFIED_AGAINST." >&2
+fi
+
 echo "staged $out from $checkout (commit $commit, protocol v$protocol)"
