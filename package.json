@@ -14,9 +14,10 @@
     "check": "node scripts/check-protocol.js",
     "bench": "node scripts/bench-models.js",
     "stage": "bash scripts/package-resources.sh",
-    "dist:mac": "npm run stage -- \"$OPENMMO_CHECKOUT\" && electron-builder --mac",
-    "dist:win": "npm run stage -- \"$OPENMMO_CHECKOUT\" && electron-builder --win",
-    "dist:linux": "npm run stage -- \"$OPENMMO_CHECKOUT\" && electron-builder --linux"
+    "build:resources": "bash scripts/build-resources.sh",
+    "dist:mac": "npm run build:resources -- \"$OPENMMO_CHECKOUT\" && electron-builder --mac",
+    "dist:win": "npm run build:resources -- \"$OPENMMO_CHECKOUT\" && electron-builder --win",
+    "dist:linux": "npm run build:resources -- \"$OPENMMO_CHECKOUT\" && electron-builder --linux"
   },
   "devDependencies": {
     "electron": "^43.0.0",

@@ -268,13 +268,36 @@ its runtime data (`config.toml`, `memory.txt`, the terrain tile cache) under
 the OS's app data directory instead of into the bundle, which is read-only
 once packaged.
 
-Building one still starts from a normal dev checkout with `agent-client` and
-`client/dist` already built (see Setup), then stages and packages it:
+Building one takes a plain OpenMMO checkout — nothing built, patches not
+applied — and does the rest in one command:
 
 ```bash
 npm install
 OPENMMO_CHECKOUT=/path/to/OpenMMO npm run dist:mac    # or dist:win / dist:linux
 ```
+
+`scripts/build-resources.sh` runs `link.sh`, `patches.sh apply`, the release
+`cargo build`, and the client build, then stages and packages the result. It is
+one command on purpose: applying the patches leaves the checkout dirty, so any
+`git checkout`/`reset` between that and the client build silently reverts
+observer mode, and the client rebuilt afterwards is stock upstream with every
+overlay file still symlinked into it and unreferenced. The staging step now
+greps the built bundle for observer mode and refuses to package a client
+without it, because the staleness guard next to it compares mtimes and cannot
+see this at all.
+
+Check the protocol first, though — the deployed server is not always at the
+checkout's version, and it refuses anything that is not an exact match:
+
+```bash
+OPENMMO_CHECKOUT=/path/to/OpenMMO npm run check
+```
+
+It names the commit to move the checkout to. The packaged app follows whatever
+it is built from: `package-resources.sh` stamps the checkout's
+`PROTOCOL_VERSION` into `build-info.json` and `config.js` reads it from there,
+so the pre-flight session and the bundled `agent-client` always agree
+(see [ADR 0002](docs/adr/0002-protocol-guard-fails-closed.md)).
 
 `OPENMMO_CHECKOUT` doesn't need to be nested inside this repo — `link.sh`,
 `patches.sh`, and this staging step all resolve the checkout from it (or,
@@ -282,9 +305,10 @@ if it's unset, from `git rev-parse --show-toplevel`, so running them from
 inside the checkout works too), so a sibling directory is just as valid as
 the nested layout in Setup.
 
-`scripts/package-resources.sh` copies the release binary and the built
-client into `build/resources/`, which `electron-builder`'s `extraResources`
-bundles into the app — except the client's own `textures/`, `models/`,
+`scripts/package-resources.sh` (also runnable on its own as `npm run stage`,
+for a checkout you already built by hand) copies the release binary and the
+built client into `build/resources/`, which `electron-builder`'s
+`extraResources` bundles into the app — except the client's own `textures/`, `models/`,
 `bgm/`, `character_concepts/`, and `portraits/`. Those are the same
 hundreds of MB the official site already serves, so `server.js` proxies
 them from the configured terrain origin at runtime instead of shipping a

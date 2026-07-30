@@ -79,9 +79,34 @@ done
 
 rsync -a "${CLIENT_ASSET_EXCLUDES[@]}" "$dist/" "$out/client/"
 
+# The staleness guard above compares mtimes, which cannot see the one failure
+# that actually happens: `patches.sh apply` leaves the tree dirty, so a
+# `git checkout`/`reset` in between reverts observer mode, and a client rebuilt
+# afterwards is stock upstream. Every overlay file is still sitting there,
+# symlinked and unreferenced, and dist is newer than all of it — so the guard
+# passes and the app ships a client that cannot spectate.
+#
+# So ask the build itself. These two survive minification, unlike the
+# identifiers (`isObserver`, `observerStore`) a first attempt looked for and
+# found zero of in a dist that turned out to be perfectly good: Svelte keeps
+# class names, and our own UI copy is a string literal either way. Either one
+# is enough, so editing the wording does not break the build.
+if ! grep -rqs -e 'observer-waiting' -e 'Waiting for the agent to enter the world' "$out/client/"; then
+    echo "staged client has no observer mode in it — it was built without patches/0002" >&2
+    echo "the tree was probably reset after 'patches.sh apply'; rebuild with:" >&2
+    echo "  scripts/build-resources.sh $checkout" >&2
+    exit 1
+fi
+
 # So a stale packaged build fails loudly instead of mysteriously: agent.js
 # matches the server's protocol-refusal message and restates it with the
 # commit this build was staged from (see config.js's buildInfo()).
+#
+# `protocolVersion` is also what the packaged app *sends* in its own handshake
+# — config.js's protocolVersion() reads it from here rather than carrying a
+# hand-updated constant, so the pre-flight session and the agent-client binary
+# we bundle beside it can never disagree about which protocol this build
+# speaks. They were staged from one checkout; this is that checkout's number.
 commit="$(git -C "$checkout" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 protocol="$(grep -o 'PROTOCOL_VERSION: u32 = [0-9]*' "$checkout/shared/src/lib.rs" 2>/dev/null | grep -o '[0-9]*$')"
 protocol="${protocol:-null}"

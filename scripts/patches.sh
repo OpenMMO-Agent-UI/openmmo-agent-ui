@@ -51,6 +51,14 @@ apply)
     cd "$root"
     for f in "$patches"/*.patch; do
         [[ -s $f ]] || continue
+        # Idempotent, because the packaging build (build-resources.sh) runs this
+        # on every pass and an already-patched tree is the normal state there.
+        # A patch that reverses cleanly is one already in the tree: skip it
+        # rather than letting `git apply -3` turn it into a bogus conflict.
+        if git apply --reverse --check "$f" 2>/dev/null; then
+            echo "already applied $(basename "$f")"
+            continue
+        fi
         # -3 leaves conflict markers instead of refusing outright, which is
         # what you want when upstream moved the code we hook into.
         if git apply -3 "$f"; then
