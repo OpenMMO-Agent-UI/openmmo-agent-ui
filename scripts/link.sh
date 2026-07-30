@@ -18,6 +18,20 @@ overlay="$self_root/overlay"
 root="${OPENMMO_CHECKOUT:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [[ -n $root ]] || { echo "Run this from inside the OpenMMO checkout, or set OPENMMO_CHECKOUT" >&2; exit 1; }
 
+# The `../..` guess above was not the only way to land outside the game tree:
+# run from inside openmmo-client on a sibling layout, `--show-toplevel` returns
+# openmmo-client itself, and every symlink is created in this repo — an
+# `agent-client/` and a `client/` appear next to `src/`, each holding one file,
+# and the game tree gets nothing. It reports "linked 3 overlay file(s)" either
+# way. Found by doing exactly that, one command before noticing them staged for
+# commit. shared/src/lib.rs is the marker the rest of the project already uses
+# to recognise a checkout (config.js, check-protocol.js).
+[[ -f $root/shared/src/lib.rs ]] || {
+    echo "$root is not an OpenMMO checkout (no shared/src/lib.rs)" >&2
+    echo "set OPENMMO_CHECKOUT to the game tree, or run this from inside it" >&2
+    exit 1
+}
+
 [[ -d $overlay ]] || { echo "no overlay at $overlay" >&2; exit 1; }
 
 linked=0
