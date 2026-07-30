@@ -137,7 +137,9 @@ class AgentProcess extends EventEmitter {
     if (!match) return
     this.protocolWarned = true
     const info = buildInfo()
-    const built = info ? ` This build is from commit ${info.commit} (protocol v${info.protocolVersion}).` : ''
+    const built = info
+      ? ` This build is from commit ${info.openmmoCommit} (protocol v${info.protocolVersion}).`
+      : ''
     this.emit(
       'fatal',
       `The server speaks protocol v${match[1]}, this build speaks v${match[2]}.${built} ` +

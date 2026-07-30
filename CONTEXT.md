@@ -42,17 +42,17 @@ _Avoid_: player mode, browser mode
 
 **Protocol guard**:
 The check, made when opening a pre-flight session, that
-`CHARACTER_SESSION_PROTOCOL_VERSION` (a hand-updated constant in config.js —
-what `characterSession.js`'s hand-encoded messages were written against) is
-still accepted by the live server. A mismatch fails closed — sign-in stops
-before `agent-client` is ever launched. Deliberately independent of whatever
-`agent-client` binary is configured; that binary's own compatibility is
-checked separately, at its own runtime, by `agent.js`'s
-`scanForProtocolMismatch`.
+the protocol stamped from the pinned OpenMMO checkout is still accepted by the
+live server. A mismatch fails closed — sign-in stops before `agent-client` is
+ever launched. `config/release.json` records which protocol versions the
+desktop's hand-encoded pre-flight messages have been verified against; CI
+rejects any other pin before packaging. A manually configured external
+`agent-client` binary remains a separate compatibility concern, checked at its
+own runtime by `agent.js`'s `scanForProtocolMismatch`.
 _Avoid_: version check (too generic — this is specifically the pre-flight
-gate, not agent-client's own runtime mismatch detection); deriving this
-number from the configured checkout/binary path (tried, and broken by a
-binary copied outside any checkout — see ADR 0002)
+gate, not agent-client's own runtime mismatch detection); deriving this number
+from a user-configured binary path (tried, and broken by a binary copied
+outside any checkout — see ADR 0002)
 
 **Directive**:
 Free-text instruction a player sends to steer their own LLM-driven character

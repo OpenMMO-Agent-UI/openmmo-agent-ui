@@ -36,6 +36,7 @@ jobs:
           tool: wasm-pack
       - run: npm ci
       - run: npm --prefix deps/OpenMMO/client ci
+      - run: npm run validate:pin
       - run: npm test
       - run: npm --prefix deps/OpenMMO/client run build:wasm
       - run: npm --prefix deps/OpenMMO/client test

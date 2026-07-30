@@ -1,4 +1,3 @@
 [submodule "deps/OpenMMO"]
 	path = deps/OpenMMO
 	url = https://github.com/tpai/OpenMMO.git
-	branch = tweak-agent-client-v10

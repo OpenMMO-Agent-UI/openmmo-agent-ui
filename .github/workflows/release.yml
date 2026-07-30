@@ -1,15 +1,111 @@
 name: Unsigned release
 
 on:
-  workflow_dispatch:
   push:
     tags: ['v*']
 
 permissions:
   contents: read
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      parent-sha: ${{ steps.plan.outputs.parent-sha }}
+      openmmo-sha: ${{ steps.plan.outputs.openmmo-sha }}
+      protocol: ${{ steps.plan.outputs.protocol }}
+      artifact-prefix: ${{ steps.plan.outputs.artifact-prefix }}
+      linux-artifact: ${{ steps.plan.outputs.linux-artifact }}
+      macos-artifact: ${{ steps.plan.outputs.macos-artifact }}
+      windows-artifact: ${{ steps.plan.outputs.windows-artifact }}
+      release-action: ${{ steps.plan.outputs.release-action }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+          lfs: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            deps/OpenMMO/client/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix deps/OpenMMO/client ci
+      - name: Inspect existing release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if release_json="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" 2>release-error.txt)"; then
+            if [[ "$(jq -r '.draft' <<<"$release_json")" == "true" ]]; then
+              echo "state=draft" >> "$GITHUB_OUTPUT"
+              existing_parent="$(jq -r 'try (.body | capture("(?m)^Parent commit: (?<sha>[0-9a-f]{40})$").sha) catch ""' <<<"$release_json")"
+              echo "parent-sha=$existing_parent" >> "$GITHUB_OUTPUT"
+            else
+              echo "state=published" >> "$GITHUB_OUTPUT"
+              echo "parent-sha=" >> "$GITHUB_OUTPUT"
+            fi
+          elif grep -q "HTTP 404" release-error.txt; then
+            echo "state=absent" >> "$GITHUB_OUTPUT"
+            echo "parent-sha=" >> "$GITHUB_OUTPUT"
+          else
+            cat release-error.txt >&2
+            exit 1
+          fi
+      - name: Plan and validate release
+        id: plan
+        env:
+          RELEASE_STATE: ${{ steps.release.outputs.state }}
+          EXISTING_PARENT_SHA: ${{ steps.release.outputs.parent-sha }}
+        run: |
+          git fetch origin master:refs/remotes/origin/master
+          plan="$(node scripts/release-plan.js plan \
+            --tag "$GITHUB_REF_NAME" \
+            --release-state "$RELEASE_STATE" \
+            --existing-parent-sha "$EXISTING_PARENT_SHA")"
+          node - "$GITHUB_OUTPUT" "$plan" <<'NODE'
+          const fs = require('node:fs')
+          const [output, encoded] = process.argv.slice(2)
+          const plan = JSON.parse(encoded)
+          const lines = [
+            `version=${plan.version}`,
+            `tag=${plan.tag}`,
+            `parent-sha=${plan.parentSha}`,
+            `openmmo-sha=${plan.openmmoSha}`,
+            `protocol=${plan.protocolVersion}`,
+            `artifact-prefix=${plan.artifactPrefix}`,
+            `linux-artifact=${plan.artifacts.linux}`,
+            `macos-artifact=${plan.artifacts.macos}`,
+            `windows-artifact=${plan.artifacts.windows}`,
+            `release-action=${plan.releaseAction}`,
+          ]
+          fs.appendFileSync(output, `${lines.join('\n')}\n`)
+          NODE
+      - run: npm test
+      - run: npm --prefix deps/OpenMMO/client run build:wasm
+      - run: npm --prefix deps/OpenMMO/client test
+      - run: npm --prefix deps/OpenMMO/client run check
+
   package:
+    needs: validate
     name: ${{ matrix.label }}
     strategy:
       fail-fast: false
@@ -18,18 +114,15 @@ jobs:
           - os: macos-14
             label: macOS arm64
             command: dist:mac
-            artifact: openmmo-agent-macos-arm64
-            paths: out/*.zip
+            artifact: ${{ needs.validate.outputs.macos-artifact }}
           - os: windows-latest
             label: Windows x64
             command: dist:win
-            artifact: openmmo-agent-windows-x64
-            paths: out/*.exe
+            artifact: ${{ needs.validate.outputs.windows-artifact }}
           - os: ubuntu-latest
             label: Linux x64
             command: dist:linux
-            artifact: openmmo-agent-linux-x64
-            paths: out/*.AppImage
+            artifact: ${{ needs.validate.outputs.linux-artifact }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -54,33 +147,74 @@ jobs:
         with:
           tool: wasm-pack
       - run: npm ci
-      - run: npm run ${{ matrix.command }}
+      - name: Build package
+        shell: bash
+        env:
+          APP_VERSION: ${{ needs.validate.outputs.version }}
+          ARTIFACT_NAME: ${{ matrix.artifact }}
+          DESKTOP_BUILD_SHA: ${{ needs.validate.outputs.parent-sha }}
+          OPENMMO_BUILD_SHA: ${{ needs.validate.outputs.openmmo-sha }}
+          OPENMMO_PROTOCOL_VERSION: ${{ needs.validate.outputs.protocol }}
+        run: npm run ${{ matrix.command }} -- --config.extraMetadata.version="$APP_VERSION" --config.artifactName="$ARTIFACT_NAME"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.paths }}
+          path: out/${{ matrix.artifact }}
           if-no-files-found: error
 
   draft-release:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: package
+    needs: [validate, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: openmmo-agent-*
+          pattern: ${{ needs.validate.outputs.artifact-prefix }}-*
           path: artifacts
           merge-multiple: true
       - name: Generate SHA-256 checksums
         working-directory: artifacts
-        run: sha256sum * > SHA256SUMS.txt
-      - name: Create unsigned draft release
+        run: sha256sum ./* > SHA256SUMS.txt
+      - name: Write release notes
+        env:
+          APP_VERSION: ${{ needs.validate.outputs.version }}
+          PARENT_SHA: ${{ needs.validate.outputs.parent-sha }}
+          OPENMMO_SHA: ${{ needs.validate.outputs.openmmo-sha }}
+          PROTOCOL: ${{ needs.validate.outputs.protocol }}
+        run: |
+          cat > release-notes.md <<EOF
+          Unsigned preview build
+
+          App version: ${APP_VERSION}
+          Parent commit: ${PARENT_SHA}
+          OpenMMO commit: ${OPENMMO_SHA}
+          Protocol version: ${PROTOCOL}
+
+          Compatible with servers requiring protocol v${PROTOCOL}.
+
+          macOS Gatekeeper and Windows SmartScreen may warn because these artifacts are unsigned.
+          Verify downloads against SHA256SUMS.txt before testing.
+          EOF
+      - name: Create or refresh unsigned draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_ACTION: ${{ needs.validate.outputs.release-action }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          APP_VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" artifacts/* \
-            --draft \
-            --title "OpenMMO Agent ${GITHUB_REF_NAME} (unsigned)" \
-            --notes "Unsigned preview artifacts. macOS Gatekeeper and Windows SmartScreen may warn. Verify downloads against SHA256SUMS.txt before testing."
+          if [[ "$RELEASE_ACTION" == "create" ]]; then
+            gh release create "$RELEASE_TAG" artifacts/* \
+              --draft \
+              --title "OpenMMO Agent v${APP_VERSION} (unsigned)" \
+              --notes-file release-notes.md
+          elif [[ "$RELEASE_ACTION" == "refresh" ]]; then
+            gh release edit "$RELEASE_TAG" \
+              --draft \
+              --title "OpenMMO Agent v${APP_VERSION} (unsigned)" \
+              --notes-file release-notes.md
+            gh release upload "$RELEASE_TAG" artifacts/* --clobber
+          else
+            echo "unknown release action: $RELEASE_ACTION" >&2
+            exit 1
+          fi

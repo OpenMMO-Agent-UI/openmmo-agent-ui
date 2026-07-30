@@ -1,0 +1,7 @@
+{
+  "verifiedProtocols": [
+    10,
+    11
+  ],
+  "fallbackProtocol": 11
+}

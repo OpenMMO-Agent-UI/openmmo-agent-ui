@@ -14,8 +14,8 @@ all, even though the binary itself was current.
 It is derived again now, from two sources that cannot land in that state:
 `build-info.json`, stamped at stage time by `scripts/package-resources.sh`
 from the checkout it had in hand, and — in dev only — the checkout itself.
-Neither is a user-chosen path, and both fall through to
-`SHAPES_VERIFIED_AGAINST` instead of guessing. The reason for going back is
+Neither is a user-chosen path, and both fall through to the verified
+`fallbackProtocol` in `config/release.json` instead of guessing. The reason for going back is
 that the independence the constant bought turned out to be the wrong
 property: the packaged app ships the `agent-client` binary *and* the web
 client staged from one checkout, so the pre-flight and the agent can only be
@@ -41,11 +41,12 @@ longer match reality (a corrupted character list, or a create/delete that
 silently does the wrong thing), which is worse than stopping and asking for
 an update.
 
-Following the checkout does not answer that second question, and no version
-number could: a bump that reorders `Character`'s fields sails through the
-handshake and then quietly mis-reads the character list. `SHAPES_VERIFIED_AGAINST`
-records the last version those shapes were actually read against, and
-`package-resources.sh` warns when the checkout has moved past it. A warning
-rather than a gate — the refusal above is the real guard, and a packaging
-command that stops on every upstream protocol bump would not be one anyone
-runs.
+Following the checkout does not prove that the desktop's hand-encoded shapes
+were reviewed for a new protocol. `config/release.json` records the protocol
+versions verified against the current desktop implementation. Normal CI and
+tag release validation reject any other pinned version before packaging.
+
+We treat `PROTOCOL_VERSION` as OpenMMO's wire-compatibility contract: commits
+that retain a verified number do not require repeated review. If OpenMMO ever
+ships a breaking shape change without bumping that number, this decision must
+be strengthened with a byte-level contract fixture.

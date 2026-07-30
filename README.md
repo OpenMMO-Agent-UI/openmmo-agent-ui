@@ -192,15 +192,22 @@ timed out repeatedly, while the same model on paid routing answers in 0.5s. A
 
 ## Pinned OpenMMO dependency
 
-All spectator and manual web-client customization lives on the fork's
-`tweak-agent-client` branch. This repository records one exact commit through
-the `deps/OpenMMO` submodule; update that pin only after both repositories'
-tests and packaging guards pass.
+All spectator and manual web-client customization lives in the public fork.
+This repository records one exact commit through the `deps/OpenMMO` submodule;
+it does not track a branch tip.
 
 ```bash
 git submodule update --init --recursive
-git -C deps/OpenMMO switch tweak-agent-client
+git -C deps/OpenMMO fetch origin --tags
+git -C deps/OpenMMO checkout <FULL_COMPATIBILITY_COMMIT_SHA>
+npm run validate:pin
 ```
+
+Do not use `git submodule update --remote` to prepare a release. The selected
+commit must be available from `tpai/OpenMMO`, match the target protocol, and
+contain the spectator and manual-start integration. Preserve compatibility
+commits with immutable fork tags such as `agent-client/protocol-v10-r1`; the
+parent repository still pins their full SHA.
 
 <details>
 <summary>Historical overlay design (no longer used)</summary>
@@ -335,6 +342,34 @@ unsigned: macOS Gatekeeper
 refuses to open it from a double-click, so right-click → Open once, or run
 `xattr -cr "OpenMMO Agent.app"` from a terminal; Windows SmartScreen has an
 equivalent "Run anyway" prompt.
+
+### Creating an unsigned release
+
+Only a valid `v<semver>` tag on `master` triggers the release workflow. The tag
+supplies the app version; do not edit `package.json` or `build-info.json`.
+
+```bash
+git add deps/OpenMMO
+git commit -m "chore(deps): pin OpenMMO protocol v10"
+git push origin master
+
+git tag v0.14.0
+git push origin v0.14.0
+```
+
+The workflow validates the pinned protocol and source commits, reruns both
+repositories' tests, and builds:
+
+```text
+openmmo-agent-v0.14.0-p10-macos-arm64.zip
+openmmo-agent-v0.14.0-p10-windows-x64.exe
+openmmo-agent-v0.14.0-p10-linux-x64.AppImage
+```
+
+It creates an unsigned draft release with checksums and the full parent and
+OpenMMO SHAs. Rerunning the same immutable tag refreshes that draft. Once
+published, its artifacts cannot be replaced; make source fixes under a new
+patch version.
 
 ## Known limits
 

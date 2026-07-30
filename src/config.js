@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { app, safeStorage } = require('electron')
 
+const releaseConfig = require('../config/release.json')
 const { parseToml, tomlString } = require('./toml')
 
 /// Player-selectable classes and the models that exist for them; the server
@@ -157,9 +158,10 @@ function seedRuntimeData() {
   }
 }
 
-/// { commit, protocolVersion } of the OpenMMO checkout this build was staged
-/// from — written by scripts/package-resources.sh. Null outside a packaged
-/// build, or if a build predates this stamp.
+/// { parentCommit, openmmoCommit, protocolVersion } for the exact desktop and
+/// OpenMMO sources staged into this package. Written by
+/// scripts/package-resources.sh; null outside a packaged build or for builds
+/// that predate the stamp.
 function buildInfo() {
   if (!app.isPackaged) return null
   try {
@@ -169,12 +171,10 @@ function buildInfo() {
   }
 }
 
-/// The last version `characterSession.js`'s hand-encoded message shapes were
-/// verified against by hand. No longer what we send — see `protocolVersion()`
-/// below — but still the floor when nothing else is readable, and the baseline
-/// `scripts/package-resources.sh` warns against once OpenMMO moves past it, so
-/// someone re-reads those shapes before trusting a build.
-const SHAPES_VERIFIED_AGAINST = 11
+/// Used only when neither a package stamp nor a development checkout can be
+/// read. Release gates separately require the pinned protocol to appear in
+/// verifiedProtocols; this fallback must be one of those versions.
+const FALLBACK_PROTOCOL_VERSION = releaseConfig.fallbackProtocol
 
 /// PROTOCOL_VERSION as written in a checkout's `shared/src/lib.rs`, or null if
 /// there is no checkout to read (a packaged app's own directory, for one).
@@ -205,11 +205,11 @@ function protocolVersionInCheckout(root) {
 /// checkout (`~/Downloads/agent-client`) with no `shared/src/lib.rs` anywhere
 /// near it. Neither source here can land in that state — the stamp is written
 /// by the script that had the checkout in hand, and both fall through to
-/// `SHAPES_VERIFIED_AGAINST` rather than guessing.
+/// `FALLBACK_PROTOCOL_VERSION` rather than guessing.
 function protocolVersion() {
   const stamped = buildInfo()
   if (stamped && Number.isInteger(stamped.protocolVersion)) return stamped.protocolVersion
-  return protocolVersionInCheckout(repoRoot()) ?? SHAPES_VERIFIED_AGAINST
+  return protocolVersionInCheckout(repoRoot()) ?? FALLBACK_PROTOCOL_VERSION
 }
 
 /// Where agent-client caches the Google refresh token — mirrors

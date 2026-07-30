@@ -144,28 +144,31 @@ fi
 # hand-updated constant, so the pre-flight session and the agent-client binary
 # we bundle beside it can never disagree about which protocol this build
 # speaks. They were staged from one checkout; this is that checkout's number.
-commit="$(git -C "$checkout" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-protocol="$(grep -o 'PROTOCOL_VERSION: u32 = [0-9]*' "$checkout/shared/src/lib.rs" 2>/dev/null | grep -o '[0-9]*$')"
-protocol="${protocol:-null}"
+checkout_commit="$(git -C "$checkout" rev-parse HEAD 2>/dev/null || echo unknown)"
+if [[ -n ${OPENMMO_BUILD_SHA:-} && $OPENMMO_BUILD_SHA != "$checkout_commit" ]]; then
+    echo "planned OpenMMO commit $OPENMMO_BUILD_SHA does not match checkout $checkout_commit" >&2
+    exit 1
+fi
+commit="${OPENMMO_BUILD_SHA:-$checkout_commit}"
+
+checkout_protocol="$(grep -o 'PROTOCOL_VERSION: u32 = [0-9]*' "$checkout/shared/src/lib.rs" 2>/dev/null | grep -o '[0-9]*$')"
+checkout_protocol="${checkout_protocol:-null}"
+if [[ -n ${OPENMMO_PROTOCOL_VERSION:-} && $OPENMMO_PROTOCOL_VERSION != "$checkout_protocol" ]]; then
+    echo "planned protocol v$OPENMMO_PROTOCOL_VERSION does not match checkout v$checkout_protocol" >&2
+    exit 1
+fi
+protocol="${OPENMMO_PROTOCOL_VERSION:-$checkout_protocol}"
+parent_commit="${DESKTOP_BUILD_SHA:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}"
 cat > "$out/agent-client/build-info.json" <<JSON
 {
-  "commit": "$commit",
+  "parentCommit": "$parent_commit",
+  "openmmoCommit": "$commit",
   "protocolVersion": $protocol
 }
 JSON
 
-# Following the checkout is right for the *version number*, but the hand-encoded
-# message shapes in characterSession.js are a separate question that no version
-# can answer — a bump that reorders `Character`'s fields would sail through the
-# handshake and quietly mis-read the character list. So say something when the
-# checkout has moved past the last version those shapes were read against.
-# A warning, not a gate: the whole point of one command is that it completes.
-verified="$(grep -o 'SHAPES_VERIFIED_AGAINST = [0-9]*' "$root/src/config.js" | grep -o '[0-9]*$' || true)"
-if [[ -n $verified && -n ${protocol//null/} ]] && ((protocol > verified)); then
-    echo "note: this checkout speaks v$protocol; characterSession.js's message shapes were" >&2
-    echo "      last verified against v$verified. The app will send v$protocol regardless." >&2
-    echo "      Worth re-reading ClientInfo/Authenticate/Character in shared/ against" >&2
-    echo "      src/characterSession.js, then bumping SHAPES_VERIFIED_AGAINST." >&2
-fi
+# CI and tag builds gate this version against config/release.json before
+# packaging. Staging remains usable with an explicit development checkout, but
+# the stamp above always records exactly what that checkout speaks.
 
 echo "staged $out from $checkout (commit $commit, protocol v$protocol)"
