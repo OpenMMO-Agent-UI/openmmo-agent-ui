@@ -34,10 +34,22 @@ function findRoot() {
 
 const ROOT = findRoot()
 const DEFAULT_URL = 'wss://openmmo.to.nexus/ws'
-const UPSTREAM = 'upstream/master'
 
+/// Which ref to search for the commit speaking the server's version. A fork
+/// checkout normally has no `upstream` remote at all — its `origin` *is* the
+/// fork, and upstream's history reached it through that — so insisting on
+/// `upstream/master` turned "here is the commit to move to" into "add the
+/// upstream remote and fetch it" on the layout most likely to be in use.
+/// Falls back rather than choosing, since a real `upstream` is the better
+/// answer when one exists.
+const SEARCH_REFS = ['upstream/master', 'origin/master', 'master']
+
+/// stderr is piped rather than inherited so a probe that is *expected* to fail
+/// stays quiet — `rev-parse --verify upstream/master` on a checkout without
+/// that remote otherwise prints "fatal: Needed a single revision" straight
+/// past this script's own output, right before it reports success.
 function git(...args) {
-  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim()
+  return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 }
 
 function localVersion() {
@@ -132,19 +144,27 @@ async function main() {
   console.log(`refused, it wants v${required}`)
 
   let commits
-  try {
-    git('rev-parse', '--verify', UPSTREAM)
-    commits = git('rev-list', '--reverse', UPSTREAM).split('\n')
-  } catch {
-    console.error(`\nNo ${UPSTREAM} to search. Add the upstream remote and fetch it.`)
+  let searched
+  for (const ref of SEARCH_REFS) {
+    try {
+      git('rev-parse', '--verify', ref)
+      commits = git('rev-list', '--reverse', ref).split('\n')
+      searched = ref
+      break
+    } catch {
+      // Try the next one.
+    }
+  }
+  if (!commits) {
+    console.error(`\nNone of ${SEARCH_REFS.join(', ')} exist here. Fetch one and try again.`)
     process.exit(1)
   }
 
   const target = newestCommitSpeaking(required, commits)
   if (!target) {
     console.error(
-      `\nNothing on ${UPSTREAM} speaks v${required}. If the server is ahead, ` +
-        `"git fetch upstream" and try again; upstream may not have pushed it yet.`,
+      `\nNothing on ${searched} speaks v${required}. If the server is ahead, ` +
+        `fetch and try again; the commit may not have been pushed yet.`,
     )
     process.exit(1)
   }
