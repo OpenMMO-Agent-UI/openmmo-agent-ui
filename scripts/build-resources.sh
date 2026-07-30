@@ -3,10 +3,9 @@
 # it. One command, so a release cannot be assembled out of parts nobody
 # rebuilt:
 #
-#   scripts/build-resources.sh <path-to-OpenMMO-checkout>
+#   scripts/build-resources.sh [path-to-OpenMMO-checkout]
 #
 # Steps, in the order the README documents them by hand:
-#   link.sh            symlink overlay/ into the upstream tree
 #   cargo build        agent-client, release
 #   client build       the web client
 #   package-resources  stage the results into build/resources/
@@ -23,44 +22,33 @@
 # nothing else — is worth keeping separate from this one.
 set -euo pipefail
 
-checkout="${1:?usage: build-resources.sh <path-to-OpenMMO-checkout>}"
-checkout="$(cd "$checkout" && pwd)"
-
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+checkout="${1:-"$root/deps/OpenMMO"}"
+checkout="$(cd "$checkout" && pwd)"
 
 # Both helper scripts resolve the checkout from OPENMMO_CHECKOUT or from
 # wherever git says they are — the latter finds openmmo-client's own repo when
 # the two are siblings, not the checkout. Be explicit rather than lucky.
 export OPENMMO_CHECKOUT="$checkout"
 
-echo "==> linking overlay into $checkout"
-bash "$root/scripts/link.sh"
-
 # Is this checkout actually on a branch carrying spectator mode? Nothing here
 # can put it there, so the only useful thing is to say so before spending a
 # release cargo build and a client build on a tree that will produce a stock
 # upstream client.
 #
-# Asked of upstream's own App.svelte rather than of the overlay: link.sh just
-# created client/src/lib/stores/observerStore.ts, so "does that file exist" is
-# a question this script already knows the answer to. Whether App.svelte
-# *reaches for* it is the part only the checkout can answer.
-if ! grep -qs 'observerStore' "$checkout/client/src/App.svelte"; then
-    echo "$checkout has no spectator mode in its client — App.svelte never imports" >&2
-    echo "observerStore, so a build here would be stock upstream. Check out the" >&2
-    echo "spectator branch first:" >&2
-    echo "  git -C $checkout branch --list '*v1*' '*spectator*' '*tweak*'" >&2
+if ! grep -qs 'observerStore' "$checkout/client/src/App.svelte" ||
+   ! grep -qs 'manualBootstrap' "$checkout/client/src/App.svelte"; then
+    echo "$checkout lacks the required spectator/manual client integration." >&2
+    echo "Initialize the pinned dependency first:" >&2
+    echo "  git submodule update --init --recursive" >&2
     exit 1
 fi
 
 echo "==> building agent-client (release)"
 cargo build --manifest-path "$checkout/Cargo.toml" --release -p agent-client
 
-# `npm install` rather than `ci`: upstream's client is not always shipped with
-# a lockfile in sync with its package.json, and a release build failing on that
-# is worse than installing what the manifest resolves to.
 echo "==> building the web client"
-npm --prefix "$checkout/client" install
+npm --prefix "$checkout/client" ci
 npm --prefix "$checkout/client" run build
 
 echo "==> staging"

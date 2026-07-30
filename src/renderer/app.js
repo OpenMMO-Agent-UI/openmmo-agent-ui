@@ -8,6 +8,14 @@ let backends = []
 let classes = []
 let running = false
 let dirtyWhileRunning = false
+let profiles = []
+let selectedProfileId = null
+let editingProfileId = null
+let workflow = null
+let playMode = 'ai'
+let settingsDirty = false
+let retryCountdownTimer = null
+let settingsSnapshot = null
 /// The spectator scene's URL, once the relay is listening and the agent has a
 /// session to mirror. One view, so one URL: there is nothing to switch between.
 let sceneUrl = null
@@ -48,14 +56,10 @@ const FIELDS = {
   maxTokens: 'int',
   temperature: 'float',
   reasoningEffort: 'text',
-  server: 'text',
-  terrain: 'text',
-  authMode: 'text',
-  googleClientId: 'text',
-  googleClientSecret: 'text',
-  npcAccount: 'text',
   watchPort: 'int',
   rustLog: 'text',
+  maxConcurrent: 'int',
+  requestTimeoutSecs: 'int',
 }
 
 function backend() {
@@ -162,7 +166,6 @@ function setStatus(state) {
     sceneUrl = null
     $('placeholder').hidden = false
     setVitals(null)
-    if (document.body.dataset.screen === 'game') setScreen('character')
   }
 }
 
@@ -180,7 +183,6 @@ function appendLog(item) {
 /// the cache, a cached credential to continue with, or a fresh device code.
 function showLoginState(state) {
   $('loginChecking').hidden = state !== 'checking'
-  $('loginContinue').hidden = state !== 'continue'
   $('loginCode').hidden = state !== 'code'
 }
 
@@ -203,11 +205,9 @@ async function beginSignIn() {
 }
 
 async function enterLoginScreen() {
+  if (workflow) return workflow.continueWithProfile(selectedProfileId)
   setScreen('login')
   showLoginState('checking')
-  const status = await api.authStatus()
-  if (status.signedIn) showLoginState('continue')
-  else await beginSignIn()
 }
 
 /// Shared tail of Continue and the device flow: land on Character with
@@ -242,6 +242,90 @@ async function afterSignIn(res) {
     setCharacterTab('create')
   }
   setScreen('character')
+}
+
+function profileById(id) {
+  return profiles.find((profile) => profile.id === id)
+}
+
+function renderProfiles() {
+  const box = $('profileList')
+  box.innerHTML = ''
+  for (const profile of profiles) {
+    const button = document.createElement('button')
+    button.className = `profile-row${profile.id === selectedProfileId ? ' on' : ''}`
+    const status = profile.validation?.ok
+      ? 'Verified'
+      : profile.validation?.error
+        ? profile.validation.error
+        : 'Not verified'
+    button.innerHTML = '<span class="profile-name"></span><span class="profile-meta"></span>'
+    button.querySelector('.profile-name').textContent =
+      `${profile.name}${profile.kind === 'builtin' ? ' · Built-in' : ''}`
+    button.querySelector('.profile-meta').textContent = `${profile.serverUrl} · ${status}`
+    button.addEventListener('click', () => {
+      selectedProfileId = profile.id
+      renderProfiles()
+      renderProfileStatus()
+    })
+    box.appendChild(button)
+  }
+  const selected = profileById(selectedProfileId)
+  $('profileEdit').disabled = !selected || selected.kind === 'builtin'
+  $('profileDelete').disabled = !selected || selected.kind === 'builtin'
+  $('profileContinue').disabled = !selected
+  $('profileTest').disabled = !selected
+}
+
+function renderProfileStatus() {
+  const profile = profileById(selectedProfileId)
+  if (!profile) {
+    $('profileStatus').textContent = ''
+    return
+  }
+  $('profileStatus').textContent = profile.validation?.ok
+    ? `Last verified ${new Date(profile.validation.checkedAt).toLocaleString()}`
+    : profile.validation?.error || 'This profile has not been verified yet.'
+}
+
+function openProfileEditor(profile = null) {
+  editingProfileId = profile?.id || null
+  $('profileName').value = profile?.name || ''
+  $('profileServer').value = profile?.serverUrl || ''
+  $('profileTerrain').value = profile?.terrainOrigin || ''
+  $('profileClientId').value = profile?.googleClientId || ''
+  $('profileClientSecret').value = ''
+  $('profileEditor').hidden = false
+}
+
+function closeProfileEditor() {
+  editingProfileId = null
+  $('profileEditor').hidden = true
+}
+
+function renderWorkflow(state) {
+  profiles = state.profiles || profiles
+  selectedProfileId = state.selectedProfileId || selectedProfileId
+  showErrors(state.errors)
+  if (state.screen === 'server') {
+    setScreen('server')
+    renderProfiles()
+    renderProfileStatus()
+  } else if (state.screen === 'oauth') {
+    setScreen('login')
+    showLoginState('checking')
+  } else if (state.screen === 'character') {
+    characters = state.characters
+    $('accountName').textContent = state.accountName || ''
+    selectedCharacterId = null
+    renderCharacterList()
+    updateCreateVisibility()
+    setCharacterTab(characters.length ? 'pick' : 'create')
+    setScreen('character')
+  } else if (state.screen === 'game') {
+    setScreen('game')
+    applyPlayState(state.session)
+  }
 }
 
 /// The four Character-screen tabs. "connection" isn't a panel of its own —
@@ -285,13 +369,12 @@ function renderCharacterList() {
     const row = document.createElement('label')
     row.className = `character-row${c.id === selectedCharacterId ? ' on' : ''}`
     row.innerHTML =
-      '<input type="radio" name="characterPick" />' +
       '<span class="character-info"><span class="character-name"></span><span class="character-meta"></span></span>' +
       '<button type="button" class="ghost small">Delete</button>'
-    row.querySelector('input').checked = c.id === selectedCharacterId
     row.querySelector('.character-name').textContent = c.name
-    row.querySelector('.character-meta').textContent = `${c.class} · ${c.gender} · Lv.${c.level}`
-    row.querySelector('input').addEventListener('change', () => selectCharacter(c.id))
+    const last = profileById(selectedProfileId)?.lastSession?.characterId === c.id ? ' · Last played' : ''
+    row.querySelector('.character-meta').textContent = `${c.class} · ${c.gender} · Lv.${c.level}${last}`
+    row.querySelector('.character-info').addEventListener('click', () => enterCharacter(c))
     row.querySelector('button').addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
@@ -299,6 +382,13 @@ function renderCharacterList() {
     })
     box.appendChild(row)
   }
+}
+
+async function enterCharacter(character) {
+  selectedCharacterId = character.id
+  await persist({ characterName: character.name })
+  await loadInstancePrompt()
+  await workflow.chooseCharacter(character.id)
 }
 
 function selectCharacter(id) {
@@ -321,8 +411,8 @@ async function loadInstancePrompt() {
     $('instanceFile').textContent = ''
     return
   }
-  $('instanceText').value = await api.getInstancePrompt(name)
-  $('instanceFile').textContent = `data/npcs/${name}/instance.txt`
+  $('instanceText').value = await api.getInstancePrompt(selectedCharacterId, name)
+  $('instanceFile').textContent = `Personality for this server and character`
 }
 
 async function deleteCharacterRow(id, name) {
@@ -353,7 +443,7 @@ function updateCreateVisibility() {
 }
 
 function updatePlayEnabled() {
-  $('play').disabled = !selectedCharacterId
+  // Character activation itself enters the game; there is no separate Play.
 }
 
 function applyView() {
@@ -377,17 +467,6 @@ function showViewProblem(message) {
   frame.removeAttribute('src')
   delete frame.dataset.url
   $('placeholder').hidden = false
-}
-
-/// `note` overrides the resting description right after a sign-out, so the
-/// click has visible consequences instead of a silently changed file.
-function setAuthState(isSignedIn, note) {
-  $('authState').textContent =
-    note ??
-    (isSignedIn
-      ? 'Signed in — Play connects without asking again.'
-      : 'Not signed in — Play shows a code to enter in your browser.')
-  $('signOut').disabled = !isSignedIn
 }
 
 /// Every slot the game has (shared/src/inventory.rs EquipSlot), head down and
@@ -568,11 +647,100 @@ function renderFeedFilters() {
 }
 
 function openSettings() {
+  settingsSnapshot = structuredClone(settings)
   $('settingsModal').hidden = false
+  settingsDirty = false
+  $('settingsDirty').hidden = true
+  syncCadenceControls()
 }
 
 function closeSettings() {
+  if (settingsDirty && !window.confirm('Discard unapplied settings changes?')) return
+  if (settingsDirty && settingsSnapshot) {
+    settings = settingsSnapshot
+    for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
+    renderClassOptions()
+    renderBackend()
+    syncCadenceControls()
+  }
+  settingsSnapshot = null
+  settingsDirty = false
   $('settingsModal').hidden = true
+}
+
+const ACTIVE_CADENCES = [
+  ['Very fast', 3],
+  ['Fast', 5],
+  ['Balanced', 10],
+  ['Relaxed', 20],
+  ['Economical', 30],
+]
+const IDLE_CADENCES = [
+  ['Frequent', 30],
+  ['Normal', 60],
+  ['Occasional', 300],
+  ['Rare', 900],
+  ['Minimum', 3600],
+]
+
+function nearestCadenceIndex(options, seconds) {
+  let best = 0
+  for (let i = 1; i < options.length; i++) {
+    if (Math.abs(options[i][1] - seconds) < Math.abs(options[best][1] - seconds)) best = i
+  }
+  return best
+}
+
+function syncCadenceControls() {
+  $('activeCadence').value = nearestCadenceIndex(ACTIVE_CADENCES, settings.minIntervalSecs)
+  $('idleCadence').value = nearestCadenceIndex(IDLE_CADENCES, settings.idleIntervalSecs)
+  renderCadenceLabels()
+}
+
+function renderCadenceLabels() {
+  const active = ACTIVE_CADENCES[Number($('activeCadence').value)]
+  const idle = IDLE_CADENCES[Number($('idleCadence').value)]
+  $('activeCadenceLabel').textContent = `${active[0]} · ${active[1]} seconds`
+  $('activeCadenceHint').textContent = `At most about ${(60 / active[1]).toFixed(1)} calls/minute while active.`
+  $('idleCadenceLabel').textContent =
+    `${idle[0]} · ${idle[1] >= 60 ? `${idle[1] / 60} minute${idle[1] === 60 ? '' : 's'}` : `${idle[1]} seconds`}`
+  $('idleCadenceHint').textContent = `At most about ${(60 / idle[1]).toFixed(2)} calls/minute while quiet.`
+}
+
+function setSettingsTab(name) {
+  for (const button of document.querySelectorAll('[data-settings-tab]')) {
+    button.classList.toggle('on', button.dataset.settingsTab === name)
+  }
+  for (const panel of document.querySelectorAll('[data-settings-panel]')) {
+    panel.hidden = panel.dataset.settingsPanel !== name
+  }
+}
+
+function applyPlayState(state) {
+  if (!state) return
+  playMode = state.mode || playMode
+  document.body.dataset.mode = playMode
+  $('modeManual').classList.toggle('on', playMode === 'manual')
+  $('modeAi').classList.toggle('on', playMode === 'ai')
+  $('modeManual').disabled = state.phase === 'switching'
+  $('modeAi').disabled = state.phase === 'switching'
+  clearInterval(retryCountdownTimer)
+  retryCountdownTimer = null
+  const startedAt = Date.now()
+  const renderStatus = () => {
+    const remaining = state.retryInMs
+      ? Math.max(0, state.retryInMs - (Date.now() - startedAt))
+      : 0
+    const retry = remaining ? ` · retry in ${Math.ceil(remaining / 1000)}s` : ''
+    $('status').textContent = `${state.phase}${retry}`
+  }
+  renderStatus()
+  if (state.retryInMs) retryCountdownTimer = setInterval(renderStatus, 250)
+  if (state.notice) showErrors([state.notice])
+  if (state.viewUrl) {
+    sceneUrl = state.viewUrl
+    applyView()
+  }
 }
 
 /// A destructive action's one guard: resolves true only if Delete is
@@ -628,23 +796,47 @@ function bindFields() {
   for (const [id, type] of Object.entries(FIELDS)) {
     const el = $(id)
     if (!el) continue
-    el.addEventListener('change', async () => {
+    el.addEventListener('change', () => {
       const value = readField(id, type)
-      await persist({ [id]: value })
+      settings[id] = value
+      settingsDirty = true
+      $('settingsDirty').hidden = false
       if (id === 'characterClass') {
         renderGenderOptions()
-        await persist({ gender: settings.gender })
       }
       if (id === 'llm') renderBackend()
-      if (id === 'authMode') renderBackend()
     })
   }
 
-  $('model').addEventListener('change', () => persist({ models: { [settings.llm]: $('model').value } }))
+  $('model').addEventListener('change', () => {
+    settings.models[settings.llm] = $('model').value
+    settingsDirty = true
+    $('settingsDirty').hidden = false
+  })
   $('apiKey').addEventListener('change', () => {
     const key = settings.llm === 'openrouter' ? 'openrouterKey' : 'openaiKey'
-    persist({ [key]: $('apiKey').value })
+    settings[key] = $('apiKey').value
+    settingsDirty = true
+    $('settingsDirty').hidden = false
   })
+
+  $('activeCadence').addEventListener('input', () => {
+    settings.minIntervalSecs = ACTIVE_CADENCES[Number($('activeCadence').value)][1]
+    $('minIntervalSecs').value = settings.minIntervalSecs
+    settingsDirty = true
+    $('settingsDirty').hidden = false
+    renderCadenceLabels()
+  })
+  $('idleCadence').addEventListener('input', () => {
+    settings.idleIntervalSecs = IDLE_CADENCES[Number($('idleCadence').value)][1]
+    $('idleIntervalSecs').value = settings.idleIntervalSecs
+    settingsDirty = true
+    $('settingsDirty').hidden = false
+    renderCadenceLabels()
+  })
+  for (const button of document.querySelectorAll('[data-settings-tab]')) {
+    button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab))
+  }
 }
 
 /// A validation error naming a field on a tab that isn't showing is useless —
@@ -656,25 +848,65 @@ function expandCharacterSections() {
 }
 
 function bindActions() {
-  // No agent process to stop — sign-in never starts one (ADR 0001) — so this
-  // just abandons any in-flight device-flow poll and re-enters sign-in from
-  // the top. There is no screen behind Login to back out to any more.
-  $('loginCancel').addEventListener('click', async () => {
-    signInGeneration++
-    showErrors([])
-    await enterLoginScreen()
+  $('profileContinue').addEventListener('click', () => workflow.continueWithProfile(selectedProfileId))
+  $('profileTest').addEventListener('click', async () => {
+    $('profileTest').disabled = true
+    const result = await api.testProfile(selectedProfileId)
+    $('profileTest').disabled = false
+    profiles = await api.listProfiles()
+    renderProfiles()
+    renderProfileStatus()
+    if (!result.ok) showErrors([result.error])
+  })
+  $('profileNew').addEventListener('click', () => openProfileEditor())
+  $('profileEdit').addEventListener('click', () => {
+    const profile = profileById(selectedProfileId)
+    if (profile?.kind === 'custom') openProfileEditor(profile)
+  })
+  $('profileDuplicate').addEventListener('click', async () => {
+    const profile = await api.duplicateProfile(selectedProfileId)
+    profiles = await api.listProfiles()
+    selectedProfileId = profile.id
+    renderProfiles()
+    openProfileEditor(profile)
+  })
+  $('profileDelete').addEventListener('click', async () => {
+    const profile = profileById(selectedProfileId)
+    if (!profile || profile.kind === 'builtin') return
+    if (!(await confirmAction(`Delete ${profile.name} and its saved Google login?`))) return
+    profiles = await api.deleteProfile(profile.id)
+    selectedProfileId = profiles.find((candidate) => candidate.selected)?.id || profiles[0]?.id
+    renderProfiles()
+    renderProfileStatus()
+  })
+  $('profileCancel').addEventListener('click', closeProfileEditor)
+  $('profileSave').addEventListener('click', async () => {
+    const input = {
+      name: $('profileName').value.trim(),
+      serverUrl: $('profileServer').value.trim(),
+      terrainOrigin: $('profileTerrain').value.trim(),
+      googleClientId: $('profileClientId').value.trim(),
+    }
+    if ($('profileClientSecret').value) input.googleClientSecret = $('profileClientSecret').value
+    try {
+      const profile = editingProfileId
+        ? await api.updateProfile(editingProfileId, input)
+        : await api.createProfile(input)
+      profiles = await api.listProfiles()
+      selectedProfileId = profile.id
+      closeProfileEditor()
+      renderProfiles()
+      renderProfileStatus()
+    } catch (err) {
+      showErrors([err.message])
+    }
   })
 
-  $('continueSignIn').addEventListener('click', async () => {
-    $('continueSignIn').disabled = true
-    const res = await api.authContinue()
-    $('continueSignIn').disabled = false
-    await afterSignIn(res)
-  })
+  $('loginCancel').addEventListener('click', () => workflow.cancelOAuth())
 
   $('switchAccount').addEventListener('click', async () => {
     await api.signOut()
-    await beginSignIn()
+    await workflow.continueWithProfile(selectedProfileId)
   })
 
   $('createCharacter').addEventListener('click', async () => {
@@ -695,8 +927,7 @@ function bindActions() {
     $('newCharacterName').value = ''
     renderCharacterList()
     updateCreateVisibility()
-    selectCharacter(res.character.id)
-    setCharacterTab('pick')
+    await enterCharacter(res.character)
   })
 
   $('directiveForm').addEventListener('submit', async (e) => {
@@ -716,7 +947,11 @@ function bindActions() {
   $('saveInstance').addEventListener('click', async () => {
     if (!settings.characterName) return
     showErrors([])
-    const res = await api.saveInstancePrompt(settings.characterName, $('instanceText').value)
+    const res = await api.saveInstancePrompt(
+      selectedCharacterId,
+      settings.characterName,
+      $('instanceText').value,
+    )
     if (!running) {
       $('instanceFile').textContent = `Saved to ${res.file}`
       return
@@ -733,34 +968,6 @@ function bindActions() {
     dirtyWhileRunning = false
     setStatus(restarted.status)
     $('instanceFile').textContent = `Saved to ${res.file} — applied`
-  })
-
-  $('play').addEventListener('click', async () => {
-    showErrors([])
-    // Play is the only thing that ever spawns agent-client (ADR 0001) — but a
-    // session can already be live here, from a window reopened onto one or a
-    // trip back out to Character. Only (re)start when there is nothing running
-    // or settings changed under it; otherwise the session is right here.
-    let res
-    if (!running) res = await api.start()
-    else if (dirtyWhileRunning) res = await api.restart()
-    else {
-      setScreen('game')
-      return
-    }
-    if (!res.ok) {
-      expandCharacterSections()
-      showErrors(res.errors)
-    } else {
-      dirtyWhileRunning = false
-      setScreen('game')
-      setStatus(res.status)
-    }
-  })
-
-  $('stop').addEventListener('click', async () => {
-    const res = await api.stop()
-    setStatus(res.status)
   })
 
   $('restart').addEventListener('click', async () => {
@@ -792,21 +999,62 @@ function bindActions() {
     requestAnimationFrame(() => applyView())
   })
 
-  $('signOut').addEventListener('click', async () => {
-    const res = await api.signOut()
-    if (!res.removed) {
-      setAuthState(false, 'Nothing to sign out of — no credential is stored.')
+  $('modeManual').addEventListener('click', async () => {
+    const result = await api.switchMode('manual')
+    if (!result.ok) showErrors([result.error])
+    else applyPlayState(result.session)
+  })
+  $('modeAi').addEventListener('click', async () => {
+    const result = await api.switchMode('ai')
+    if (!result.ok) showErrors([result.error])
+    else applyPlayState(result.session)
+  })
+  $('modeSettings').addEventListener('click', openSettings)
+  $('changeCharacter').addEventListener('click', async () => {
+    if (!(await confirmAction('Leave this session and choose another character?', 'Leave'))) return
+    await api.leavePlay('character')
+    setScreen('character')
+  })
+  $('changeServer').addEventListener('click', async () => {
+    if (!(await confirmAction('Leave this session and choose another server?', 'Leave'))) return
+    await api.leavePlay('server')
+    await workflow.start()
+  })
+  $('settingsApply').addEventListener('click', async () => {
+    showErrors([])
+    $('settingsApply').disabled = true
+    $('settingsApply').textContent = 'Validating…'
+    const applied = await api.applySettings(settings)
+    $('settingsApply').disabled = false
+    $('settingsApply').textContent = 'Apply'
+    if (!applied.ok) {
+      showErrors(applied.errors)
       return
     }
-    setAuthState(false, res.wasRunning
-      ? 'Signed out and stopped the agent. Play to sign in again.'
-      : 'Signed out. Play to sign in again.')
+    settings = applied.settings
+    settingsDirty = false
+    $('settingsDirty').hidden = true
+    if (playMode === 'ai' && running) {
+      const result = await api.restart()
+      if (!result.ok) {
+        showErrors(result.errors)
+        return
+      }
+    }
+    closeSettings()
   })
 
-  $('openSettingsFromLogin').addEventListener('click', openSettings)
   $('openSettingsFromGame').addEventListener('click', openSettings)
   $('settingsClose').addEventListener('click', closeSettings)
 }
+
+window.addEventListener('message', (event) => {
+  if (event.source !== $('frame').contentWindow) return
+  if (event.data?.type === 'openmmo-manual-ready') void api.manualReady()
+  if (event.data?.type === 'openmmo-manual-error') {
+    void api.manualReady(event.data.error || 'Manual client could not enter the world')
+  }
+})
 
 async function init() {
   const info = await api.info()
@@ -814,20 +1062,15 @@ async function init() {
   backends = info.backends
   classes = info.classes
 
-  $('llm').innerHTML = backends.map((b) => `<option value="${b.id}">${b.label}</option>`).join('')
+  $('llm').innerHTML = backends
+    .filter((backend) => backend.kind !== 'none')
+    .map((backend) => `<option value="${backend.id}">${backend.label}</option>`)
+    .join('')
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()
   renderBackend()
 
-  setAuthState((await api.authStatus()).signedIn)
-
   for (const item of info.log) appendLog(item)
-
-  // Decide the starting screen before setStatus's auto-bounce-to-character
-  // rule can fire on a false `running` that just means "freshly opened."
-  // A session already running (app restarted mid-play) skips straight past
-  // the login/character gates; anything else starts at Login.
-  setScreen(info.status.running ? 'game' : 'login')
 
   setStatus(info.status)
   // A window reopened onto a session that never stopped gets no `view:ready`
@@ -848,7 +1091,19 @@ async function init() {
   api.onWorn(renderWorn)
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
+    if (urls && urls.mode) {
+      playMode = urls.mode
+      document.body.dataset.mode = playMode
+    }
     applyView()
+  })
+  api.onViewStop(() => {
+    sceneUrl = null
+    const frame = $('frame')
+    frame.hidden = true
+    frame.removeAttribute('src')
+    delete frame.dataset.url
+    $('placeholder').hidden = false
   })
   api.onViewMemory((mb) => {
     $('mem').textContent = mb ? `${mb} MB` : ''
@@ -858,18 +1113,27 @@ async function init() {
   api.onState(setStatus)
   api.onDeviceCode(showDeviceCode)
   api.onFatal((message) => showErrors([message]))
+  api.onPlayState(applyPlayState)
   // The watch server coming up is what says the session is live; main.js sends
   // the scene URL off the same event.
   api.onWatchReady(() => {
     if (running) setScreen('game')
   })
 
-  // Login used to be reached by Binary's Continue; with that screen gone, the
-  // sign-in it kicked off has to start here. Deliberately last and
-  // deliberately not awaited: `enterLoginScreen` runs the device flow, which
-  // blocks until the user finishes in the browser, and it can only report the
-  // code through the `onDeviceCode` listener registered just above.
-  if (!info.status.running) void enterLoginScreen()
+  workflow = new window.AppWorkflow(
+    {
+      listProfiles: api.listProfiles,
+      selectProfile: api.selectProfile,
+      testProfile: api.testProfile,
+      authStatus: api.authStatus,
+      authContinue: api.authContinue,
+      authSignIn: api.authSignIn,
+      authCancel: api.authCancel,
+      enterCharacter: api.enterCharacter,
+    },
+    renderWorkflow,
+  )
+  await workflow.start()
 }
 
 init()

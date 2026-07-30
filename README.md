@@ -1,9 +1,8 @@
 # OpenMMO Client
 
-A desktop client for playing [OpenMMO](https://openmmo.to.nexus) with an LLM at
-the controls. Pick a model, write who your character is, press **Play** — and
-watch it live in the real 3D game client while it plays, sending it word when
-you want something done.
+A desktop client for playing [OpenMMO](https://openmmo.to.nexus) manually or
+with an LLM at the controls. Choose a server, sign in, choose a character, then
+switch between the hand and robot controls at any time.
 
 ```
 ┌──────────────┬──────────────────────────────┐
@@ -21,39 +20,28 @@ opinion about: a settings panel, encrypted key storage, Google device-flow
 sign-in surfaced as a button instead of a log line, a live feed of every prompt
 and reply — and a 3D spectator view of your own character.
 
-This repo holds **only our additions**. Upstream OpenMMO stays untouched, so it
-can be updated underneath us — see [Staying rebaseable](#staying-rebaseable).
+The customized OpenMMO fork is pinned at `deps/OpenMMO`, so every desktop
+commit identifies the exact web client, protocol, and native agent it builds.
 
 ## Setup
 
-Clone the game, then clone this repo inside it as `openmmo-client/`:
+Clone this repository with its pinned dependency:
 
 ```bash
-git clone https://github.com/Julian-adv/OpenMMO.git
-cd OpenMMO
-git lfs pull                                   # models, textures, music
-git clone git@github.com:Daky/openmmo-client.git
-
-./openmmo-client/scripts/link.sh               # our sources into the game tree
+git clone --recurse-submodules git@github.com:Daky/openmmo-client.git
+cd openmmo-client
 ```
-
-Our edits to upstream's *own* files are commits, on a branch in the game
-checkout — check that branch out before building (see
-[Carrying our changes](#carrying-our-changes)).
 
 Then build and run:
 
 ```bash
-cargo build --release -p agent-client
-npm --prefix client install && npm --prefix client run build
-npm --prefix openmmo-client install
-npm --prefix openmmo-client start
+npm install
+npm run build:resources
+npm start
 ```
 
-In the window: sign in with Google, then choose an existing character or
-create one — up to 3 per account — and press **Play**. The `agent-client`
-binary is found automatically — the packaged bundle first, then this
-checkout's `target/release` and `target/debug`.
+The build deliberately skips Git LFS payloads; terrain assets stream from the
+selected profile's terrain origin and are cached at runtime.
 
 ### Requirements
 
@@ -202,7 +190,20 @@ One trap worth naming: `openai/gpt-oss-20b:free` answered in **51 seconds** and
 timed out repeatedly, while the same model on paid routing answers in 0.5s. A
 `:free` suffix measures the queue, not the model.
 
-## Carrying our changes
+## Pinned OpenMMO dependency
+
+All spectator and manual web-client customization lives on the fork's
+`tweak-agent-client` branch. This repository records one exact commit through
+the `deps/OpenMMO` submodule; update that pin only after both repositories'
+tests and packaging guards pass.
+
+```bash
+git submodule update --init --recursive
+git -C deps/OpenMMO switch tweak-agent-client
+```
+
+<details>
+<summary>Historical overlay design (no longer used)</summary>
 
 Our changes come in two shapes, kept apart on purpose.
 
@@ -264,6 +265,8 @@ Run `git diff origin/master...<your-spectator-branch> -- client/` for the curren
 list rather than trusting this one; the last time it was written down by hand it
 went stale without anyone noticing.
 
+</details>
+
 ### In-browser agent (withdrawn)
 
 An in-browser agent — the same loop running inside the web client, on your own
@@ -273,30 +276,22 @@ never be exercised. It lives in the history if it is wanted back.
 
 ## Packaging a standalone build
 
-`npm start` needs the dev setup above — a built `agent-client` binary, a built
-`client/dist`, `link.sh` already run, and the OpenMMO checkout on its spectator
-branch. A packaged build needs none of that at
-runtime: it ships its own copy of the binary and the web client, and writes
+`npm start` needs `npm run build:resources` once. A packaged build ships its
+own copy of the binary and web client and writes
 its runtime data (`config.toml`, `memory.txt`, the terrain tile cache) under
 the OS's app data directory instead of into the bundle, which is read-only
 once packaged.
 
-Building one takes an OpenMMO checkout on its spectator branch, nothing else
-built, and does the rest in one command:
+The submodule pin is the only normal build input:
 
 ```bash
 npm install
-OPENMMO_CHECKOUT=/path/to/OpenMMO npm run dist:mac    # or dist:win / dist:linux
+npm run dist:mac    # or dist:win / dist:linux
 ```
 
-`scripts/build-resources.sh` runs `link.sh`, the release `cargo build`, and the
-client build, then stages and packages the result. It cannot put the spectator
-commits into the checkout — that is a branch you check out — so it checks for
-them first, in upstream's own `App.svelte`, and refuses to spend a release build
-on a tree that would produce a stock upstream client. Staging then greps the
-built bundle for observer mode as a backstop, because the staleness guard beside
-it compares mtimes and a branch switch can leave a newer dist built from an
-older tree, which no mtime can see.
+`scripts/build-resources.sh` builds the release agent and web client from
+`deps/OpenMMO`, then stages them. Staging checks the built bundle for both
+spectator and desktop manual-start capabilities.
 
 The binary gets the equivalent check: staging refuses one older than the
 checkout's newest `agent-client/src`/`shared/src` commit. `npm run stage` alone
@@ -309,7 +304,7 @@ Check the protocol first, though — the deployed server is not always at the
 checkout's version, and it refuses anything that is not an exact match:
 
 ```bash
-OPENMMO_CHECKOUT=/path/to/OpenMMO npm run check
+npm run check
 ```
 
 It names the commit to move the checkout to. The packaged app follows whatever
@@ -318,11 +313,8 @@ it is built from: `package-resources.sh` stamps the checkout's
 so the pre-flight session and the bundled `agent-client` always agree
 (see [ADR 0002](docs/adr/0002-protocol-guard-fails-closed.md)).
 
-`OPENMMO_CHECKOUT` doesn't need to be nested inside this repo — `link.sh` and
-this staging step both resolve the checkout from it (or,
-if it's unset, from `git rev-parse --show-toplevel`, so running them from
-inside the checkout works too), so a sibling directory is just as valid as
-the nested layout in Setup.
+`OPENMMO_CHECKOUT` remains an explicit development escape hatch; CI and normal
+local builds intentionally ignore branch tips and use the recorded pin.
 
 `scripts/package-resources.sh` (also runnable on its own as `npm run stage`,
 for a checkout you already built by hand) copies the release binary and the
@@ -338,9 +330,8 @@ round trip. Also staged: only the fixed-content slice of `agent-client/data/`
 the tile cache). The output lands in `out/`, around 130 MB zipped / 300 MB
 unpacked — almost all of that Electron itself.
 
-Only `dist:mac` is verified — built and run on Apple Silicon. Both it and
-the untested `dist:win` / `dist:linux` (each needs its own native build
-machine for `agent-client`) produce an unsigned app: macOS Gatekeeper
+GitHub Actions builds each target on its native runner. All artifacts are
+unsigned: macOS Gatekeeper
 refuses to open it from a double-click, so right-click → Open once, or run
 `xattr -cr "OpenMMO Agent.app"` from a terminal; Windows SmartScreen has an
 equivalent "Run anyway" prompt.
@@ -367,8 +358,9 @@ src/msgpack.js    the wire codec, in the dialect rmp_serde speaks
 src/server.js     serves client/dist, proxies /api and LFS-pointer assets
 src/toml.js       just enough TOML to import an existing config
 src/renderer/     the panel (plain HTML/CSS/JS, no build step)
-overlay/          our source, symlinked into the game tree
-scripts/          link.sh, build-resources.sh, package-resources.sh
+deps/OpenMMO/     exact customized OpenMMO dependency
+overlay/          desktop-owned prompts and agent data only
+scripts/          build-resources.sh, package-resources.sh
 ```
 
 ## License

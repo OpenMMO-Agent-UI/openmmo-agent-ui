@@ -227,6 +227,7 @@ pre {
   display: none;
 }
 
+body[data-screen='server'] #screen-server,
 body[data-screen='login'] #screen-login,
 body[data-screen='character'] #screen-character {
   display: flex;
@@ -269,6 +270,88 @@ body[data-screen='game'] #screen-game {
 
 .card.wide {
   max-width: 560px;
+}
+
+.card.server-card {
+  max-width: 680px;
+}
+
+.profile-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  margin-bottom: 12px;
+  overflow-y: auto;
+}
+
+.profile-row {
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+  background: var(--panel-2);
+}
+
+.profile-row.on {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.profile-name,
+.profile-meta {
+  display: block;
+}
+
+.profile-name {
+  font-weight: 600;
+}
+
+.profile-meta {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.profile-editor {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.profile-editor-actions {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.danger-outline {
+  color: var(--ember);
+}
+
+.grow {
+  flex: 1;
+}
+
+.optional,
+.account-line {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.account-line {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin: -12px 0 8px;
 }
 
 /* A letterhead, not a badge: the rule underneath is what makes it read as
@@ -447,8 +530,62 @@ body[data-screen='game'] #screen-game {
 /* ---------- game screen ---------- */
 
 .screen-game {
+  position: relative;
   height: 100vh;
   flex-direction: column;
+}
+
+.mode-overlay {
+  position: fixed;
+  z-index: 35;
+  top: 8px;
+  right: 10px;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(20, 23, 28, 0.9);
+  -webkit-app-region: no-drag;
+}
+
+.mode-button {
+  width: 32px;
+  height: 30px;
+  padding: 5px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.mode-button svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mode-button.on {
+  color: var(--accent);
+  background: var(--panel-2);
+  border-color: rgba(201, 162, 74, 0.35);
+}
+
+body[data-mode='manual'] .gamebar,
+body[data-mode='manual'] .rail,
+body[data-mode='manual'] .directive-panel,
+body[data-mode='manual'] .drawer {
+  display: none !important;
+}
+
+body[data-mode='manual'] .gameshell,
+body[data-mode='manual'] #view,
+body[data-mode='manual'] .gamesurface {
+  width: 100%;
+  height: 100%;
 }
 
 .gamebar {
@@ -898,6 +1035,12 @@ iframe {
   padding: 14px 18px;
   border-bottom: 1px solid var(--line);
   font-weight: 600;
+}
+
+.modal-card > .tabs {
+  flex: none;
+  margin: 0;
+  padding: 0 14px;
 }
 
 .modal-body {

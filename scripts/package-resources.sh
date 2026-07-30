@@ -2,14 +2,13 @@
 # Stage build/resources/ from an already-built OpenMMO checkout, for
 # electron-builder's `extraResources` to bundle into a packaged app.
 #
-#   scripts/package-resources.sh <path-to-OpenMMO-checkout>
+#   scripts/package-resources.sh [path-to-OpenMMO-checkout]
 #
 # This does not build anything itself. The checkout must already be on a branch
 # carrying spectator mode, and have been through the normal dev setup from the
 # README:
-#   ./openmmo-client/scripts/link.sh
 #   cargo build --release -p agent-client
-#   npm --prefix client install && npm --prefix client run build
+#   npm --prefix client ci && npm --prefix client run build
 #
 # scripts/build-resources.sh does all of that and then calls this.
 #
@@ -25,12 +24,9 @@
 # streams them at runtime rather than shipping a copy.
 set -euo pipefail
 
-CLIENT_ASSET_EXCLUDES=(--exclude=/textures --exclude=/models --exclude=/bgm --exclude=/character_concepts --exclude=/portraits)
-
-checkout="${1:?usage: package-resources.sh <path-to-OpenMMO-checkout>}"
-checkout="$(cd "$checkout" && pwd)"
-
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+checkout="${1:-"$root/deps/OpenMMO"}"
+checkout="$(cd "$checkout" && pwd)"
 out="$root/build/resources"
 
 exe="agent-client"
@@ -74,15 +70,8 @@ dist="$checkout/client/dist"
     exit 1
 }
 
-# Our own client-side source lives in overlay/, and none of it reaches the app
-# until the client is rebuilt — a dist older than any of it is a client that
-# silently predates it. Found the expensive way: a committed fix for a spectator
-# whose character never moved shipped inside an app whose bundled client was
-# built hours before the fix existed, and the app was the only place anyone was
-# looking.
-#
-# The checkout's own half is asked the same question against its commits, since
-# the edits to upstream's files live there now. Committer dates rather than a
+# Client customization now lives wholly in the pinned checkout. Committer
+# dates rather than a
 # branch-switch time, which git does not record: a rebase restamps them to now,
 # so moving the spectator branch onto a new upstream reads as "newer than your
 # dist" and forces the rebuild it genuinely needs. Caught staging a dist eight
@@ -91,14 +80,6 @@ dist="$checkout/client/dist"
 # client sends its own protocol_version(), so that dist would have spoken the
 # wrong protocol from inside a bundle stamped with the right one.
 if [[ -z ${ALLOW_STALE_CLIENT:-} ]]; then
-    stale=$(find "$root/overlay" -type f -newer "$dist/index.html" -print -quit 2>/dev/null || true)
-    [[ -z $stale ]] || {
-        echo "stale client build: ${stale#"$root/"} is newer than $dist/index.html" >&2
-        echo "rebuild it first: npm --prefix client run build (in $checkout), then re-run this" >&2
-        echo "or set ALLOW_STALE_CLIENT=1 to stage it anyway" >&2
-        exit 1
-    }
-
     client_commit=$(git -C "$checkout" log -1 --format=%ct -- client/ 2>/dev/null || echo 0)
     dist_built=$(stat -f %m "$dist/index.html" 2>/dev/null || stat -c %Y "$dist/index.html" 2>/dev/null || echo 0)
     if ((client_commit > dist_built)); then
@@ -124,7 +105,13 @@ for entry in system_prompt.txt user_prompts templates animation_durations.json; 
     cp -R "$src" "$out/agent-client/data/$entry"
 done
 
-rsync -a "${CLIENT_ASSET_EXCLUDES[@]}" "$dist/" "$out/client/"
+cp -R "$dist/." "$out/client/"
+rm -rf \
+    "$out/client/textures" \
+    "$out/client/models" \
+    "$out/client/bgm" \
+    "$out/client/character_concepts" \
+    "$out/client/portraits"
 
 # The staleness guard above compares mtimes, which cannot see the one failure
 # that actually happens: the checkout is on a branch without spectator mode, so
@@ -138,9 +125,12 @@ rsync -a "${CLIENT_ASSET_EXCLUDES[@]}" "$dist/" "$out/client/"
 # class names, and our own UI copy is a string literal either way. Either one
 # is enough, so editing the wording does not break the build.
 if ! grep -rqs -e 'observer-waiting' -e 'Waiting for the agent to enter the world' "$out/client/"; then
-    echo "staged client has no observer mode in it — built from a tree without the" >&2
-    echo "spectator commits, or from a dist that predates them. Check out the" >&2
-    echo "spectator branch in $checkout, then:" >&2
+    echo "staged client has no observer mode in it. Rebuild the pinned checkout:" >&2
+    echo "  scripts/build-resources.sh $checkout" >&2
+    exit 1
+fi
+if ! grep -rqs -e 'Could not enter the game' -e 'Authentication failed' "$out/client/"; then
+    echo "staged client has no desktop manual-start contract. Rebuild the pinned checkout:" >&2
     echo "  scripts/build-resources.sh $checkout" >&2
     exit 1
 fi

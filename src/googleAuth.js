@@ -95,7 +95,6 @@ async function runDeviceFlow(clientId, clientSecret, onCode) {
 
     if (!token.error) {
       if (!token.refresh_token) throw new Error('Google sign-in returned no refresh_token')
-      writeCache(clientId, token.refresh_token)
       return token.refresh_token
     }
     if (token.error === 'authorization_pending') continue
@@ -142,4 +141,11 @@ function peekEmail(idToken) {
   }
 }
 
-module.exports = { cachedRefreshToken, runDeviceFlow, mintIdToken, clearCache, peekEmail }
+module.exports = {
+  cachedRefreshToken,
+  writeCache,
+  runDeviceFlow,
+  mintIdToken,
+  clearCache,
+  peekEmail,
+}

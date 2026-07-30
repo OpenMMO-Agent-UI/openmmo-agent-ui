@@ -42,7 +42,6 @@ const BACKENDS = [
     envKey: 'OPENAI_COMPAT_API_KEY',
     models: [],
   },
-  { id: 'none', label: 'No LLM (idle)', kind: 'none', models: [] },
 ]
 
 /// Same default as agent-client's own `DEFAULT_CLIENT_ID` in google_auth.rs —
@@ -106,16 +105,11 @@ function settingsPath() {
 
 /// The OpenMMO checkout `agentDir()`/`clientDist()` (server.js) resolve
 /// `agent-client/` and `client/` against in dev. `OPENMMO_CHECKOUT` (the
-/// packaging scripts' own env var) wins when set; otherwise this assumes the
-/// README's documented layout — openmmo-client cloned *inside* the OpenMMO
-/// checkout — which only holds if the two are actually nested. Checked out
-/// as siblings instead (as common as nested in practice), this silently
-/// resolves to nonsense (a data/ or client/dist that was never there) —
-/// found testing Play itself, the same way protocolVersion()'s equivalent
-/// bug was found testing the pre-flight session.
+/// packaging scripts' own env var) remains a development escape hatch.
+/// Normal development and every release use the exact submodule pin.
 function repoRoot() {
   if (process.env.OPENMMO_CHECKOUT) return process.env.OPENMMO_CHECKOUT
-  return path.resolve(__dirname, '..', '..')
+  return path.resolve(__dirname, '..', 'deps', 'OpenMMO')
 }
 
 /// Where a packaged build ships the agent-client binary and its seed data.
@@ -178,7 +172,7 @@ function buildInfo() {
 /// below — but still the floor when nothing else is readable, and the baseline
 /// `scripts/package-resources.sh` warns against once OpenMMO moves past it, so
 /// someone re-reads those shapes before trusting a build.
-const SHAPES_VERIFIED_AGAINST = 9
+const SHAPES_VERIFIED_AGAINST = 11
 
 /// PROTOCOL_VERSION as written in a checkout's `shared/src/lib.rs`, or null if
 /// there is no checkout to read (a packaged app's own directory, for one).

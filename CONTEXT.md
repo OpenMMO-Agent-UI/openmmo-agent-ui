@@ -16,13 +16,29 @@ _Avoid_: character session, management session, auth session
 
 **Connection profile**:
 The bundle of `server`, `terrain`, `googleClientId`, and `googleClientSecret`
-edited together in the settings popup. Bundled because they aren't
+selected before sign-in on the server screen. Bundled because they aren't
 independently swappable: the game server validates a sign-in token's Google
 client ID against its own allowlist, so pointing at a different server
 generally means supplying a matching client ID/secret pair for it, not just
 changing the server URL alone.
-_Avoid_: connection settings (too easily confused with the settings popup as
-a whole, which also holds unrelated fields like LLM backend)
+_Avoid_: connection settings
+
+**Play session**:
+The lifetime of exactly one controlling client for one selected character.
+Its controller is either the AI `agent-client` or the interactive manual web
+client. A mode handoff does not commit until the replacement controller is
+ready, and controllers never overlap.
+_Avoid_: agent session (manual play has no agent), game process
+
+**Automatic play**:
+The AI-controlled play mode. It retries unexpected failures indefinitely and
+uses the one global LLM configuration.
+_Avoid_: auto-run, bot mode
+
+**Manual play**:
+The human-controlled embedded OpenMMO client, bootstrapped with the desktop
+app's selected profile, credential, and stable character ID.
+_Avoid_: player mode, browser mode
 
 **Protocol guard**:
 The check, made when opening a pre-flight session, that

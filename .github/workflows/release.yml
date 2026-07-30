@@ -1,0 +1,86 @@
+name: Unsigned release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            label: macOS arm64
+            command: dist:mac
+            artifact: openmmo-agent-macos-arm64
+            paths: out/*.zip
+          - os: windows-latest
+            label: Windows x64
+            command: dist:win
+            artifact: openmmo-agent-windows-x64
+            paths: out/*.exe
+          - os: ubuntu-latest
+            label: Linux x64
+            command: dist:linux
+            artifact: openmmo-agent-linux-x64
+            paths: out/*.AppImage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          lfs: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            deps/OpenMMO/client/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: deps/OpenMMO
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+      - run: npm ci
+      - run: npm run ${{ matrix.command }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.paths }}
+          if-no-files-found: error
+
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: openmmo-agent-*
+          path: artifacts
+          merge-multiple: true
+      - name: Generate SHA-256 checksums
+        working-directory: artifacts
+        run: sha256sum * > SHA256SUMS.txt
+      - name: Create unsigned draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" artifacts/* \
+            --draft \
+            --title "OpenMMO Agent ${GITHUB_REF_NAME} (unsigned)" \
+            --notes "Unsigned preview artifacts. macOS Gatekeeper and Windows SmartScreen may warn. Verify downloads against SHA256SUMS.txt before testing."

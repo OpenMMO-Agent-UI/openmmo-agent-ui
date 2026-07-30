@@ -18,6 +18,7 @@ const { protocolVersion } = require('./config')
 /// this throws instead of falling back to the plain character-name field.
 
 const REPLY_TIMEOUT_MS = 10000
+const PROFILE_TEST_TIMEOUT_MS = 5000
 const PROTOCOL_MISMATCH = /^Protocol v(\d+) required, you sent v(\d+)/
 
 class ProtocolMismatchError extends Error {}
@@ -75,6 +76,39 @@ function connect(url) {
     ws.once('open', onOpen)
     ws.once('error', onError)
   })
+}
+
+/// A connection profile gate before OAuth. A matching ClientInfo handshake is
+/// intentionally silent, so follow it with an empty Authenticate: a compatible
+/// server must answer AuthError, proving it decoded the pinned protocol.
+async function testConnection(serverUrl, terrainOrigin, fetchFn = fetch) {
+  let ws
+  try {
+    ws = await connect(serverUrl)
+    ws.send(encode({ ClientInfo: [protocolVersion(), 'desktop', 'profile-test'] }))
+    ws.send(encode({ Authenticate: [''] }))
+    const reply = await nextMessage(ws, PROFILE_TEST_TIMEOUT_MS)
+    if (!reply) throw new Error('Server did not acknowledge the pinned protocol')
+    if (reply[0] === 'AuthError') {
+      const message = authErrorMessage(reply[0], reply[1]) || ''
+      if (PROTOCOL_MISMATCH.test(message)) throw new ProtocolMismatchError(message)
+    } else {
+      throw new Error(`Unexpected profile-test reply: ${reply[0]}`)
+    }
+  } finally {
+    if (ws) ws.close()
+  }
+
+  if (terrainOrigin) {
+    const origin = new URL(terrainOrigin)
+    const res = await fetchFn(origin, {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) throw new Error(`Terrain origin returned HTTP ${res.status}`)
+  }
+  return { ok: true }
 }
 
 function authErrorMessage(name, body) {
@@ -155,4 +189,4 @@ async function deleteCharacter(ws, characterId) {
   if (name !== 'CharacterDeleted') throw new Error(`Unexpected reply to character deletion: ${name}`)
 }
 
-module.exports = { openSession, ProtocolMismatchError }
+module.exports = { openSession, testConnection, ProtocolMismatchError }

@@ -2,7 +2,8 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const crypto = require('node:crypto')
+const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron')
 
 const config = require('./config')
 const { AgentProcess } = require('./agent')
@@ -10,6 +11,9 @@ const { ClientServer, distReady } = require('./server')
 const { AgentProxy } = require('./proxy')
 const googleAuth = require('./googleAuth')
 const characterSession = require('./characterSession')
+const { ConnectionProfileStore } = require('./connectionProfiles')
+const { PlaySessionCoordinator } = require('./playSession')
+const { validateLlmSettings } = require('./llmValidation')
 
 const agent = new AgentProcess()
 const clientServer = new ClientServer()
@@ -30,6 +34,13 @@ let feedTimer = null
 let feedSeq = null
 let settings = null
 let win = null
+let profileStore = null
+let currentIdToken = null
+let playSession = null
+let currentCharacters = []
+let activeCharacterId = null
+let manualReadiness = null
+let authGeneration = 0
 // The pre-flight session (ADR 0001): open for the lifetime of the Character
 // screen, closed once Play launches agent-client or the app signs out.
 let preflightSession = null
@@ -187,15 +198,230 @@ async function openSpectatorView() {
   }
 }
 
+function profileCipher() {
+  const keyFile = path.join(app.getPath('userData'), 'profile-secrets.key')
+  const fallbackKey = () => {
+    if (!fs.existsSync(keyFile)) {
+      fs.mkdirSync(path.dirname(keyFile), { recursive: true })
+      fs.writeFileSync(keyFile, crypto.randomBytes(32), { mode: 0o600 })
+    }
+    return fs.readFileSync(keyFile)
+  }
+  return {
+    encrypt(value) {
+      const json = JSON.stringify(value)
+      if (safeStorage.isEncryptionAvailable()) {
+        return `enc:${safeStorage.encryptString(json).toString('base64')}`
+      }
+      const iv = crypto.randomBytes(12)
+      const cipher = crypto.createCipheriv('aes-256-gcm', fallbackKey(), iv)
+      const encrypted = Buffer.concat([cipher.update(json, 'utf8'), cipher.final()])
+      return `aes:${iv.toString('base64')}:${cipher.getAuthTag().toString('base64')}:${encrypted.toString('base64')}`
+    },
+    decrypt(value) {
+      if (value.startsWith('enc:') && safeStorage.isEncryptionAvailable()) {
+        return JSON.parse(safeStorage.decryptString(Buffer.from(value.slice(4), 'base64')))
+      }
+      if (value.startsWith('plain:')) {
+        return JSON.parse(Buffer.from(value.slice(6), 'base64').toString('utf8'))
+      }
+      if (value.startsWith('aes:')) {
+        const [, iv, tag, encrypted] = value.split(':')
+        const decipher = crypto.createDecipheriv(
+          'aes-256-gcm',
+          fallbackKey(),
+          Buffer.from(iv, 'base64'),
+        )
+        decipher.setAuthTag(Buffer.from(tag, 'base64'))
+        return JSON.parse(
+          Buffer.concat([
+            decipher.update(Buffer.from(encrypted, 'base64')),
+            decipher.final(),
+          ]).toString('utf8'),
+        )
+      }
+      throw new Error('Connection-profile secrets cannot be decrypted')
+    },
+  }
+}
+
+function selectedProfileSettings() {
+  return profileStore.withSecrets(profileStore.selected().id)
+}
+
+function applySelectedProfile() {
+  const profile = selectedProfileSettings()
+  settings = config.save({
+    ...settings,
+    server: profile.serverUrl,
+    terrain: profile.terrainOrigin,
+    authMode: 'google',
+    googleClientId: profile.googleClientId,
+    googleClientSecret: profile.googleClientSecret,
+  })
+  const refreshToken = profileStore.credential(profile.id)
+  if (refreshToken) googleAuth.writeCache(profile.googleClientId, refreshToken)
+  else googleAuth.clearCache()
+  return profile
+}
+
+function validateGlobalLlm() {
+  const backend = config.BACKENDS.find((candidate) => candidate.id === settings.llm)
+  if (!backend || backend.kind === 'none') {
+    return { ok: false, error: 'Set up an LLM to use Automatic play' }
+  }
+  if (backend.kind === 'http' && !settings.models[settings.llm]) {
+    return { ok: false, error: `Pick a model for ${backend.label}` }
+  }
+  if (settings.llm === 'openrouter' && !settings.openrouterKey) {
+    return { ok: false, error: 'OpenRouter needs an API key' }
+  }
+  if (settings.llm === 'openai' && (!settings.openaiBaseUrl || !settings.openaiKey)) {
+    return { ok: false, error: 'OpenAI-compatible mode needs a Base URL and API key' }
+  }
+  return { ok: true }
+}
+
+async function stopAiController() {
+  if (agent.running) await agent.stopAndWait()
+  stopFeedPolling()
+  proxy.stop()
+  send('view:stop')
+}
+
+function waitForAgentWorld() {
+  let cancel
+  const promise = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => finish(new Error('AI did not enter the world in time')), 30000)
+    const ready = (url) => finish(null, url)
+    const fatal = (message) => finish(new Error(message))
+    const state = (next) => {
+      if (!next.running && next.exitCode != null) finish(new Error('AI exited before entering the world'))
+    }
+    function finish(error, url) {
+      clearTimeout(timeout)
+      agent.off('watch-ready', ready)
+      agent.off('fatal', fatal)
+      agent.off('state', state)
+      if (error) reject(error)
+      else resolve(url)
+    }
+    agent.once('watch-ready', ready)
+    agent.once('fatal', fatal)
+    agent.on('state', state)
+    cancel = () => finish(new Error('AI startup canceled'))
+  })
+  promise.cancel = cancel
+  return promise
+}
+
+async function startManualController(context) {
+  closePreflightSession()
+  const profile = selectedProfileSettings()
+  const refreshToken = profileStore.credential(profile.id)
+  if (!refreshToken) throw new Error('Not signed in')
+  currentIdToken = await googleAuth.mintIdToken(
+    refreshToken,
+    profile.googleClientId,
+    profile.googleClientSecret,
+  )
+  const base = await clientServer.start(profile.terrainOrigin)
+  const bootstrap = Buffer.from(
+    JSON.stringify({
+      serverUrl: profile.serverUrl,
+      googleIdToken: currentIdToken,
+      characterId: context.characterId,
+    }),
+  ).toString('base64url')
+  const viewUrl = `${base}/#manual=${bootstrap}`
+  const readiness = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      manualReadiness = null
+      reject(new Error('Manual client did not enter the world in time'))
+    }, 30000)
+    manualReadiness = {
+      finish(error) {
+        clearTimeout(timeout)
+        manualReadiness = null
+        if (error) reject(new Error(error))
+        else resolve()
+      },
+    }
+  })
+  send('view:ready', { scene: viewUrl, mode: 'manual' })
+  await readiness
+  return { viewUrl }
+}
+
+async function stopManualController() {
+  manualReadiness?.finish('Manual startup canceled')
+  send('view:stop')
+}
+
+function createPlaySession() {
+  return new PlaySessionCoordinator({
+    ai: {
+      start: async () => {
+        const ready = waitForAgentWorld()
+        ready.catch(() => {})
+        const result = await startAgent()
+        if (!result.ok) {
+          ready.cancel()
+          throw new Error(result.errors.join('\n'))
+        }
+        return { viewUrl: await ready }
+      },
+      stop: stopAiController,
+      cancelPending: async () => {},
+    },
+    manual: {
+      start: startManualController,
+      stop: stopManualController,
+    },
+    validateLlm: async () => validateGlobalLlm(),
+    scheduler: {
+      schedule(fn, delayMs) {
+        const timer = setTimeout(fn, delayMs)
+        return () => clearTimeout(timer)
+      },
+    },
+    onState: (state) => send('play:state', state),
+  })
+}
+
 app.whenReady().then(() => {
   config.seedRuntimeData()
   settings = config.importExistingConfig(config.load())
   config.save(settings)
+  const legacyRefreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
+  profileStore = new ConnectionProfileStore({
+    file: path.join(app.getPath('userData'), 'connection-profiles.json'),
+    cipher: profileCipher(),
+    builtin: {
+      name: 'openmmo.to.nexus',
+      serverUrl: config.DEFAULTS.server,
+      terrainOrigin: config.DEFAULTS.terrain,
+      googleClientId: config.DEFAULTS.googleClientId,
+      googleClientSecret: config.DEFAULTS.googleClientSecret || '',
+    },
+    legacy: {
+      server: settings.server,
+      terrain: settings.terrain,
+      googleClientId: settings.googleClientId,
+      googleClientSecret: settings.googleClientSecret,
+      refreshToken: legacyRefreshToken,
+      characterId: null,
+      account: null,
+    },
+  })
+  applySelectedProfile()
+  playSession = createPlaySession()
 
   agent.on('log', (item) => send('agent:log', item))
   agent.on('state', (state) => {
     if (!state.running) stopFeedPolling()
     send('agent:state', state)
+    if (!state.running && state.exitCode != null) playSession?.controllerExited('AI disconnected')
   })
   agent.on('fatal', (message) => send('agent:fatal', message))
   agent.on('watch-ready', (url) => {
@@ -212,8 +438,8 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  agent.stop()
-  if (process.platform !== 'darwin') app.quit()
+  void playSession?.stop()
+  app.quit()
 })
 
 app.on('before-quit', () => {
@@ -235,12 +461,60 @@ ipcMain.handle('app:info', () => ({
   credentialPath: config.credentialPath(),
 }))
 
+ipcMain.handle('profiles:list', () => profileStore.list())
+
+ipcMain.handle('profiles:create', (_e, input) => profileStore.create(input))
+
+ipcMain.handle('profiles:update', (_e, id, patch) => profileStore.update(id, patch))
+
+ipcMain.handle('profiles:duplicate', (_e, id) => profileStore.duplicate(id))
+
+ipcMain.handle('profiles:delete', (_e, id) => {
+  profileStore.delete(id)
+  return profileStore.list()
+})
+
+ipcMain.handle('profiles:select', (_e, id) => {
+  authGeneration++
+  closePreflightSession()
+  currentCharacters = []
+  profileStore.select(id)
+  return applySelectedProfile()
+})
+
+ipcMain.handle('profiles:test', async (_e, id) => {
+  const profile = profileStore.withSecrets(id)
+  if (!profile) return { ok: false, error: 'Connection profile not found' }
+  try {
+    await characterSession.testConnection(profile.serverUrl, profile.terrainOrigin)
+    profileStore.setValidation(id, { ok: true, checkedAt: Date.now() })
+    return { ok: true }
+  } catch (err) {
+    profileStore.setValidation(id, { ok: false, checkedAt: Date.now(), error: err.message })
+    return { ok: false, error: err.message }
+  }
+})
+
 ipcMain.handle('settings:save', (_e, patch) => {
   settings = config.save({ ...settings, ...patch, models: { ...settings.models, ...(patch.models || {}) } })
   return settings
 })
 
 ipcMain.handle('settings:validate', (_e, patch) => config.validate({ ...settings, ...patch }))
+
+ipcMain.handle('settings:apply', async (_e, patch) => {
+  const candidate = {
+    ...settings,
+    ...patch,
+    models: { ...settings.models, ...(patch.models || {}) },
+  }
+  const errors = config.validate(candidate)
+  if (errors.length) return { ok: false, errors }
+  const live = await validateLlmSettings(candidate)
+  if (!live.ok) return { ok: false, errors: [live.error] }
+  settings = config.save(candidate)
+  return { ok: true, settings }
+})
 
 ipcMain.handle('config:preview', () => config.renderConfigToml(settings))
 
@@ -253,11 +527,15 @@ async function startAgent() {
   // The pre-flight session already resolved the exact character agent-client
   // is about to enter with (ADR 0001) — nothing left for it to do.
   closePreflightSession()
+  currentCharacters = []
   // agent-client hard-errors on a configured prompt file that doesn't exist —
   // guarantee both before every start, not just when the player opens the
   // personality-prompt editor.
   config.ensureUserPrompt()
-  if (settings.characterName) config.ensureInstancePrompt(settings.characterName)
+  if (settings.characterName) {
+    materializePersonality(profileStore.selected().id, activeCharacterId, settings.characterName)
+    config.ensureInstancePrompt(settings.characterName)
+  }
   try {
     await proxy.start(settings.server)
     return { ok: true, status: await agent.start({ ...settings, server: proxy.agentUrl }) }
@@ -275,33 +553,60 @@ ipcMain.handle('agent:restart', async () => {
   return startAgent()
 })
 
-/// The personality prompt — the only prompt editor in the app. Per-character
-/// (ADR: see config.js's instancePromptPath), layered on top of the fixed
-/// general persona in user_prompt.txt, since it's meant to be individual, not
-/// shared across the account's 3 characters.
-ipcMain.handle('instance:get', (_e, characterName) => {
-  if (!characterName) return ''
+function personalityPath(profileId, characterId) {
+  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
+  return path.join(app.getPath('userData'), 'personalities', safe(profileId), `${safe(characterId)}.txt`)
+}
+
+function materializePersonality(profileId, characterId, characterName) {
+  if (!characterName) return
+  const scoped = characterId ? personalityPath(profileId, characterId) : null
+  const legacy = config.instancePromptPath(characterName)
+  if (scoped && !fs.existsSync(scoped) && fs.existsSync(legacy)) {
+    fs.mkdirSync(path.dirname(scoped), { recursive: true })
+    fs.copyFileSync(legacy, scoped)
+  }
+  if (scoped && fs.existsSync(scoped)) {
+    fs.mkdirSync(path.dirname(legacy), { recursive: true })
+    fs.copyFileSync(scoped, legacy)
+  }
+}
+
+/// Personality is isolated by connection profile and stable character ID.
+/// The name-based agent path is only a materialized compatibility copy.
+ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
+  if (!characterId) return ''
+  const file = personalityPath(profileStore.selected().id, characterId)
   try {
-    return fs.readFileSync(config.instancePromptPath(characterName), 'utf8')
+    if (!fs.existsSync(file)) materializePersonality(profileStore.selected().id, characterId, characterName)
+    return fs.readFileSync(file, 'utf8')
   } catch {
     return ''
   }
 })
 
-ipcMain.handle('instance:save', (_e, characterName, text) => {
-  const file = config.instancePromptPath(characterName)
+ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const file = personalityPath(profileStore.selected().id, characterId)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, text)
+  if (characterName) materializePersonality(profileStore.selected().id, characterId, characterName)
   return { ok: true, file }
 })
 
 /// Signing out has to take the agent with it: it holds a live session on the
 /// credential we are about to delete.
 ipcMain.handle('auth:signout', async () => {
+  authGeneration++
   const wasRunning = agent.running
   if (wasRunning) await agent.stopAndWait()
   closePreflightSession()
-  const removed = config.signOut()
+  const profileId = profileStore.selected().id
+  const removed = Boolean(profileStore.credential(profileId))
+  profileStore.setCredential(profileId, null)
+  googleAuth.clearCache()
+  currentCharacters = []
+  currentIdToken = null
   // A new sign-in may be a different account; last session's chosen
   // character shouldn't carry over silently.
   settings = config.save({ ...settings, characterName: '' })
@@ -312,22 +617,47 @@ ipcMain.handle('auth:signout', async () => {
 /// currently configured client? Drives the Login screen's initial
 /// Continue-vs-sign-in state (ADR 0001).
 ipcMain.handle('auth:status', () => ({
-  signedIn: Boolean(googleAuth.cachedRefreshToken(settings.googleClientId)),
+  signedIn: Boolean(profileStore.credential(profileStore.selected().id)),
 }))
 
 /// Mints a fresh id_token from a refresh token and (re)opens the pre-flight
 /// session on it, replacing whatever was open before. Returns the id_token
 /// since finishSignIn() below still needs it for peekEmail().
-async function reopenPreflightSession(refreshToken) {
-  const idToken = await googleAuth.mintIdToken(refreshToken, settings.googleClientId, settings.googleClientSecret)
+async function reopenPreflightSession(refreshToken, profile = selectedProfileSettings()) {
+  const idToken = await googleAuth.mintIdToken(
+    refreshToken,
+    profile.googleClientId,
+    profile.googleClientSecret,
+  )
   closePreflightSession()
-  preflightSession = await characterSession.openSession(settings.server, idToken)
+  preflightSession = await characterSession.openSession(profile.serverUrl, idToken)
   return idToken
 }
 
 /// Shared tail of both sign-in paths below.
-async function finishSignIn(refreshToken) {
-  const idToken = await reopenPreflightSession(refreshToken)
+async function finishSignIn(refreshToken, profileId, generation) {
+  const profile = profileStore.withSecrets(profileId)
+  if (!profile) throw new Error('Connection profile no longer exists')
+  const idToken = await googleAuth.mintIdToken(
+    refreshToken,
+    profile.googleClientId,
+    profile.googleClientSecret,
+  )
+  const session = await characterSession.openSession(profile.serverUrl, idToken)
+  if (generation !== authGeneration || profileStore.selected().id !== profileId) {
+    session.close()
+    return { ok: false, canceled: true, error: 'Sign-in canceled' }
+  }
+  closePreflightSession()
+  preflightSession = session
+  currentIdToken = idToken
+  currentCharacters = preflightSession.characters
+  profileStore.setCredential(profileId, refreshToken)
+  googleAuth.writeCache(profile.googleClientId, refreshToken)
+  profileStore.rememberSession(profileId, {
+    account: googleAuth.peekEmail(idToken),
+    characterId: profileStore.get(profileId).lastSession?.characterId ?? null,
+  })
   return {
     ok: true,
     email: googleAuth.peekEmail(idToken),
@@ -345,7 +675,7 @@ async function finishSignIn(refreshToken) {
 /// prompting in the background.
 async function ensurePreflightSession() {
   if (preflightSession) return { ok: true }
-  const refreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
+  const refreshToken = profileStore.credential(profileStore.selected().id)
   if (!refreshToken) return { ok: false, error: 'Not signed in' }
   try {
     await reopenPreflightSession(refreshToken)
@@ -364,9 +694,11 @@ function signInError(err) {
 /// straight to listing characters, no device flow shown.
 ipcMain.handle('auth:continue', async () => {
   try {
-    const refreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
+    const profileId = profileStore.selected().id
+    const generation = ++authGeneration
+    const refreshToken = profileStore.credential(profileId)
     if (!refreshToken) throw new Error('No cached credential to continue with')
-    return await finishSignIn(refreshToken)
+    return await finishSignIn(refreshToken, profileId, generation)
   } catch (err) {
     return signInError(err)
   }
@@ -377,22 +709,33 @@ ipcMain.handle('auth:continue', async () => {
 /// screen), then continue exactly as `auth:continue` does.
 ipcMain.handle('auth:signin', async () => {
   try {
+    const profileId = profileStore.selected().id
+    const profile = profileStore.withSecrets(profileId)
+    const generation = ++authGeneration
     const refreshToken = await googleAuth.runDeviceFlow(
-      settings.googleClientId,
-      settings.googleClientSecret,
+      profile.googleClientId,
+      profile.googleClientSecret,
       (code) => send('auth:device-code', code),
     )
-    return await finishSignIn(refreshToken)
+    return await finishSignIn(refreshToken, profileId, generation)
   } catch (err) {
     return signInError(err)
   }
+})
+
+ipcMain.handle('auth:cancel', () => {
+  authGeneration++
+  closePreflightSession()
+  return { ok: true }
 })
 
 ipcMain.handle('characters:create', async (_e, { name, characterClass, gender }) => {
   const ready = await ensurePreflightSession()
   if (!ready.ok) return ready
   try {
-    return { ok: true, character: await preflightSession.createCharacter(name, characterClass, gender) }
+    const character = await preflightSession.createCharacter(name, characterClass, gender)
+    currentCharacters.push(character)
+    return { ok: true, character }
   } catch (err) {
     return { ok: false, error: err.message }
   }
@@ -403,10 +746,51 @@ ipcMain.handle('characters:delete', async (_e, characterId) => {
   if (!ready.ok) return ready
   try {
     await preflightSession.deleteCharacter(characterId)
+    currentCharacters = currentCharacters.filter((character) => character.id !== characterId)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err.message }
   }
+})
+
+ipcMain.handle('play:enter', async (_e, characterId) => {
+  const ready = await ensurePreflightSession()
+  if (!ready.ok) return ready
+  const character = currentCharacters.find((candidate) => candidate.id === characterId)
+  if (!character) return { ok: false, error: 'That character is no longer in this account roster' }
+  const characterName = character.name
+  settings = config.save({ ...settings, characterName })
+  activeCharacterId = characterId
+  profileStore.rememberSession(profileStore.selected().id, {
+    account: profileStore.selected().lastSession?.account || null,
+    characterId,
+  })
+  try {
+    const session = await playSession.enter({ characterId, characterName })
+    return { ok: true, session }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('play:switch', async (_e, mode) => {
+  try {
+    return { ok: true, session: await playSession.switchTo(mode) }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('play:manual-ready', (_e, error = null) => {
+  if (!manualReadiness) return { ok: false }
+  manualReadiness.finish(error)
+  return { ok: !error }
+})
+
+ipcMain.handle('play:leave', async (_e, destination) => {
+  await playSession.stop()
+  closePreflightSession()
+  return { ok: true, destination }
 })
 
 /// A directive (ADR 0003): best-effort, delivered as a relay-forged whisper.
