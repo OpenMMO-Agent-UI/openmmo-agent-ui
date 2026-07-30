@@ -298,6 +298,13 @@ built bundle for observer mode as a backstop, because the staleness guard beside
 it compares mtimes and a branch switch can leave a newer dist built from an
 older tree, which no mtime can see.
 
+The binary gets the equivalent check: staging refuses one older than the
+checkout's newest `agent-client/src`/`shared/src` commit. `npm run stage` alone
+(no cargo build) reusing whatever binary already sits in `target/release/` is
+exactly how this goes wrong — confirmed by pointing a real binary at a local
+socket and reading the protocol version it actually sent, which did not match
+the one the same build's `build-info.json` claimed.
+
 Check the protocol first, though — the deployed server is not always at the
 checkout's version, and it refuses anything that is not an exact match:
 

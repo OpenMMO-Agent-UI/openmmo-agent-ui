@@ -44,6 +44,30 @@ fi
     exit 1
 }
 
+# This only ever checks the binary *exists*, same as the client build below —
+# and unlike the client, nothing here rebuilds it, so a binary that predates a
+# protocol bump is staged exactly as readily as a current one. Caught for real:
+# staging alone (`npm run stage`, no cargo build) reused a binary compiled
+# before a checkout moved to a new PROTOCOL_VERSION, silently paired it with a
+# build-info.json stamped from the checkout's *current* shared/src/lib.rs, and
+# produced a shipped app whose own build-info claimed the right protocol while
+# the binary inside it spoke the old one — confirmed by intercepting its actual
+# handshake bytes, not just reading source.
+#
+# `-src` only: agent-client/CUSTOM_FEATURES.md is a doc file under
+# agent-client/, and a commit that only touches it is not a reason to demand a
+# rebuild.
+newest_src=$(git -C "$checkout" log -1 --format=%ct -- agent-client/src shared/src agent-client/Cargo.toml shared/Cargo.toml 2>/dev/null || echo 0)
+binary_built=$(stat -f %m "$binary" 2>/dev/null || stat -c %Y "$binary" 2>/dev/null || echo 0)
+if [[ -z ${ALLOW_STALE_CLIENT:-} ]] && ((newest_src > binary_built)); then
+    echo "stale agent-client binary: $binary predates the checkout's newest agent-client/shared commit" >&2
+    echo "  binary built: $(date -r "$binary_built" 2>/dev/null || echo "$binary_built")" >&2
+    echo "  last commit:  $(date -r "$newest_src" 2>/dev/null || echo "$newest_src") ($(git -C "$checkout" log -1 --format='%h %s' -- agent-client/src shared/src))" >&2
+    echo "rebuild it: cargo build --release -p agent-client (in $checkout), then re-run this" >&2
+    echo "or set ALLOW_STALE_CLIENT=1 to stage it anyway" >&2
+    exit 1
+fi
+
 dist="$checkout/client/dist"
 [[ -f "$dist/index.html" && -d "$dist/assets" ]] || {
     echo "no built client at $dist — run: npm --prefix client install && npm --prefix client run build" >&2
