@@ -2,10 +2,10 @@
 
 const fs = require('node:fs')
 const path = require('node:path')
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, shell } = require('electron')
 
 const config = require('./config')
-const { AgentProcess, candidateBinaries, resolveBinary, probeBinary } = require('./agent')
+const { AgentProcess } = require('./agent')
 const { ClientServer, distReady } = require('./server')
 const { AgentProxy } = require('./proxy')
 const googleAuth = require('./googleAuth')
@@ -228,8 +228,6 @@ ipcMain.handle('app:info', () => ({
   backends: config.BACKENDS,
   classes: config.CLASSES,
   agentDir: config.agentDir(),
-  binary: resolveBinary(settings.binaryPath) || null,
-  searched: candidateBinaries(settings.binaryPath),
   status: agent.status(),
   log: agent.log,
   clientBuilt: distReady(),
@@ -418,26 +416,6 @@ ipcMain.handle('directive:send', (_e, text) => {
   const delivered = proxy.sendDirective(settings.characterName, text)
   if (!delivered) return { ok: false, error: 'Not connected yet — try again in a moment' }
   return { ok: true }
-})
-
-ipcMain.handle('binary:pick', async () => {
-  const res = await dialog.showOpenDialog(win, {
-    title: 'Select the agent-client binary',
-    properties: ['openFile'],
-  })
-  if (res.canceled || !res.filePaths[0]) return null
-  settings = config.save({ ...settings, binaryPath: res.filePaths[0] })
-  return settings.binaryPath
-})
-
-/// Confirms the OS can actually exec the resolved binary — catches a picked
-/// .app bundle, wrong-arch build, or corrupted download before Play does,
-/// which otherwise surfaces as a bare "spawn ENOEXEC" deep in the log.
-ipcMain.handle('binary:check', async () => {
-  const binary = resolveBinary(settings.binaryPath)
-  if (!binary) return { ok: false, error: 'No agent-client binary found. Build it or choose one.' }
-  const probe = await probeBinary(binary)
-  return { ...probe, path: binary }
 })
 
 /// Re-hand the renderer the scene URL. `view:ready` is pushed once, when the

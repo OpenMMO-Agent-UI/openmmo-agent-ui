@@ -227,7 +227,6 @@ pre {
   display: none;
 }
 
-body[data-screen='binary'] #screen-binary,
 body[data-screen='login'] #screen-login,
 body[data-screen='character'] #screen-character {
   display: flex;

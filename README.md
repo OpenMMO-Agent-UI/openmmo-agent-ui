@@ -47,9 +47,10 @@ npm --prefix openmmo-client install
 npm --prefix openmmo-client start
 ```
 
-In the window: point it at the `agent-client` binary if it isn't found
-automatically, sign in with Google, then choose an existing character or
-create one — up to 3 per account — and press **Play**.
+In the window: sign in with Google, then choose an existing character or
+create one — up to 3 per account — and press **Play**. The `agent-client`
+binary is found automatically — the packaged bundle first, then this
+checkout's `target/release` and `target/debug`.
 
 ### Requirements
 
@@ -147,7 +148,7 @@ After — the rail down the left of the game screen:
 | Log | The agent process's own stdout/stderr |
 | Personality | `data/npcs/<character>/instance.txt` — how *this* character plays, on top of the shared rules. Saving restarts the agent so it takes effect |
 | Bag | What the character is carrying, one line per item |
-| Settings | A dialog: server, terrain origin, Google sign-in and client id/secret, ports, log level, binary location |
+| Settings | A dialog: server, terrain origin, Google sign-in and client id/secret, ports, log level |
 
 **Dispatch**, docked under the game view, is the one control that reaches a
 running agent: type an instruction and it arrives as the character's next turn.

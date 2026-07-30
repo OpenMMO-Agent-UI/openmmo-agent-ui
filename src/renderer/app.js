@@ -15,8 +15,8 @@ const feedHidden = new Set()
 
 // Pre-flight session state (ADR 0001): the character list fetched at sign-in,
 // and which one is chosen for this Play. Bumped on every sign-in attempt so
-// a stale device-flow poll (abandoned via "choose a different binary") can't
-// resolve later and yank the screen back.
+// a stale device-flow poll (abandoned via "Start over") can't resolve later
+// and yank the screen back.
 let characters = []
 let selectedCharacterId = null
 let signInGeneration = 0
@@ -147,8 +147,8 @@ function renderBackend() {
 }
 
 /// Once running is false, whatever screen is showing bounces back to
-/// wherever restarting makes sense — Character for a session that was
-/// already playing, Binary for one that died before ever signing in.
+/// wherever restarting makes sense — Character, for a session that was
+/// already playing.
 function setStatus(state) {
   running = state.running
   $('dot').className = `dot${running ? ' on' : ''}`
@@ -192,8 +192,8 @@ function showDeviceCode(code) {
 }
 
 /// Runs the device flow (main process does the actual OAuth, ADR 0001).
-/// Guarded by `signInGeneration` so a poll abandoned via "choose a different
-/// binary" can't resolve later and yank the screen back to Character.
+/// Guarded by `signInGeneration` so a poll abandoned via "Start over" can't
+/// resolve later and yank the screen back to Character.
 async function beginSignIn() {
   showLoginState('checking')
   const generation = ++signInGeneration
@@ -211,12 +211,20 @@ async function enterLoginScreen() {
 }
 
 /// Shared tail of Continue and the device flow: land on Character with
-/// whatever the pre-flight session found, or bounce back to Binary on
-/// failure — a protocol mismatch (ADR 0002) or a refused sign-in alike.
+/// whatever the pre-flight session found, or stay put on failure — a protocol
+/// mismatch (ADR 0002) or a refused sign-in alike. Login is the first screen
+/// now, so there is nowhere behind it to bounce to: leave the error in the
+/// toast and offer whichever sign-in action can still be retried, rather than
+/// the "checking…" pulse it was mid-way through.
 async function afterSignIn(res) {
   if (!res.ok) {
     showErrors([res.error])
-    setScreen('binary')
+    setScreen('login')
+    // A cached credential still has Continue to retry the pre-flight with.
+    // Without one, every sub-state is a lie — the code just failed and
+    // "checking…" would pulse forever — so hide all three and leave the card
+    // on "Start over", which is outside them and always works.
+    showLoginState((await api.authStatus()).signedIn ? 'continue' : null)
     return
   }
   characters = res.characters
@@ -647,25 +655,14 @@ function expandCharacterSections() {
   setCharacterTab('create')
 }
 
-/// Actually spawns the resolved binary (see agent.js's probeBinary) rather
-/// than just checking a file exists, so a picked .app bundle or wrong-arch
-/// build fails here instead of as a bare "spawn ENOEXEC" during Play.
-async function checkBinaryAndReport() {
-  const result = await api.checkBinary()
-  $('binaryInfo').textContent = result.ok
-    ? `Binary: ${result.path}`
-    : result.path
-      ? `Binary: ${result.path} — ${result.error}`
-      : result.error
-  return result.ok
-}
-
 function bindActions() {
-  // No agent process to stop — sign-in never starts one (ADR 0001) — just
-  // abandon any in-flight device-flow poll and back out.
-  $('loginCancel').addEventListener('click', () => {
+  // No agent process to stop — sign-in never starts one (ADR 0001) — so this
+  // just abandons any in-flight device-flow poll and re-enters sign-in from
+  // the top. There is no screen behind Login to back out to any more.
+  $('loginCancel').addEventListener('click', async () => {
     signInGeneration++
-    setScreen('binary')
+    showErrors([])
+    await enterLoginScreen()
   })
 
   $('continueSignIn').addEventListener('click', async () => {
@@ -740,9 +737,10 @@ function bindActions() {
 
   $('play').addEventListener('click', async () => {
     showErrors([])
-    // Binary's Continue may already have started the agent to get the
-    // device code moving — Play only needs to (re)start it if settings
-    // changed since, otherwise the already-connected session is right here.
+    // Play is the only thing that ever spawns agent-client (ADR 0001) — but a
+    // session can already be live here, from a window reopened onto one or a
+    // trip back out to Character. Only (re)start when there is nothing running
+    // or settings changed under it; otherwise the session is right here.
     let res
     if (!running) res = await api.start()
     else if (dirtyWhileRunning) res = await api.restart()
@@ -805,39 +803,6 @@ function bindActions() {
       : 'Signed out. Play to sign in again.')
   })
 
-  $('pickBinary').addEventListener('click', async () => {
-    const picked = await api.pickBinary()
-    if (picked) {
-      settings.binaryPath = picked
-      await checkBinaryAndReport()
-    }
-  })
-
-  $('binaryContinue').addEventListener('click', async () => {
-    showErrors([])
-    $('binaryContinue').disabled = true
-    $('binaryContinue').textContent = 'Checking…'
-    const ok = await checkBinaryAndReport()
-    $('binaryContinue').disabled = false
-    $('binaryContinue').textContent = 'Continue'
-    if (!ok) {
-      showErrors(['agent-client is not runnable — choose a different binary.'])
-      return
-    }
-    // A session already running (app restarted mid-play) skips straight to
-    // Game; anything else goes through sign-in — agent-client itself never
-    // starts until a character is chosen and Play is pressed (ADR 0001).
-    if (running) {
-      setScreen('game')
-      return
-    }
-    await enterLoginScreen()
-  })
-  $('openBinaryFromSettings').addEventListener('click', () => {
-    closeSettings()
-    setScreen('binary')
-  })
-
   $('openSettingsFromLogin').addEventListener('click', openSettings)
   $('openSettingsFromGame').addEventListener('click', openSettings)
   $('settingsClose').addEventListener('click', closeSettings)
@@ -855,17 +820,14 @@ async function init() {
   renderBackend()
 
   setAuthState((await api.authStatus()).signedIn)
-  $('binaryInfo').textContent = info.binary
-    ? `Binary: ${info.binary}`
-    : `No agent-client binary found. Build it with "cargo build --release -p agent-client", or choose one below.`
 
   for (const item of info.log) appendLog(item)
 
   // Decide the starting screen before setStatus's auto-bounce-to-character
   // rule can fire on a false `running` that just means "freshly opened."
   // A session already running (app restarted mid-play) skips straight past
-  // the binary/login/character gates; anything else starts at Binary.
-  setScreen(info.status.running ? 'game' : 'binary')
+  // the login/character gates; anything else starts at Login.
+  setScreen(info.status.running ? 'game' : 'login')
 
   setStatus(info.status)
   // A window reopened onto a session that never stopped gets no `view:ready`
@@ -901,6 +863,13 @@ async function init() {
   api.onWatchReady(() => {
     if (running) setScreen('game')
   })
+
+  // Login used to be reached by Binary's Continue; with that screen gone, the
+  // sign-in it kicked off has to start here. Deliberately last and
+  // deliberately not awaited: `enterLoginScreen` runs the device flow, which
+  // blocks until the user finishes in the browser, and it can only report the
+  // code through the `onDeviceCode` listener registered just above.
+  if (!info.status.running) void enterLoginScreen()
 }
 
 init()

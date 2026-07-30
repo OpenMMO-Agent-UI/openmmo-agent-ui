@@ -9,23 +9,11 @@
     <title>OpenMMO Agent</title>
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body data-screen="binary">
+  <body data-screen="login">
     <div id="errors" class="toast" hidden></div>
 
-    <!-- BINARY -->
-    <section id="screen-binary" class="screen screen-entry">
-      <div class="glow"></div>
-      <div class="card">
-        <p class="wordmark">OpenMMO</p>
-        <h1 class="display">Locate agent-client</h1>
-        <p class="lede">This is the binary that plays the game. Build it with "cargo build --release -p agent-client", or point at one already built.</p>
-        <p class="hint" id="binaryInfo"></p>
-        <button id="pickBinary" class="ghost">Choose binary…</button>
-        <button id="binaryContinue" class="primary block">Continue</button>
-      </div>
-    </section>
-
-    <!-- LOGIN -->
+    <!-- LOGIN — the first screen. A packaged build ships its own agent-client
+         (extraResources in package.json), so there is nothing to locate. -->
     <section id="screen-login" class="screen screen-entry">
       <div class="glow"></div>
       <div class="card">
@@ -52,7 +40,7 @@
           <p class="hint pulsing">Waiting for you to finish in the browser…</p>
         </div>
 
-        <button id="loginCancel" class="linklike">Choose a different binary</button>
+        <button id="loginCancel" class="linklike">Start over</button>
         <button id="openSettingsFromLogin" class="linklike">Advanced sign-in &amp; connection settings</button>
       </div>
     </section>
@@ -249,7 +237,6 @@
                 <option value="warn">warn</option>
               </select></label>
           </div>
-          <button id="openBinaryFromSettings" class="linklike">Change agent-client binary</button>
         </div>
       </div>
     </div>

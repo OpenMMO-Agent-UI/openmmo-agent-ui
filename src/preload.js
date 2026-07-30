@@ -18,8 +18,6 @@ contextBridge.exposeInMainWorld('agentApp', {
   restart: () => ipcRenderer.invoke('agent:restart'),
   getInstancePrompt: (characterName) => ipcRenderer.invoke('instance:get', characterName),
   saveInstancePrompt: (characterName, text) => ipcRenderer.invoke('instance:save', characterName, text),
-  pickBinary: () => ipcRenderer.invoke('binary:pick'),
-  checkBinary: () => ipcRenderer.invoke('binary:check'),
   signOut: () => ipcRenderer.invoke('auth:signout'),
   authStatus: () => ipcRenderer.invoke('auth:status'),
   authContinue: () => ipcRenderer.invoke('auth:continue'),

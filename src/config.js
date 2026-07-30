@@ -81,6 +81,11 @@ const DEFAULTS = {
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
   rustLog: 'info',
+  /// Overrides the search order in agent.js's `candidateBinaries` — the
+  /// packaged bundle first, then the dev checkout's target/. No UI writes this
+  /// any more (a packaged build ships its own agent-client, so the screen that
+  /// used to pick one is gone); it stays as a hand-editable escape hatch in
+  /// settings.json for a dev checkout whose binary lives somewhere unusual.
   binaryPath: '',
   imported: false,
 }

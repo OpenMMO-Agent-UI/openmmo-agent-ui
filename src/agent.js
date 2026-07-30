@@ -51,8 +51,8 @@ function resolveBinary(override) {
 }
 
 /// `resolveBinary` only checks the path exists as a file — it would happily
-/// accept a picked .app bundle's directory, a wrong-arch build, or a
-/// corrupted download, all of which fail at spawn time with something like
+/// accept a directory, a wrong-arch build, or a download the OS has
+/// quarantined, all of which fail at spawn time with something like
 /// "spawn ENOEXEC" once the user is already mid-session. Node's `spawn`
 /// event only fires once the OS has actually exec'd the file, so it's the
 /// most direct way to catch that ahead of time — a failed exec emits
@@ -140,10 +140,18 @@ class AgentProcess extends EventEmitter {
     const binary = resolveBinary(settings.binaryPath)
     if (!binary) {
       throw new Error(
-        `agent-client binary not found. Build it with "cargo build --release -p agent-client", ` +
-          `or point at one in Settings. Looked in:\n${candidateBinaries(settings.binaryPath).join('\n')}`,
+        `agent-client binary not found. A packaged build ships its own, so this is a dev checkout: ` +
+          `build it with "cargo build --release -p agent-client", or set OPENMMO_CHECKOUT to the ` +
+          `checkout holding it. Looked in:\n${candidateBinaries(settings.binaryPath).join('\n')}`,
       )
     }
+
+    // The Locate-agent-client screen used to exec this ahead of time; with that
+    // screen gone, Play is the only place left that can turn an unrunnable
+    // binary into an error the user sees, rather than a bare "spawn ENOEXEC"
+    // arriving in the log a moment after the UI has already said "running".
+    const probe = await probeBinary(binary)
+    if (!probe.ok) throw new Error(`agent-client at ${binary} will not run: ${probe.error}`)
 
     const cwd = agentDir()
     if (!fs.existsSync(path.join(cwd, 'data'))) {
@@ -239,4 +247,4 @@ class AgentProcess extends EventEmitter {
   }
 }
 
-module.exports = { AgentProcess, resolveBinary, candidateBinaries, probeBinary }
+module.exports = { AgentProcess }
