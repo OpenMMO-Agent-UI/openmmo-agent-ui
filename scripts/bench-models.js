@@ -23,7 +23,9 @@ const RUNS = 3
 /// before it writes the turn, and the prompt has grown — too tight a budget
 /// comes back as empty content, which is indistinguishable from a refusal.
 const MAX_TOKENS = 4096
-const ROOT = path.resolve(__dirname, '..', '..')
+/// Same resolution as config.js's repoRoot(): the pinned submodule checkout,
+/// overridable for a dev checkout that lives somewhere else.
+const ROOT = process.env.OPENMMO_CHECKOUT || path.resolve(__dirname, '..', 'deps', 'OpenMMO')
 const FIXTURES = path.join(__dirname, 'fixtures')
 
 /// Kept in step with the driver's own action list; a well-formed reply full of
