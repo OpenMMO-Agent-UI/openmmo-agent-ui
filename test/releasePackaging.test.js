@@ -26,6 +26,25 @@ test('file modification time is emitted as portable epoch seconds', () => {
   }
 })
 
+test('agent binary resolution selects the Windows executable', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openmmo-binary-'))
+  try {
+    const unixBinary = path.join(dir, 'agent-client')
+    const windowsBinary = path.join(dir, 'agent-client.exe')
+    fs.writeFileSync(unixBinary, 'unix')
+    fs.writeFileSync(windowsBinary, 'windows')
+
+    const helper = path.join(ROOT, 'scripts', 'find-agent-binary.js')
+    const result = execFileSync(process.execPath, [helper, dir, 'win32'], {
+      encoding: 'utf8',
+    })
+
+    assert.equal(result, `${windowsBinary}\n`)
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('distribution commands never let electron-builder publish implicitly', () => {
   const scripts = require('../package.json').scripts
 

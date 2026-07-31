@@ -29,16 +29,11 @@ checkout="${1:-"$root/deps/OpenMMO"}"
 checkout="$(cd "$checkout" && pwd)"
 out="$root/build/resources"
 
-exe="agent-client"
-binary="$checkout/target/release/$exe"
-if [[ ! -f $binary && -f "$checkout/target/release/$exe.exe" ]]; then
-    exe="agent-client.exe"
-    binary="$checkout/target/release/$exe"
-fi
-[[ -f $binary ]] || {
+binary="$(node "$root/scripts/find-agent-binary.js" "$checkout/target/release")" || {
     echo "no agent-client binary at $checkout/target/release/ — run: cargo build --release -p agent-client" >&2
     exit 1
 }
+exe="$(basename "$binary")"
 
 # This only ever checks the binary *exists*, same as the client build below —
 # and unlike the client, nothing here rebuilds it, so a binary that predates a
