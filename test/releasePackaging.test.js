@@ -52,3 +52,12 @@ test('distribution commands never let electron-builder publish implicitly', () =
     assert.match(scripts[name], /electron-builder .* --publish never$/)
   }
 })
+
+test('draft release commands have explicit repository context', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'release.yml'),
+    'utf8',
+  )
+
+  assert.match(workflow, /GH_REPO: \$\{\{ github\.repository \}\}/)
+})

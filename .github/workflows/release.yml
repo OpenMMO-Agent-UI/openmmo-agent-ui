@@ -199,6 +199,7 @@ jobs:
       - name: Create or refresh unsigned draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_ACTION: ${{ needs.validate.outputs.release-action }}
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
           APP_VERSION: ${{ needs.validate.outputs.version }}
