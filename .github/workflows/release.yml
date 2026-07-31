@@ -156,6 +156,12 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
+          # electron-builder's bundled root_certs.keychain only carries an expired WWDR cert,
+          # not the Developer ID intermediates — import them so the leaf cert's chain validates.
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG1CA.cer" https://www.apple.com/certificateauthority/DeveloperIDCA.cer
+          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          security import "$RUNNER_TEMP/DeveloperIDG1CA.cer" -k login.keychain
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k login.keychain
           {
             echo "CSC_LINK<<CSC_LINK_EOF"
             echo "$CSC_LINK"
