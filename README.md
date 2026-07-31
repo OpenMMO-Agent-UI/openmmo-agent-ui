@@ -206,7 +206,7 @@ npm run validate:pin
 Do not use `git submodule update --remote` to prepare a release. The selected
 commit must be available from `tpai/OpenMMO`, match the target protocol, and
 contain the spectator and manual-start integration. Preserve compatibility
-commits with immutable fork tags such as `agent-client/protocol-v10-r1`; the
+commits with immutable fork tags such as `agent-client/protocol-v11-r1`; the
 parent repository still pins their full SHA.
 
 <details>
@@ -350,20 +350,20 @@ supplies the app version; do not edit `package.json` or `build-info.json`.
 
 ```bash
 git add deps/OpenMMO
-git commit -m "chore(deps): pin OpenMMO protocol v10"
+git commit -m "chore(deps): pin OpenMMO protocol v11"
 git push origin master
 
-git tag v0.14.0
-git push origin v0.14.0
+git tag v0.15.0
+git push origin v0.15.0
 ```
 
 The workflow validates the pinned protocol and source commits, reruns both
 repositories' tests, and builds:
 
 ```text
-openmmo-agent-v0.14.0-p10-macos-arm64.zip
-openmmo-agent-v0.14.0-p10-windows-x64.exe
-openmmo-agent-v0.14.0-p10-linux-x64.AppImage
+openmmo-agent-v0.15.0-p11-macos-arm64.zip
+openmmo-agent-v0.15.0-p11-windows-x64.exe
+openmmo-agent-v0.15.0-p11-linux-x64.AppImage
 ```
 
 It creates an unsigned draft release with checksums and the full parent and
