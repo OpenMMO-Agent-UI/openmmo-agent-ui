@@ -644,6 +644,11 @@ body[data-mode='manual'] .gamesurface {
   font-variant-numeric: tabular-nums;
 }
 
+.vitals-actions {
+  color: var(--muted);
+  font-size: 16px;
+}
+
 .gameshell {
   flex: 1;
   display: flex;
@@ -862,7 +867,8 @@ iframe {
 .drawer-body pre,
 .drawer-body #feed,
 .drawer-body .bag-list,
-.drawer-body .worn-list {
+.drawer-body .worn-list,
+.drawer-body .coords-list {
   flex: 1;
   min-height: 0;
 }
@@ -875,6 +881,27 @@ iframe {
   flex: 1;
   height: auto;
   min-height: 320px;
+}
+
+/* Sub-tabs inside the Personality & Memory drawer panel — smaller and
+   tighter than the top-level .tabs they reuse, since they live in a 340px
+   drawer rather than a full screen. */
+.subtabs {
+  flex: none;
+  margin: 0 0 12px;
+}
+
+[data-drawer-panel='prompt'] > [data-subtab-panel] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.memory-view {
+  flex: 1;
+  min-height: 0;
+  white-space: pre-wrap;
 }
 
 #feed {
@@ -980,6 +1007,7 @@ iframe {
 }
 
 .bag-name {
+  flex: 1;
   color: var(--text);
 }
 
@@ -987,6 +1015,33 @@ iframe {
   flex: none;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+}
+
+.bag-marks {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.bag-mark {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.bag-mark input[type='checkbox'] {
+  margin: 0;
+}
+
+#bagLabelsSubmit {
+  flex: none;
+  margin-top: 8px;
 }
 
 /* ---------- worn equipment ---------- */
@@ -1002,6 +1057,59 @@ iframe {
   gap: 10px;
   padding: 6px 2px;
   border-bottom: 1px solid var(--line);
+}
+
+/* ---------- coordinates ---------- */
+
+.coords-list {
+  overflow-y: auto;
+}
+
+.coord-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.coord-go {
+  flex: 1;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.coord-go:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--accent);
+}
+
+.coord-delete {
+  flex: none;
+}
+
+.coords-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  padding-top: 10px;
+}
+
+.coords-form .row {
+  display: flex;
+  gap: 6px;
+}
+
+.coords-form input {
+  margin-top: 0;
 }
 
 .worn-slot {

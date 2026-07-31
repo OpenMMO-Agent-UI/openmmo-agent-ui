@@ -87,24 +87,31 @@ function createWindow() {
 /// standing still, and it once cost twenty minutes before anyone looked. The
 /// feed carries the raw text, so judge it here and say so out loud.
 let malformedRun = 0
+// Actions from the most recently *valid* llm-response, shown next to the
+// clock in the gamebar header. Cleared on a malformed turn rather than left
+// stale, since a bad turn did nothing.
+let lastActions = null
 
 function checkTurnShape(items) {
   for (const item of items) {
     if (item.k !== 'llm-response') continue
     const start = item.m.indexOf('{')
     const end = item.m.lastIndexOf('}')
-    let ok = false
+    let actions = null
     if (start !== -1 && end > start) {
       try {
-        ok = Array.isArray(JSON.parse(item.m.slice(start, end + 1)).actions)
+        const parsed = JSON.parse(item.m.slice(start, end + 1))
+        if (Array.isArray(parsed.actions)) actions = parsed.actions
       } catch {
-        ok = false
+        actions = null
       }
     }
-    if (ok) {
+    if (actions) {
       malformedRun = 0
+      lastActions = actions
       continue
     }
+    lastActions = null
     malformedRun++
     // One is a hiccup the next turn covers; a run of them is the model
     // having drifted off the schema, and every one of those turns is lost.
@@ -141,6 +148,7 @@ async function pollFeed(port) {
     gold: body.gold ?? null,
     time: body.time || null,
     bag: body.bag || [],
+    actions: lastActions,
   })
 }
 
@@ -174,6 +182,7 @@ function startFeedPolling(port) {
   stopFeedPolling()
   if (!port) return
   feedSeq = null
+  lastActions = null
   feedTimer = setInterval(() => {
     pollFeed(port).catch(() => {})
   }, 1000)
@@ -583,13 +592,17 @@ function materializePersonality(profileId, characterId, characterName) {
 }
 
 /// Personality is isolated by connection profile and stable character ID.
-/// The name-based agent path is only a materialized compatibility copy.
+/// The name-based agent path is only a materialized compatibility copy. The
+/// file on disk also carries an app-managed sellable/dropable block (see
+/// config.composeInstanceText) that the textarea must never show or let the
+/// player accidentally overwrite — stripped here before it reaches the
+/// renderer.
 ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
   if (!characterId) return ''
   const file = personalityPath(profileStore.selected().id, characterId)
   try {
     if (!fs.existsSync(file)) materializePersonality(profileStore.selected().id, characterId, characterName)
-    return fs.readFileSync(file, 'utf8')
+    return config.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
   } catch {
     return ''
   }
@@ -597,11 +610,125 @@ ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
 
 ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
   if (!characterId) return { ok: false, error: 'No character selected' }
-  const file = personalityPath(profileStore.selected().id, characterId)
+  const profileId = profileStore.selected().id
+  const file = personalityPath(profileId, characterId)
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, text)
-  if (characterName) materializePersonality(profileStore.selected().id, characterId, characterName)
+  fs.writeFileSync(file, config.composeInstanceText(text, readLabels(profileId, characterId)))
+  if (characterName) materializePersonality(profileId, characterId, characterName)
   return { ok: true, file }
+})
+
+/// Read-only view of what the agent itself has written to memory.txt (its
+/// own `memory_update` output, never edited by the player) — see
+/// config.memoryPath. Missing file (nothing remembered yet, or the agent has
+/// never run) just reads as empty.
+ipcMain.handle('memory:get', (_e, { characterName }) => {
+  if (!characterName) return ''
+  try {
+    return fs.readFileSync(config.memoryPath(characterName), 'utf8')
+  } catch {
+    return ''
+  }
+})
+
+/// Sellable/dropable marks on bag items, isolated the same way as the
+/// personality file and coordinates below. The source of truth for the bag
+/// drawer's checkboxes; instance.txt's own copy (below) is just a rendering
+/// of this for agent-client to read.
+function labelsPath(profileId, characterId) {
+  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
+  return path.join(app.getPath('userData'), 'labels', safe(profileId), `${safe(characterId)}.json`)
+}
+
+function readLabels(profileId, characterId) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(labelsPath(profileId, characterId), 'utf8'))
+    return {
+      sellable: Array.isArray(parsed.sellable) ? parsed.sellable : [],
+      dropable: Array.isArray(parsed.dropable) ? parsed.dropable : [],
+    }
+  } catch {
+    return { sellable: [], dropable: [] }
+  }
+}
+
+function writeLabels(profileId, characterId, labels) {
+  const file = labelsPath(profileId, characterId)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(labels))
+}
+
+ipcMain.handle('labels:get', (_e, { characterId }) => {
+  if (!characterId) return { sellable: [], dropable: [] }
+  return readLabels(profileStore.selected().id, characterId)
+})
+
+ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const profileId = profileStore.selected().id
+  const clean = {
+    sellable: Array.isArray(labels?.sellable) ? [...new Set(labels.sellable)] : [],
+    dropable: Array.isArray(labels?.dropable) ? [...new Set(labels.dropable)] : [],
+  }
+  writeLabels(profileId, characterId, clean)
+  // Re-render instance.txt's labels block from the character's existing
+  // prose plus these new marks — mirrors instance:save, just triggered by a
+  // label change instead of a personality edit.
+  const file = personalityPath(profileId, characterId)
+  let prose = ''
+  try {
+    prose = config.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
+  } catch {
+    prose = ''
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, config.composeInstanceText(prose, clean))
+  if (characterName) materializePersonality(profileId, characterId, characterName)
+  return { ok: true, labels: clean }
+})
+
+/// Player-saved coordinates, isolated by connection profile and character —
+/// same scoping as the personality file, just JSON instead of plain text.
+function coordinatesPath(profileId, characterId) {
+  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
+  return path.join(app.getPath('userData'), 'coordinates', safe(profileId), `${safe(characterId)}.json`)
+}
+
+function readCoordinates(profileId, characterId) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(coordinatesPath(profileId, characterId), 'utf8'))
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeCoordinates(profileId, characterId, list) {
+  const file = coordinatesPath(profileId, characterId)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(list))
+}
+
+ipcMain.handle('coordinates:list', (_e, { characterId }) => {
+  if (!characterId) return []
+  return readCoordinates(profileStore.selected().id, characterId)
+})
+
+ipcMain.handle('coordinates:add', (_e, { characterId, name, x, y, z }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const profileId = profileStore.selected().id
+  const list = readCoordinates(profileId, characterId)
+  list.push({ id: crypto.randomUUID(), name, x, y, z })
+  writeCoordinates(profileId, characterId, list)
+  return { ok: true, list }
+})
+
+ipcMain.handle('coordinates:delete', (_e, { characterId, id }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const profileId = profileStore.selected().id
+  const list = readCoordinates(profileId, characterId).filter((c) => c.id !== id)
+  writeCoordinates(profileId, characterId, list)
+  return { ok: true, list }
 })
 
 /// Signing out has to take the agent with it: it holds a live session on the

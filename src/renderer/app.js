@@ -385,6 +385,8 @@ async function enterCharacter(character) {
   selectedCharacterId = character.id
   await persist({ characterName: character.name })
   await loadInstancePrompt()
+  await loadCoords()
+  await loadBagLabels()
   await workflow.chooseCharacter(character.id)
 }
 
@@ -395,6 +397,8 @@ function selectCharacter(id) {
   persist({ characterName: chosen ? chosen.name : '' })
   updatePlayEnabled()
   void loadInstancePrompt()
+  void loadCoords()
+  void loadBagLabels()
 }
 
 /// Individual personality for whichever character is selected — reloaded on
@@ -410,6 +414,116 @@ async function loadInstancePrompt() {
   }
   $('instanceText').value = await api.getInstancePrompt(selectedCharacterId, name)
   $('instanceFile').textContent = `Personality for this server and character`
+}
+
+let memoryPollTimer = null
+
+/// Read-only view of the agent's own memory.txt — reloaded on every switch,
+/// same per-character scoping as the personality prompt.
+async function loadMemory() {
+  const name = settings.characterName
+  $('memoryCharacterName').textContent = name || 'this character'
+  if (!name) {
+    $('memoryText').textContent = ''
+    $('memoryEmpty').hidden = true
+    return
+  }
+  const text = await api.getMemory(name)
+  $('memoryText').textContent = text
+  $('memoryEmpty').hidden = Boolean(text && text.trim())
+}
+
+/// The agent can append to memory.txt mid-session, so the tab polls while
+/// it's the one actually showing — stopped the moment it isn't (see
+/// setPersonalitySubtab/bindRail) to avoid needless file reads otherwise.
+function startMemoryPolling() {
+  void loadMemory()
+  stopMemoryPolling()
+  memoryPollTimer = setInterval(loadMemory, 3000)
+}
+
+function stopMemoryPolling() {
+  if (memoryPollTimer) clearInterval(memoryPollTimer)
+  memoryPollTimer = null
+}
+
+function setPersonalitySubtab(name) {
+  for (const btn of document.querySelectorAll('#personalityTabs .tab')) {
+    btn.classList.toggle('on', btn.dataset.subtab === name)
+  }
+  for (const panel of document.querySelectorAll('[data-subtab-panel]')) {
+    panel.hidden = panel.dataset.subtabPanel !== name
+  }
+  if (name === 'memory') startMemoryPolling()
+  else stopMemoryPolling()
+}
+
+function bindPersonalityTabs() {
+  for (const btn of document.querySelectorAll('#personalityTabs .tab')) {
+    btn.addEventListener('click', () => setPersonalitySubtab(btn.dataset.subtab))
+  }
+}
+
+const BUILTIN_COORDS = [
+  { name: 'Rica', x: -1473.8, y: 1.1, z: 4735.5 },
+  { name: 'Old Crypt Dungeon', x: -1450, y: 0.7, z: 4720 },
+  { name: 'Fishing spot', x: -1501.6, y: 0.3, z: 4732.3 },
+  { name: 'Orc Warren', x: -1616, y: 1.05, z: 4918 },
+]
+let customCoords = []
+
+/// Player-saved coordinates, reloaded on every character switch — scoped the
+/// same way as the personality text (per connection profile + character).
+async function loadCoords() {
+  customCoords = selectedCharacterId ? await api.listCoordinates(selectedCharacterId) : []
+  renderCoords()
+}
+
+function coordRow(coord, removable) {
+  const row = document.createElement('div')
+  row.className = 'coord-row'
+  const go = document.createElement('button')
+  go.type = 'button'
+  go.className = 'coord-go'
+  go.textContent = `${coord.name} (${coord.x}, ${coord.y}, ${coord.z})`
+  go.addEventListener('click', () => sendCoordDirective(coord))
+  row.appendChild(go)
+  if (removable) {
+    const del = document.createElement('button')
+    del.type = 'button'
+    del.className = 'ghost small coord-delete'
+    del.textContent = '×'
+    del.title = 'Remove'
+    del.addEventListener('click', async () => {
+      const res = await api.deleteCoordinate(selectedCharacterId, coord.id)
+      if (res.ok) {
+        customCoords = res.list
+        renderCoords()
+      }
+    })
+    row.appendChild(del)
+  }
+  return row
+}
+
+function renderCoords() {
+  const box = $('coordsList')
+  box.innerHTML = ''
+  for (const coord of BUILTIN_COORDS) box.appendChild(coordRow(coord, false))
+  for (const coord of customCoords) box.appendChild(coordRow(coord, true))
+}
+
+/// Same directive pipe as the Dispatch input (ADR 0003): a best-effort nudge
+/// for the NPC's next turn, so a clicked spot gets the same You/Agent
+/// feedback as anything typed by hand.
+async function sendCoordDirective(coord) {
+  const text = `Go to ${coord.name} (${coord.x}, ${coord.y}, ${coord.z}).`
+  const res = await api.sendDirective(text)
+  if (!res.ok) {
+    showErrors([res.error])
+    return
+  }
+  trackDirective(text)
 }
 
 async function deleteCharacterRow(id, name) {
@@ -483,9 +597,79 @@ const WORN_SLOTS = [
   ['ring_left', 'Ring (left)'],
 ]
 
+/// One label per parsed AgentAction (agent-client/src/driver/action.rs),
+/// shown next to the clock in the gamebar header.
+function actionLabel(action) {
+  if (!action || typeof action !== 'object') return ''
+  switch (action.type) {
+    case 'say': {
+      const msg = String(action.message ?? '')
+      return `Say "${msg.length > 24 ? `${msg.slice(0, 24)}…` : msg}"`
+    }
+    case 'attack':
+      return `Attack→${action.monster_id ?? action.target ?? action.id ?? '?'}`
+    case 'move':
+      if (action.target) return `Move→${action.target}`
+      if (action.x != null || action.z != null) {
+        const x = action.x != null ? Math.round(action.x) : '?'
+        const z = action.z != null ? Math.round(action.z) : '?'
+        return `Move→(${x}, ${z})`
+      }
+      if (action.direction) return `Move→${action.direction}${action.distance != null ? ` ${action.distance}m` : ''}`
+      if (action.depth != null) return `Move→floor ${action.depth}`
+      return 'Move'
+    case 'respawn':
+      return 'Respawn'
+    case 'fish':
+      return 'Fish'
+    case 'stop_fishing':
+      return 'Stop fishing'
+    case 'offer_deal':
+      return `Offer→${action.item ?? '?'}${action.player ? ` to ${action.player}` : ''}`
+    case 'open_trade':
+      return `Trade→${action.player ?? '?'}`
+    case 'party_invite':
+      return `Invite→${action.player ?? '?'}`
+    case 'party_accept':
+      return 'Accept party'
+    case 'party_decline':
+      return 'Decline party'
+    case 'party_leave':
+      return 'Leave party'
+    case 'use':
+      return `Use→${action.item ?? '?'}`
+    case 'pickup':
+      return `Pickup→${action.item ?? '?'}`
+    case 'sell':
+      return `Sell→${action.item ?? '?'}`
+    case 'buy':
+      return `Buy→${action.item ?? '?'}`
+    case 'drop':
+      return `Drop→${action.item ?? '?'}`
+    case 'buyback':
+      return `Buyback→${action.item ?? '?'}`
+    case 'break_prop':
+      return `Break→prop ${action.prop_id ?? action.id ?? '?'}`
+    case 'open_chest':
+      return action.chest ? `Open chest→${action.chest}` : 'Open chest'
+    case 'reroll':
+      return 'Reroll'
+    case 'wait':
+      return 'Wait'
+    default:
+      return action.type ? String(action.type) : ''
+  }
+}
+
+function formatActions(actions) {
+  if (!Array.isArray(actions) || !actions.length) return ''
+  return actions.map(actionLabel).filter(Boolean).join(', ')
+}
+
 function setVitals(v) {
   if (!v || !v.self) {
     $('vitals').textContent = ''
+    $('vitalsActions').textContent = ''
     renderBag([])
     renderWorn({})
     return
@@ -496,7 +680,9 @@ function setVitals(v) {
       ? ` · ${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
   const gold = v.gold == null ? '' : ` · ${v.gold}g`
+  const actions = formatActions(v.actions)
   $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}`
+  $('vitalsActions').textContent = actions ? `Last actions: ${actions}` : ''
   renderBag(v.bag)
 }
 
@@ -535,9 +721,46 @@ function renderWorn(worn) {
   $('wornEmpty').hidden = count > 0
 }
 
+/// Sellable/dropable marks for the currently loaded character — the source
+/// of truth is main.js's labels.json; instance.txt's own copy is just a
+/// rendering of this for agent-client to read (see config.composeInstanceText).
+/// Staged in-memory as Sets of "item_def_id#enchant" bag-row keys and only
+/// written to disk when Apply labels is clicked.
+let stagedLabels = { sellable: new Set(), dropable: new Set() }
+/// The bag rows from the most recent render, kept around so the Apply
+/// button can check for enchant collisions without re-deriving them.
+let currentBagRows = []
+
+async function loadBagLabels() {
+  stagedLabels = { sellable: new Set(), dropable: new Set() }
+  $('bagLabelsStatus').textContent = ''
+  if (!selectedCharacterId) return
+  const saved = await api.getBagLabels(selectedCharacterId)
+  stagedLabels = {
+    sellable: new Set(saved.sellable || []),
+    dropable: new Set(saved.dropable || []),
+  }
+}
+
+function bagMarkCheckbox(letter, title, checked, onChange) {
+  const label = document.createElement('label')
+  label.className = 'bag-mark'
+  label.title = title
+  const input = document.createElement('input')
+  input.type = 'checkbox'
+  input.checked = checked
+  input.addEventListener('change', () => onChange(input.checked))
+  const span = document.createElement('span')
+  span.textContent = letter
+  label.append(input, span)
+  return label
+}
+
 /// agent-client keeps each pickup as its own bag instance rather than
 /// merging stacks, so raw entries repeat the same item many times over —
 /// grouped by item + enchant here into one line each, with a total count.
+/// Each row carries its own Sellable/Dropable checkboxes, staged into
+/// stagedLabels until Apply labels commits them.
 function renderBag(bag) {
   const box = $('bagList')
   box.innerHTML = ''
@@ -549,23 +772,77 @@ function renderBag(bag) {
   const rows = [...grouped.entries()]
     .map(([key, quantity]) => {
       const [id, enchant] = key.split('#')
-      return { label: itemLabel(id, Number(enchant)), quantity }
+      return { key, id, enchant: Number(enchant), label: itemLabel(id, Number(enchant)), quantity }
     })
     .sort((a, b) => a.label.localeCompare(b.label))
+  currentBagRows = rows
 
   $('bagEmpty').hidden = rows.length > 0
+  $('bagLabelsSubmit').hidden = rows.length === 0
   for (const row of rows) {
     const el = document.createElement('div')
     el.className = 'bag-row'
+
+    const marks = document.createElement('span')
+    marks.className = 'bag-marks'
+    marks.append(
+      bagMarkCheckbox('S', 'Sellable', stagedLabels.sellable.has(row.key), (checked) => {
+        if (checked) stagedLabels.sellable.add(row.key)
+        else stagedLabels.sellable.delete(row.key)
+      }),
+      bagMarkCheckbox('D', 'Dropable', stagedLabels.dropable.has(row.key), (checked) => {
+        if (checked) stagedLabels.dropable.add(row.key)
+        else stagedLabels.dropable.delete(row.key)
+      }),
+    )
+
     const name = document.createElement('span')
     name.className = 'bag-name'
     name.textContent = row.label
     const qty = document.createElement('span')
     qty.className = 'bag-qty'
     qty.textContent = `×${row.quantity}`
-    el.append(name, qty)
+    el.append(marks, name, qty)
     box.appendChild(el)
   }
+}
+
+/// sell/drop actions take only an item_def_id, with no way to say which
+/// enchant level they mean (agent-client driver/action.rs) — so marking one
+/// enchant variant while carrying another is ambiguous: the model could act
+/// on either. Surfaced as one consolidated warning per Apply click, listing
+/// every item_def_id in the staged batch that has more than one enchant
+/// variant in the current bag.
+function enchantCollisions() {
+  const enchantsById = new Map()
+  for (const row of currentBagRows) {
+    if (!enchantsById.has(row.id)) enchantsById.set(row.id, new Set())
+    enchantsById.get(row.id).add(row.enchant)
+  }
+  const ids = new Set()
+  for (const key of [...stagedLabels.sellable, ...stagedLabels.dropable]) {
+    const id = key.split('#')[0]
+    if ((enchantsById.get(id)?.size || 0) > 1) ids.add(id)
+  }
+  return [...ids].map((id) => itemLabel(id)).sort()
+}
+
+async function submitBagLabels() {
+  if (!selectedCharacterId) return
+  const collisions = enchantCollisions()
+  if (collisions.length) {
+    const proceed = await confirmAction(
+      `${collisions.join(', ')} — you carry more than one enchant level, and sell/drop can't tell them apart. ` +
+        'The agent might act on the wrong one. Apply labels anyway?',
+      'Apply anyway',
+    )
+    if (!proceed) return
+  }
+  const res = await api.saveBagLabels(selectedCharacterId, settings.characterName, {
+    sellable: [...stagedLabels.sellable],
+    dropable: [...stagedLabels.dropable],
+  })
+  $('bagLabelsStatus').textContent = res.ok ? 'Labels applied.' : res.error || 'Failed to apply labels.'
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -762,7 +1039,7 @@ function confirmAction(message, okLabel = 'Delete') {
 
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality', thoughts: 'Thoughts', log: 'Log' }
+  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality & Memory', thoughts: 'Thoughts', log: 'Log', coords: 'Coordinates' }
   for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.drawer
@@ -772,6 +1049,7 @@ function bindRail() {
       if (isOpenSame) {
         drawer.hidden = true
         drawer.dataset.kind = ''
+        stopMemoryPolling()
         return
       }
       drawer.hidden = false
@@ -781,10 +1059,15 @@ function bindRail() {
       for (const panel of document.querySelectorAll('[data-drawer-panel]')) {
         panel.hidden = panel.dataset.drawerPanel !== kind
       }
+      // Always land on Personality, not wherever Memory's polling was left
+      // off — simpler than tracking whether it's safe to resume polling.
+      if (kind === 'prompt') setPersonalitySubtab('personality')
+      else stopMemoryPolling()
     })
   }
   $('drawerClose').addEventListener('click', () => {
     $('drawer').hidden = true
+    stopMemoryPolling()
     for (const other of document.querySelectorAll('.rail [data-drawer]')) other.classList.remove('on')
   })
 }
@@ -941,6 +1224,23 @@ function bindActions() {
     trackDirective(text)
   })
 
+  $('coordsForm').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const name = $('coordName').value.trim()
+    const x = Number($('coordX').value)
+    const y = Number($('coordY').value)
+    const z = Number($('coordZ').value)
+    if (!name || !selectedCharacterId || [x, y, z].some(Number.isNaN)) return
+    const res = await api.addCoordinate(selectedCharacterId, { name, x, y, z })
+    if (!res.ok) {
+      showErrors([res.error])
+      return
+    }
+    customCoords = res.list
+    renderCoords()
+    e.target.reset()
+  })
+
   $('saveInstance').addEventListener('click', async () => {
     if (!settings.characterName) return
     showErrors([])
@@ -966,6 +1266,8 @@ function bindActions() {
     setStatus(restarted.status)
     $('instanceFile').textContent = `Saved to ${res.file} — applied`
   })
+
+  $('bagLabelsSubmit').addEventListener('click', () => void submitBagLabels())
 
   $('restart').addEventListener('click', async () => {
     showErrors([])
@@ -1079,9 +1381,11 @@ async function init() {
   bindActions()
   bindRail()
   bindCharacterTabs()
+  bindPersonalityTabs()
 
   renderFeedFilters()
   renderWorn({})
+  renderCoords()
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)

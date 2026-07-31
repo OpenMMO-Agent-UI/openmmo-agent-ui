@@ -106,6 +106,7 @@
         <span class="dot" id="dot"></span>
         <span class="status" id="status">stopped</span>
         <span class="vitals" id="vitals"></span>
+        <span class="vitals-actions" id="vitalsActions"></span>
         <span class="spacer"></span>
         <span class="mem" id="mem"></span>
         <button id="reloadView" class="ghost" title="Reload the spectator view">↻</button>
@@ -136,8 +137,11 @@
           <button data-drawer="bag" title="Bag" aria-label="Bag">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V6a5 5 0 0 1 10 0v2" /><path d="M5 8h14l1 12H4z" /><path d="M9 11v2M15 11v2" /></svg>
           </button>
-          <button data-drawer="prompt" title="Personality" aria-label="Personality">
+          <button data-drawer="prompt" title="Personality &amp; Memory" aria-label="Personality &amp; Memory">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h9l5 5v11H5z" /><path d="M14 4v5h5" /><path d="M8 13h8M8 17h5" /></svg>
+          </button>
+          <button data-drawer="coords" title="Coordinates" aria-label="Coordinates">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z" /><circle cx="12" cy="9" r="2.5" /></svg>
           </button>
           <button data-drawer="thoughts" title="Thoughts" aria-label="Thoughts">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z" /></svg>
@@ -202,18 +206,45 @@
               <pre id="log"></pre>
             </div>
             <div data-drawer-panel="prompt" hidden>
-              <p class="hint">How <span id="instanceCharacterName">this character</span> plays — its own personality, on top of the shared rules.</p>
-              <textarea id="instanceText" spellcheck="false"></textarea>
-              <button id="saveInstance" class="ghost">Save</button>
-              <p class="hint" id="instanceFile"></p>
+              <div class="tabs subtabs" id="personalityTabs" role="tablist">
+                <button class="tab on" data-subtab="personality" role="tab">Personality</button>
+                <button class="tab" data-subtab="memory" role="tab">Memory</button>
+              </div>
+              <div data-subtab-panel="personality">
+                <p class="hint">How <span id="instanceCharacterName">this character</span> plays — its own personality, on top of the shared rules.</p>
+                <textarea id="instanceText" spellcheck="false"></textarea>
+                <button id="saveInstance" class="ghost">Save</button>
+                <p class="hint" id="instanceFile"></p>
+              </div>
+              <div data-subtab-panel="memory" hidden>
+                <p class="hint">What <span id="memoryCharacterName">this character</span> remembers — written by the agent itself, read-only.</p>
+                <pre id="memoryText" class="memory-view"></pre>
+                <p class="hint" id="memoryEmpty">Nothing remembered yet.</p>
+              </div>
             </div>
             <div data-drawer-panel="worn" hidden>
               <div id="wornList" class="worn-list"></div>
               <p class="hint" id="wornEmpty">Nothing worn yet.</p>
             </div>
             <div data-drawer-panel="bag" hidden>
+              <p class="hint">Mark what the agent may Sell or Drop, then Apply.</p>
               <div id="bagList" class="bag-list"></div>
               <p class="hint" id="bagEmpty">Nothing carried yet.</p>
+              <button id="bagLabelsSubmit" class="ghost" hidden>Apply labels</button>
+              <p class="hint" id="bagLabelsStatus"></p>
+            </div>
+            <div data-drawer-panel="coords" hidden>
+              <div id="coordsList" class="coords-list"></div>
+              <form id="coordsForm" class="coords-form">
+                <input id="coordName" placeholder="Name" autocomplete="off" required />
+                <div class="row">
+                  <input id="coordX" type="number" step="any" placeholder="x" required />
+                  <input id="coordY" type="number" step="any" placeholder="y" required />
+                  <input id="coordZ" type="number" step="any" placeholder="z" required />
+                </div>
+                <button type="submit" class="ghost">Add</button>
+              </form>
+              <p class="hint">Click a spot to send your character there. Built-in spots can't be removed.</p>
             </div>
           </div>
         </aside>

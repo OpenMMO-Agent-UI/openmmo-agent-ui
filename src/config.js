@@ -399,7 +399,9 @@ function renderConfigToml(s) {
     `always_active = ${s.alwaysActive ? 'true' : 'false'}`,
     // Without this the `memory_update` the model writes every turn is thrown
     // away, and the agent relearns the same town from scratch on each restart.
-    'memory_file = "data/memory.txt"',
+    // Keyed per character (like instance_prompt below) so switching characters
+    // doesn't mix one character's memories into another's prompt.
+    `memory_file = ${tomlString(s.characterName ? memoryRelativePath(s.characterName) : 'data/memory.txt')}`,
   )
   // agent-client hard-errors on a configured prompt file that doesn't exist
   // (load_system_prompt), unlike memory_file's own missing-file tolerance —
@@ -432,6 +434,55 @@ function ensureInstancePrompt(characterName) {
   if (fs.existsSync(file)) return
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, '')
+}
+
+function memoryRelativePath(characterName) {
+  return `${NPC_DATA_DIR}/${characterName}/memory.txt`
+}
+
+/// Where agent-client's own `memory_update` writes land, and where the
+/// drawer's read-only Memory tab reads from — never written by this app.
+function memoryPath(characterName) {
+  return path.join(agentDir(), memoryRelativePath(characterName))
+}
+
+/// Marks the start of the block this app manages inside a character's
+/// instance.txt (sellable/dropable item lists, see labelsBlock below).
+/// Everything from this line down is regenerated on every label change and
+/// hidden from the Personality textarea — the player only ever edits what
+/// comes before it.
+const LABELS_MARKER = '<!-- BAG LABELS: DO NOT EDIT BELOW (managed by the app) -->'
+
+/// Strips the app-managed labels block back out of a saved instance.txt,
+/// leaving just the player's own prose — the inverse of composeInstanceText.
+function splitInstanceText(raw) {
+  const idx = String(raw || '').indexOf(LABELS_MARKER)
+  const prose = idx === -1 ? String(raw || '') : raw.slice(0, idx)
+  return { prose: prose.replace(/\s+$/, '') }
+}
+
+/// item_def_id only, deduped, sorted — sell/drop actions have no enchant
+/// field (agent-client driver/action.rs), so listing e.g. "iron_sword#2"
+/// distinctly from "iron_sword#0" would promise a distinction the model has
+/// no way to act on.
+function labelsBlock(labels) {
+  const idsOf = (keys) => [...new Set((keys || []).map((key) => String(key).split('#')[0]))].sort()
+  const sellable = idsOf(labels?.sellable)
+  const dropable = idsOf(labels?.dropable)
+  if (!sellable.length && !dropable.length) return ''
+  const lines = [LABELS_MARKER]
+  if (sellable.length) lines.push(`Sellable: ${sellable.join(', ')}`)
+  if (dropable.length) lines.push(`Dropable: ${dropable.join(', ')}`)
+  return lines.join('\n')
+}
+
+/// Player prose plus the current labels block, ready to write to
+/// instance.txt. The inverse of splitInstanceText.
+function composeInstanceText(prose, labels) {
+  const cleanProse = String(prose || '').replace(/\s+$/, '')
+  const block = labelsBlock(labels)
+  if (!block) return cleanProse ? `${cleanProse}\n` : ''
+  return cleanProse ? `${cleanProse}\n\n${block}\n` : `${block}\n`
 }
 
 /// user_prompt.txt has no editor in the app any more — the personality
@@ -511,6 +562,9 @@ module.exports = {
   instancePromptPath,
   ensureInstancePrompt,
   ensureUserPrompt,
+  memoryPath,
+  splitInstanceText,
+  composeInstanceText,
   packagedSeedDir,
   seedRuntimeData,
   buildInfo,

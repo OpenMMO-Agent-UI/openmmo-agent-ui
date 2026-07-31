@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('agentApp', {
     ipcRenderer.invoke('instance:get', { characterId, characterName }),
   saveInstancePrompt: (characterId, characterName, text) =>
     ipcRenderer.invoke('instance:save', { characterId, characterName, text }),
+  getMemory: (characterName) => ipcRenderer.invoke('memory:get', { characterName }),
+  getBagLabels: (characterId) => ipcRenderer.invoke('labels:get', { characterId }),
+  saveBagLabels: (characterId, characterName, labels) =>
+    ipcRenderer.invoke('labels:save', { characterId, characterName, labels }),
   signOut: () => ipcRenderer.invoke('auth:signout'),
   authStatus: () => ipcRenderer.invoke('auth:status'),
   authContinue: () => ipcRenderer.invoke('auth:continue'),
@@ -41,6 +45,9 @@ contextBridge.exposeInMainWorld('agentApp', {
   manualReady: (error) => ipcRenderer.invoke('play:manual-ready', error),
   leavePlay: (destination) => ipcRenderer.invoke('play:leave', destination),
   sendDirective: (text) => ipcRenderer.invoke('directive:send', text),
+  listCoordinates: (characterId) => ipcRenderer.invoke('coordinates:list', { characterId }),
+  addCoordinate: (characterId, coord) => ipcRenderer.invoke('coordinates:add', { characterId, ...coord }),
+  deleteCoordinate: (characterId, id) => ipcRenderer.invoke('coordinates:delete', { characterId, id }),
   openView: () => ipcRenderer.invoke('view:open'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),
