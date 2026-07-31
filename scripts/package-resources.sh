@@ -54,7 +54,7 @@ fi
 # agent-client/, and a commit that only touches it is not a reason to demand a
 # rebuild.
 newest_src=$(git -C "$checkout" log -1 --format=%ct -- agent-client/src shared/src agent-client/Cargo.toml shared/Cargo.toml 2>/dev/null || echo 0)
-binary_built=$(stat -f %m "$binary" 2>/dev/null || stat -c %Y "$binary" 2>/dev/null || echo 0)
+binary_built=$(node "$root/scripts/file-mtime.js" "$binary")
 if [[ -z ${ALLOW_STALE_CLIENT:-} ]] && ((newest_src > binary_built)); then
     echo "stale agent-client binary: $binary predates the checkout's newest agent-client/shared commit" >&2
     echo "  binary built: $(date -r "$binary_built" 2>/dev/null || echo "$binary_built")" >&2
@@ -81,7 +81,7 @@ dist="$checkout/client/dist"
 # wrong protocol from inside a bundle stamped with the right one.
 if [[ -z ${ALLOW_STALE_CLIENT:-} ]]; then
     client_commit=$(git -C "$checkout" log -1 --format=%ct -- client/ 2>/dev/null || echo 0)
-    dist_built=$(stat -f %m "$dist/index.html" 2>/dev/null || stat -c %Y "$dist/index.html" 2>/dev/null || echo 0)
+    dist_built=$(node "$root/scripts/file-mtime.js" "$dist/index.html")
     if ((client_commit > dist_built)); then
         echo "stale client build: $dist was built before the checkout's newest client/ commit" >&2
         echo "  dist built:  $(date -r "$dist_built" 2>/dev/null || echo "$dist_built")" >&2

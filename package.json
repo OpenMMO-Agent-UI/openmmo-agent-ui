@@ -15,9 +15,9 @@
     "bench": "node scripts/bench-models.js",
     "stage": "bash scripts/package-resources.sh",
     "build:resources": "bash scripts/build-resources.sh",
-    "dist:mac": "npm run build:resources && electron-builder --mac",
-    "dist:win": "npm run build:resources && electron-builder --win",
-    "dist:linux": "npm run build:resources && electron-builder --linux"
+    "dist:mac": "npm run build:resources && electron-builder --mac --publish never",
+    "dist:win": "npm run build:resources && electron-builder --win --publish never",
+    "dist:linux": "npm run build:resources && electron-builder --linux --publish never"
   },
   "devDependencies": {
     "electron": "^43.0.0",
