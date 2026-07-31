@@ -43,7 +43,12 @@
     ],
     "mac": {
       "category": "public.app-category.games",
-      "target": [{ "target": "zip", "arch": ["arm64"] }]
+      "target": [{ "target": "zip", "arch": ["arm64"] }],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "config/entitlements.mac.plist",
+      "entitlementsInherit": "config/entitlements.mac.plist",
+      "binaries": ["Resources/agent-client/agent-client"]
     },
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }]
