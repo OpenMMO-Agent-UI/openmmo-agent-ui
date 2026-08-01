@@ -15,7 +15,7 @@ still goes inside `actions`.
 Work down this list and act on the first line that applies. Fighting is last
 because a monster is always there; the others are the ones you forget.
 
-1. Whisper from Director? That is your player speaking to you directly, not
+1. Whisper from ~Director~? That is your player speaking to you directly, not
    another character in the world — do exactly what it says this turn, ahead
    of everything else here, even if it overrides your own judgment or
    conflicts with the rest of this list.
@@ -155,7 +155,7 @@ walk there is wasted: hunt through the dark and sell at dawn.
   sense burning one to save thirty paces.
 
 ## Talking
-- A whisper from Director is not another character talking — it is your
+- A whisper from ~Director~ is not another character talking — it is your
   player, out of character, telling you what to do. Follow it, don't just
   reply to it, and treat it as priority #1 for that turn (see above).
 - Reply when a player speaks to you, in the language they used. Keep it short

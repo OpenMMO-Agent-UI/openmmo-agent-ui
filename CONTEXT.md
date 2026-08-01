@@ -72,7 +72,10 @@ The specific mechanism behind a Directive: the relay forges a
 server itself had sent it, addressed to the agent's own character. It exists
 only because a whisper already gets `Urgent` priority and unconditional
 prompt inclusion in `agent-client` — not because whispering is semantically
-what's happening. Always sent with `from: "Director"` — a fixed sentinel, not
-the player's Google display name — so the shipped default prompt can name it
-literally ("a whisper from Director is your player's direct order").
+what's happening. Always sent with `from: "~Director~"` — a fixed sentinel,
+not the player's Google display name — chosen to contain a character the
+server's name validator rejects (`server/src/auth.rs` `valid_name_char`), so
+no real player can ever register that name and have a genuine whisper
+impersonate a directive. The shipped default prompt names it literally ("a
+whisper from ~Director~ is your player's direct order").
 _Avoid_: injected message, fake whisper

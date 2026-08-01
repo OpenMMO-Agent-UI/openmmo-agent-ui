@@ -569,7 +569,8 @@ body[data-screen='game'] #screen-game {
 
 body[data-mode='manual'] .rail,
 body[data-mode='manual'] .directive-panel,
-body[data-mode='manual'] .drawer {
+body[data-mode='manual'] .drawer,
+body[data-mode='manual'] .action-toasts {
   display: none !important;
 }
 
@@ -644,11 +645,6 @@ body[data-mode='manual'] .gamesurface {
   font-variant-numeric: tabular-nums;
 }
 
-.vitals-actions {
-  color: var(--muted);
-  font-size: 16px;
-}
-
 .gameshell {
   flex: 1;
   display: flex;
@@ -706,6 +702,36 @@ body[data-mode='manual'] .gamesurface {
   min-height: 0;
   position: relative;
   background: #0d0f14;
+}
+
+.action-toasts {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 60%;
+  pointer-events: none;
+}
+
+.action-toast {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(201, 162, 74, 0.2);
+  background: rgba(27, 32, 41, 0.75);
+  color: var(--text);
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  word-break: break-word;
+  opacity: 1;
+  transition: opacity 0.4s ease;
+}
+
+.action-toast.out {
+  opacity: 0;
 }
 
 iframe {

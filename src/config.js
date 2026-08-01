@@ -57,8 +57,11 @@ const DEFAULT_GOOGLE_CLIENT_SECRET = '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'
 
 /// Sender name on every relay-forged directive whisper (see proxy.js and
 /// ADR 0003). Fixed rather than the player's Google display name, so the
-/// shipped default prompt can name it literally.
-const DIRECTIVE_SENDER = 'Director'
+/// shipped default prompt can name it literally. Contains `~`, which the
+/// server's character-name charset rejects (server/src/auth.rs
+/// valid_name_char) — no real player can ever register this name and have a
+/// genuine whisper impersonate a directive.
+const DIRECTIVE_SENDER = '~Director~'
 
 const DEFAULTS = {
   server: 'wss://openmmo.to.nexus/ws',

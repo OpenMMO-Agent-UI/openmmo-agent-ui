@@ -33,6 +33,23 @@ let signInGeneration = 0
 // right next to what was sent rather than assumed to have landed.
 let pendingDirective = null
 
+/// monster_id -> display name, learned from "Monster: kobold [m1045_5] HP
+/// 5/5 ..." lines in the agent's own llm-prompt feed items (agent-client's
+/// state.rs format_world_state) — the id is what actions echo back and the
+/// server matches on, never the name, so labels need this lookup to show
+/// something readable. Never cleared: a monster out of view in a later
+/// prompt should still resolve for an action against it moments earlier.
+const monsterNames = new Map()
+const MONSTER_LINE_RE = /Monster:\s*(\S+)\s*\[([^\]]+)\]/g
+
+function learnMonsterNames(text) {
+  MONSTER_LINE_RE.lastIndex = 0
+  let match
+  while ((match = MONSTER_LINE_RE.exec(text))) {
+    monsterNames.set(match[2], match[1])
+  }
+}
+
 const FEED_KINDS = [
   'llm-prompt',
   'llm-response',
@@ -466,8 +483,8 @@ function bindPersonalityTabs() {
 
 const BUILTIN_COORDS = [
   { name: 'Rica', x: -1473.8, y: 1.1, z: 4735.5 },
-  { name: 'Old Crypt Dungeon', x: -1450, y: 0.7, z: 4720 },
   { name: 'Fishing spot', x: -1501.6, y: 0.3, z: 4732.3 },
+  { name: 'Old Crypt', x: -1450, y: 0.7, z: 4720 },
   { name: 'Orc Warren', x: -1616, y: 1.05, z: 4918 },
 ]
 let customCoords = []
@@ -606,8 +623,10 @@ function actionLabel(action) {
       const msg = String(action.message ?? '')
       return `Say "${msg.length > 24 ? `${msg.slice(0, 24)}…` : msg}"`
     }
-    case 'attack':
-      return `Attack→${action.monster_id ?? action.target ?? action.id ?? '?'}`
+    case 'attack': {
+      const id = action.monster_id ?? action.target ?? action.id ?? '?'
+      return `Attack→${monsterNames.get(id) ?? id}`
+    }
     case 'move':
       if (action.target) return `Move→${action.target}`
       if (action.x != null || action.z != null) {
@@ -661,15 +680,88 @@ function actionLabel(action) {
   }
 }
 
-function formatActions(actions) {
-  if (!Array.isArray(actions) || !actions.length) return ''
-  return actions.map(actionLabel).filter(Boolean).join(', ')
+const ACTION_TOAST_TTL_MS = 7000
+const ACTION_TOAST_FADE_MS = 400
+const ACTION_TOAST_CAP = 10
+
+/// A serialized signature of whichever `actions` array the last setVitals
+/// call already toasted. main.js resends the same actions every poll tick
+/// until a new turn lands — but each send crosses the main/renderer IPC
+/// boundary, which structured-clones the payload, so the renderer never
+/// receives the same array *instance* twice even when nothing changed.
+/// Comparing content instead of identity is what actually tells a genuinely
+/// new turn apart from the same stale value arriving again.
+let lastToastedActionsSignature = null
+
+/// Toast element -> its pending fade/remove timers, so a repeat of the same
+/// action (see pushActionToast) can cancel and restart them instead of
+/// leaving the old ones to fire early on a toast that just got reused.
+const actionToastTimers = new Map()
+
+function scheduleToastRemoval(el) {
+  const prev = actionToastTimers.get(el)
+  if (prev) {
+    clearTimeout(prev.fadeTimer)
+    clearTimeout(prev.removeTimer)
+  }
+  el.classList.remove('out')
+  actionToastTimers.set(el, {
+    fadeTimer: setTimeout(() => el.classList.add('out'), ACTION_TOAST_TTL_MS - ACTION_TOAST_FADE_MS),
+    removeTimer: setTimeout(() => {
+      actionToastTimers.delete(el)
+      el.remove()
+    }, ACTION_TOAST_TTL_MS),
+  })
+}
+
+/// A repeated action (e.g. "Move→north" every turn while walking) collapses
+/// into the most recent toast instead of stacking a new one — otherwise a
+/// long walk reads as a wall of identical notifications.
+function pushActionToast(text) {
+  const box = $('actionToasts')
+  const last = box.lastElementChild
+  if (last && last.dataset.label === text) {
+    const count = Number(last.dataset.count) + 1
+    last.dataset.count = String(count)
+    last.textContent = `${text} ×${count}`
+    scheduleToastRemoval(last)
+    return
+  }
+  const el = document.createElement('div')
+  el.className = 'action-toast'
+  el.textContent = text
+  el.dataset.label = text
+  el.dataset.count = '1'
+  box.appendChild(el)
+  while (box.childElementCount > ACTION_TOAST_CAP) box.removeChild(box.firstChild)
+  scheduleToastRemoval(el)
+}
+
+function pushActionToasts(actions) {
+  const signature = Array.isArray(actions) ? JSON.stringify(actions) : ''
+  if (signature === lastToastedActionsSignature) return
+  lastToastedActionsSignature = signature
+  if (!Array.isArray(actions)) return
+  for (const action of actions) {
+    const label = actionLabel(action)
+    if (label) pushActionToast(label)
+  }
+}
+
+function clearActionToasts() {
+  for (const { fadeTimer, removeTimer } of actionToastTimers.values()) {
+    clearTimeout(fadeTimer)
+    clearTimeout(removeTimer)
+  }
+  actionToastTimers.clear()
+  $('actionToasts').innerHTML = ''
+  lastToastedActionsSignature = null
 }
 
 function setVitals(v) {
   if (!v || !v.self) {
     $('vitals').textContent = ''
-    $('vitalsActions').textContent = ''
+    clearActionToasts()
     renderBag([])
     renderWorn({})
     return
@@ -680,9 +772,8 @@ function setVitals(v) {
       ? ` · ${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
   const gold = v.gold == null ? '' : ` · ${v.gold}g`
-  const actions = formatActions(v.actions)
   $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}`
-  $('vitalsActions').textContent = actions ? `Last actions: ${actions}` : ''
+  pushActionToasts(v.actions)
   renderBag(v.bag)
 }
 
@@ -852,6 +943,8 @@ async function submitBagLabels() {
 function appendFeed(items) {
   const box = $('feed')
   for (const item of items) {
+    if (item.k === 'llm-prompt') learnMonsterNames(item.m)
+
     const el = document.createElement('div')
     el.className = `feed-item k-${item.k}`
     if (item.k === 'llm-response') el.classList.add('open')

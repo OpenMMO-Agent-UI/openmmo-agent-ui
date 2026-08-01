@@ -106,7 +106,6 @@
         <span class="dot" id="dot"></span>
         <span class="status" id="status">stopped</span>
         <span class="vitals" id="vitals"></span>
-        <span class="vitals-actions" id="vitalsActions"></span>
         <span class="spacer"></span>
         <span class="mem" id="mem"></span>
         <button id="reloadView" class="ghost" title="Reload the spectator view">↻</button>
@@ -163,6 +162,7 @@
               <p>Start the agent and its world appears here, rendered by the real game client from the agent's own view.</p>
               <p class="hint" id="viewHint">Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.</p>
             </div>
+            <div id="actionToasts" class="action-toasts"></div>
           </div>
 
           <!-- Always visible, not a rail drawer: this is the one control that
