@@ -322,10 +322,20 @@ function closeProfileEditor() {
   $('profileEditor').hidden = true
 }
 
+/// The screen renderWorkflow last acted on — lets it tell a real transition
+/// into 'character' (reset the pick list) apart from chooseCharacter's own
+/// intermediate `{busy: true}` publish, which merges onto whatever screen
+/// was already current and re-fires this same branch mid-entry. Without this,
+/// that publish nulls the selectedCharacterId enterCharacter() just set,
+/// moments before workflow.chooseCharacter() even resolves.
+let lastRenderedScreen = null
+
 function renderWorkflow(state) {
   profiles = state.profiles || profiles
   selectedProfileId = state.selectedProfileId || selectedProfileId
   showErrors(state.errors)
+  const enteringScreen = state.screen !== lastRenderedScreen
+  lastRenderedScreen = state.screen
   if (state.screen === 'server') {
     setScreen('server')
     renderProfiles()
@@ -336,7 +346,7 @@ function renderWorkflow(state) {
   } else if (state.screen === 'character') {
     characters = state.characters
     $('accountName').textContent = state.accountName || ''
-    selectedCharacterId = null
+    if (enteringScreen) selectedCharacterId = null
     renderCharacterList()
     updateCreateVisibility()
     setCharacterTab(characters.length ? 'pick' : 'create')
@@ -623,6 +633,23 @@ function renderPresets() {
   box.innerHTML = ''
   for (const preset of BUILTIN_PRESETS) box.appendChild(presetRow(preset, false))
   for (const preset of customPresets) box.appendChild(presetRow(preset, true))
+  renderDirectivePresets()
+}
+
+/// One-click chips above the Dispatch input — same presets as the drawer,
+/// same immediate-send behavior as clicking a preset row there.
+function renderDirectivePresets() {
+  const box = $('directivePresets')
+  box.innerHTML = ''
+  for (const preset of [...BUILTIN_PRESETS, ...customPresets]) {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = 'chip directive-preset-chip'
+    chip.textContent = preset.name
+    chip.title = preset.prompt
+    chip.addEventListener('click', () => sendPresetDirective(preset))
+    box.appendChild(chip)
+  }
 }
 
 /// Same directive pipe as Coordinates (ADR 0003) — a preset is just a
@@ -713,9 +740,12 @@ const WORN_SLOTS = [
   ['neck', 'Neck'],
   ['ear', 'Ear'],
   ['chest', 'Chest'],
+  ['shirt', 'Shirt'],
+  ['back', 'Back'],
   ['belt', 'Belt'],
   ['pants', 'Pants'],
   ['boots', 'Boots'],
+  ['hands', 'Hands'],
   ['main_hand', 'Main hand'],
   ['off_hand', 'Off hand'],
   ['ring', 'Ring'],

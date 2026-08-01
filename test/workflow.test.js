@@ -104,3 +104,23 @@ test('selecting a character enters the game immediately without a Play step', as
   assert.equal(state.screen, 'game')
   assert.deepEqual(state.session, { mode: 'ai', characterId: 2 })
 })
+
+/// chooseCharacter's first publish (`{busy: true}`) merges onto whatever
+/// screen was already current rather than declaring one — so it republishes
+/// 'character' mid-entry, not just at start(). A consumer that treats every
+/// publish carrying screen:'character' as a fresh arrival at the picker (as
+/// app.js's renderWorkflow once did) will act on that intermediate tick and
+/// undo state the caller just set for the character being entered — see the
+/// selectedCharacterId-reset bug this was written to lock in behavior for.
+test('chooseCharacter republishes the current screen, unchanged, before it resolves', async () => {
+  const { workflow, states } = fixture()
+  await workflow.start()
+  await workflow.continueWithProfile('official')
+  states.length = 0
+
+  await workflow.chooseCharacter(2)
+
+  assert.equal(states[0].busy, true)
+  assert.equal(states[0].screen, 'character')
+  assert.equal(states.at(-1).screen, 'game')
+})

@@ -868,6 +868,24 @@ iframe {
   background: rgba(193, 85, 59, 0.1);
 }
 
+.directive-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.directive-preset-chip {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  opacity: 1;
+}
+
+.directive-preset-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 .drawer {
   width: 340px;
   flex: none;

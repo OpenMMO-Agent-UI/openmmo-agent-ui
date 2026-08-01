@@ -1,7 +1,8 @@
 {
   "verifiedProtocols": [
     10,
-    11
+    11,
+    12
   ],
   "fallbackProtocol": 11
 }
