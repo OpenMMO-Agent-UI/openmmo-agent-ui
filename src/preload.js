@@ -48,6 +48,11 @@ contextBridge.exposeInMainWorld('agentApp', {
   listCoordinates: (characterId) => ipcRenderer.invoke('coordinates:list', { characterId }),
   addCoordinate: (characterId, coord) => ipcRenderer.invoke('coordinates:add', { characterId, ...coord }),
   deleteCoordinate: (characterId, id) => ipcRenderer.invoke('coordinates:delete', { characterId, id }),
+  listPresets: (characterId) => ipcRenderer.invoke('presets:list', { characterId }),
+  addPreset: (characterId, preset) => ipcRenderer.invoke('presets:add', { characterId, ...preset }),
+  updatePreset: (characterId, id, preset) =>
+    ipcRenderer.invoke('presets:update', { characterId, id, ...preset }),
+  deletePreset: (characterId, id) => ipcRenderer.invoke('presets:delete', { characterId, id }),
   openView: () => ipcRenderer.invoke('view:open'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),

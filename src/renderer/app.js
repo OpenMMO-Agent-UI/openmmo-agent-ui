@@ -172,6 +172,11 @@ function setStatus(state) {
   $('dot').className = `dot${running ? ' on' : ''}`
   $('status').textContent = running ? `running (pid ${state.pid})` : 'stopped'
   $('restart').hidden = !(running && dirtyWhileRunning)
+  $('directiveInput').disabled = !running
+  $('directiveInput').placeholder = running
+    ? 'Send word to your character…'
+    : 'Not running — nothing to dispatch to'
+  $('directiveForm').querySelector('button[type="submit"]').disabled = !running
   if (!running) {
     const frame = $('frame')
     frame.hidden = true
@@ -403,6 +408,7 @@ async function enterCharacter(character) {
   await persist({ characterName: character.name })
   await loadInstancePrompt()
   await loadCoords()
+  await loadPresets()
   await loadBagLabels()
   await workflow.chooseCharacter(character.id)
 }
@@ -415,6 +421,7 @@ function selectCharacter(id) {
   updatePlayEnabled()
   void loadInstancePrompt()
   void loadCoords()
+  void loadPresets()
   void loadBagLabels()
 }
 
@@ -481,8 +488,24 @@ function bindPersonalityTabs() {
   }
 }
 
+function setActivityTab(name) {
+  for (const btn of document.querySelectorAll('#activityTabs .tab')) {
+    btn.classList.toggle('on', btn.dataset.activityTab === name)
+  }
+  for (const panel of document.querySelectorAll('[data-activity-panel]')) {
+    panel.hidden = panel.dataset.activityPanel !== name
+  }
+}
+
+function bindActivityTabs() {
+  for (const btn of document.querySelectorAll('#activityTabs .tab')) {
+    btn.addEventListener('click', () => setActivityTab(btn.dataset.activityTab))
+  }
+}
+
 const BUILTIN_COORDS = [
-  { name: 'Rica', x: -1473.8, y: 1.1, z: 4735.5 },
+  { name: 'Aldermark', x: -1471.4, y: 0.9, z: 4741.2 },
+  { name: 'Merchant Rica', x: -1473.8, y: 1.1, z: 4735.5 },
   { name: 'Fishing spot', x: -1501.6, y: 0.3, z: 4732.3 },
   { name: 'Old Crypt', x: -1450, y: 0.7, z: 4720 },
   { name: 'Orc Warren', x: -1616, y: 1.05, z: 4918 },
@@ -534,13 +557,98 @@ function renderCoords() {
 /// for the NPC's next turn, so a clicked spot gets the same You/Agent
 /// feedback as anything typed by hand.
 async function sendCoordDirective(coord) {
-  const text = `Go to ${coord.name} (${coord.x}, ${coord.y}, ${coord.z}).`
+  const text = `Go to ${coord.name} (${coord.x}, ${coord.y}, ${coord.z}) immediately without questioning.`
   const res = await api.sendDirective(text)
   if (!res.ok) {
     showErrors([res.error])
     return
   }
   trackDirective(text)
+}
+
+const BUILTIN_PRESETS = [
+  { name: 'Idle', prompt: 'Stay at where you are and do nothing until ~Director~ give you instructions.' },
+  { name: 'Go Fishing', prompt: 'Go to Fishing spot and cast {"type": "fish"}' },
+  { name: 'Sell Items', prompt: 'Go find Merchant Rica and sell any sellable items.' },
+]
+let customPresets = []
+let editingPresetId = null
+
+/// Player-saved dispatch presets, reloaded on every character switch — same
+/// per-character scoping as Coordinates.
+async function loadPresets() {
+  customPresets = selectedCharacterId ? await api.listPresets(selectedCharacterId) : []
+  renderPresets()
+}
+
+function presetRow(preset, editable) {
+  const row = document.createElement('div')
+  row.className = 'preset-row'
+  const go = document.createElement('button')
+  go.type = 'button'
+  go.className = 'preset-go'
+  go.textContent = preset.name
+  go.title = preset.prompt
+  go.addEventListener('click', () => sendPresetDirective(preset))
+  row.appendChild(go)
+  if (editable) {
+    const edit = document.createElement('button')
+    edit.type = 'button'
+    edit.className = 'ghost small preset-edit'
+    edit.textContent = '✎'
+    edit.title = 'Edit'
+    edit.addEventListener('click', () => startEditPreset(preset))
+    row.appendChild(edit)
+
+    const del = document.createElement('button')
+    del.type = 'button'
+    del.className = 'ghost small preset-delete'
+    del.textContent = '×'
+    del.title = 'Remove'
+    del.addEventListener('click', async () => {
+      const res = await api.deletePreset(selectedCharacterId, preset.id)
+      if (res.ok) {
+        customPresets = res.list
+        if (editingPresetId === preset.id) cancelEditPreset()
+        renderPresets()
+      }
+    })
+    row.appendChild(del)
+  }
+  return row
+}
+
+function renderPresets() {
+  const box = $('presetsList')
+  box.innerHTML = ''
+  for (const preset of BUILTIN_PRESETS) box.appendChild(presetRow(preset, false))
+  for (const preset of customPresets) box.appendChild(presetRow(preset, true))
+}
+
+/// Same directive pipe as Coordinates (ADR 0003) — a preset is just a
+/// pre-written directive.
+async function sendPresetDirective(preset) {
+  const res = await api.sendDirective(preset.prompt)
+  if (!res.ok) {
+    showErrors([res.error])
+    return
+  }
+  trackDirective(preset.prompt)
+}
+
+function startEditPreset(preset) {
+  editingPresetId = preset.id
+  $('presetName').value = preset.name
+  $('presetPrompt').value = preset.prompt
+  $('presetsSubmit').textContent = 'Save'
+  $('presetsCancelEdit').hidden = false
+}
+
+function cancelEditPreset() {
+  editingPresetId = null
+  $('presetsForm').reset()
+  $('presetsSubmit').textContent = 'Add'
+  $('presetsCancelEdit').hidden = true
 }
 
 async function deleteCharacterRow(id, name) {
@@ -680,9 +788,25 @@ function actionLabel(action) {
   }
 }
 
-const ACTION_TOAST_TTL_MS = 7000
-const ACTION_TOAST_FADE_MS = 400
-const ACTION_TOAST_CAP = 10
+function toastTtlMs() {
+  return (settings?.toastPersistSecs ?? 7) * 1000
+}
+function toastFadeMs() {
+  return (settings?.toastFadeSecs ?? 0.4) * 1000
+}
+function toastMaxCount() {
+  return settings?.toastMaxCount ?? 10
+}
+
+/// Pushes the settings-configurable toast look (font size, background
+/// transparency, fade duration) onto :root so every `.action-toast` —
+/// including the live preview in Settings — picks it up without threading
+/// the values through per-element inline styles.
+function applyToastCssVars() {
+  document.documentElement.style.setProperty('--toast-font-size', `${settings.toastFontSize}px`)
+  document.documentElement.style.setProperty('--toast-bg-opacity', String(settings.toastOpacity / 100))
+  document.documentElement.style.setProperty('--toast-fade-ms', `${toastFadeMs()}ms`)
+}
 
 /// A serialized signature of whichever `actions` array the last setVitals
 /// call already toasted. main.js resends the same actions every poll tick
@@ -705,12 +829,14 @@ function scheduleToastRemoval(el) {
     clearTimeout(prev.removeTimer)
   }
   el.classList.remove('out')
+  const ttl = toastTtlMs()
+  const fade = toastFadeMs()
   actionToastTimers.set(el, {
-    fadeTimer: setTimeout(() => el.classList.add('out'), ACTION_TOAST_TTL_MS - ACTION_TOAST_FADE_MS),
+    fadeTimer: setTimeout(() => el.classList.add('out'), Math.max(0, ttl - fade)),
     removeTimer: setTimeout(() => {
       actionToastTimers.delete(el)
       el.remove()
-    }, ACTION_TOAST_TTL_MS),
+    }, ttl),
   })
 }
 
@@ -733,7 +859,7 @@ function pushActionToast(text) {
   el.dataset.label = text
   el.dataset.count = '1'
   box.appendChild(el)
-  while (box.childElementCount > ACTION_TOAST_CAP) box.removeChild(box.firstChild)
+  while (box.childElementCount > toastMaxCount()) box.removeChild(box.firstChild)
   scheduleToastRemoval(el)
 }
 
@@ -758,8 +884,16 @@ function clearActionToasts() {
   lastToastedActionsSignature = null
 }
 
+/// Cached off the last vitals push so the Coordinates drawer's "Use current
+/// position" button (bound in bindActions) has something to read on click —
+/// the agent-client's /api/state already carries this in `self.position`,
+/// it just wasn't kept around anywhere before now.
+let lastSelf = null
+
 function setVitals(v) {
   if (!v || !v.self) {
+    lastSelf = null
+    $('coordUseCurrent').disabled = true
     $('vitals').textContent = ''
     clearActionToasts()
     renderBag([])
@@ -767,12 +901,17 @@ function setVitals(v) {
     return
   }
   const s = v.self
+  lastSelf = s
+  $('coordUseCurrent').disabled = !s.position
   const clock =
     v.time && v.time.hour != null
       ? ` · ${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
   const gold = v.gold == null ? '' : ` · ${v.gold}g`
-  $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}`
+  const coords = s.position
+    ? ` · (${s.position.x.toFixed(1)}, ${s.position.y.toFixed(1)}, ${s.position.z.toFixed(1)})`
+    : ''
+  $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}${coords}`
   pushActionToasts(v.actions)
   renderBag(v.bag)
 }
@@ -919,21 +1058,32 @@ function enchantCollisions() {
 }
 
 async function submitBagLabels() {
-  if (!selectedCharacterId) return
-  const collisions = enchantCollisions()
-  if (collisions.length) {
-    const proceed = await confirmAction(
-      `${collisions.join(', ')} — you carry more than one enchant level, and sell/drop can't tell them apart. ` +
-        'The agent might act on the wrong one. Apply labels anyway?',
-      'Apply anyway',
-    )
-    if (!proceed) return
+  if (!selectedCharacterId) {
+    $('bagLabelsStatus').textContent = 'No character selected.'
+    return
   }
-  const res = await api.saveBagLabels(selectedCharacterId, settings.characterName, {
-    sellable: [...stagedLabels.sellable],
-    dropable: [...stagedLabels.dropable],
-  })
-  $('bagLabelsStatus').textContent = res.ok ? 'Labels applied.' : res.error || 'Failed to apply labels.'
+  try {
+    const collisions = enchantCollisions()
+    if (collisions.length) {
+      const proceed = await confirmAction(
+        `${collisions.join(', ')} — you carry more than one enchant level, and sell/drop can't tell them apart. ` +
+          'The agent might act on the wrong one. Apply labels anyway?',
+        'Apply anyway',
+      )
+      if (!proceed) {
+        $('bagLabelsStatus').textContent = 'Cancelled.'
+        return
+      }
+    }
+    $('bagLabelsStatus').textContent = 'Applying…'
+    const res = await api.saveBagLabels(selectedCharacterId, settings.characterName, {
+      sellable: [...stagedLabels.sellable],
+      dropable: [...stagedLabels.dropable],
+    })
+    $('bagLabelsStatus').textContent = res.ok ? 'Labels applied.' : res.error || 'Failed to apply labels.'
+  } catch (err) {
+    $('bagLabelsStatus').textContent = err?.message || 'Failed to apply labels.'
+  }
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -1019,6 +1169,7 @@ function openSettings() {
   settingsDirty = false
   $('settingsDirty').hidden = true
   syncCadenceControls()
+  syncToastControls()
 }
 
 function closeSettings() {
@@ -1072,6 +1223,49 @@ function renderCadenceLabels() {
   $('idleCadenceLabel').textContent =
     `${idle[0]} · ${idle[1] >= 60 ? `${idle[1] / 60} minute${idle[1] === 60 ? '' : 's'}` : `${idle[1]} seconds`}`
   $('idleCadenceHint').textContent = `At most about ${(60 / idle[1]).toFixed(2)} calls/minute while quiet.`
+}
+
+function syncToastControls() {
+  $('toastFontSize').value = settings.toastFontSize
+  $('toastOpacity').value = settings.toastOpacity
+  $('toastPersistSecs').value = settings.toastPersistSecs
+  $('toastFadeSecs').value = settings.toastFadeSecs
+  $('toastMaxCount').value = settings.toastMaxCount
+  renderToastLabels()
+}
+
+function renderToastLabels() {
+  $('toastFontSizeLabel').textContent = `${settings.toastFontSize}px`
+  $('toastOpacityLabel').textContent = `${settings.toastOpacity}%`
+  $('toastPersistSecsLabel').textContent = `${settings.toastPersistSecs}s`
+  $('toastFadeSecsLabel').textContent = `${settings.toastFadeSecs}s`
+  $('toastMaxCountLabel').textContent = String(settings.toastMaxCount)
+}
+
+/// Toast look/timing take effect immediately and save on every drag tick —
+/// unlike LLM/Automatic-play, there is nothing here for Apply & validate to
+/// check or restart agent-client over, so staging them behind that button
+/// would just add a click for a change that's purely cosmetic.
+function bindToastControls() {
+  const numericFields = {
+    toastFontSize: 'int',
+    toastOpacity: 'int',
+    toastPersistSecs: 'int',
+    toastFadeSecs: 'float',
+    toastMaxCount: 'int',
+  }
+  for (const [id, type] of Object.entries(numericFields)) {
+    $(id).addEventListener('input', () => {
+      settings[id] = readField(id, type)
+      renderToastLabels()
+      applyToastCssVars()
+      persistToastSetting({ [id]: settings[id] })
+    })
+  }
+}
+
+async function persistToastSetting(patch) {
+  settings = await api.saveSettings(patch)
 }
 
 function setSettingsTab(name) {
@@ -1132,7 +1326,7 @@ function confirmAction(message, okLabel = 'Delete') {
 
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality & Memory', thoughts: 'Thoughts', log: 'Log', coords: 'Coordinates' }
+  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality & Memory', activity: 'Activity', presets: 'Dispatch Presets', coords: 'Coordinates' }
   for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.drawer
@@ -1156,6 +1350,8 @@ function bindRail() {
       // off — simpler than tracking whether it's safe to resume polling.
       if (kind === 'prompt') setPersonalitySubtab('personality')
       else stopMemoryPolling()
+      // Same reasoning as Personality/Memory: always land on Thoughts.
+      if (kind === 'activity') setActivityTab('thoughts')
     })
   }
   $('drawerClose').addEventListener('click', () => {
@@ -1207,6 +1403,7 @@ function bindFields() {
     $('settingsDirty').hidden = false
     renderCadenceLabels()
   })
+  bindToastControls()
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
     button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab))
   }
@@ -1317,6 +1514,14 @@ function bindActions() {
     trackDirective(text)
   })
 
+  $('coordUseCurrent').addEventListener('click', () => {
+    if (!lastSelf?.position) return
+    $('coordName').value = lastSelf.name || ''
+    $('coordX').value = lastSelf.position.x.toFixed(1)
+    $('coordY').value = lastSelf.position.y.toFixed(1)
+    $('coordZ').value = lastSelf.position.z.toFixed(1)
+  })
+
   $('coordsForm').addEventListener('submit', async (e) => {
     e.preventDefault()
     const name = $('coordName').value.trim()
@@ -1334,6 +1539,25 @@ function bindActions() {
     e.target.reset()
   })
 
+  $('presetsForm').addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const name = $('presetName').value.trim()
+    const prompt = $('presetPrompt').value.trim()
+    if (!name || !prompt || !selectedCharacterId) return
+    const res = editingPresetId
+      ? await api.updatePreset(selectedCharacterId, editingPresetId, { name, prompt })
+      : await api.addPreset(selectedCharacterId, { name, prompt })
+    if (!res.ok) {
+      showErrors([res.error])
+      return
+    }
+    customPresets = res.list
+    renderPresets()
+    cancelEditPreset()
+  })
+
+  $('presetsCancelEdit').addEventListener('click', () => cancelEditPreset())
+
   $('saveInstance').addEventListener('click', async () => {
     if (!settings.characterName) return
     showErrors([])
@@ -1342,6 +1566,10 @@ function bindActions() {
       settings.characterName,
       $('instanceText').value,
     )
+    if (!res.ok) {
+      $('instanceFile').textContent = res.error || 'Save failed'
+      return
+    }
     if (!running) {
       $('instanceFile').textContent = `Saved to ${res.file}`
       return
@@ -1401,7 +1629,6 @@ function bindActions() {
     if (!result.ok) showErrors([result.error])
     else applyPlayState(result.session)
   })
-  $('modeSettings').addEventListener('click', openSettings)
   $('changeCharacter').addEventListener('click', async () => {
     if (!(await confirmAction('Leave this session and choose another character?', 'Leave'))) return
     await api.leavePlay('character')
@@ -1461,6 +1688,7 @@ async function init() {
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()
   renderBackend()
+  applyToastCssVars()
 
   for (const item of info.log) appendLog(item)
 
@@ -1475,10 +1703,12 @@ async function init() {
   bindRail()
   bindCharacterTabs()
   bindPersonalityTabs()
+  bindActivityTabs()
 
   renderFeedFilters()
   renderWorn({})
   renderCoords()
+  renderPresets()
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)

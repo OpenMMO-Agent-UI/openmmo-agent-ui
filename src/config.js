@@ -92,6 +92,11 @@ const DEFAULTS = {
   /// dev checkout whose binary lives somewhere unusual.
   binaryPath: '',
   imported: false,
+  toastFontSize: 13,
+  toastOpacity: 75,
+  toastPersistSecs: 7,
+  toastFadeSecs: 0.4,
+  toastMaxCount: 10,
 }
 
 const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret']

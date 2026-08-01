@@ -15,6 +15,9 @@
   --verdigris: #5e9078;
   --err: #d1495b;
   --display-font: 'Big Caslon', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --toast-font-size: 13px;
+  --toast-bg-opacity: 0.75;
+  --toast-fade-ms: 400ms;
 }
 
 * {
@@ -721,17 +724,25 @@ body[data-mode='manual'] .gamesurface {
   padding: 6px 12px;
   border-radius: 6px;
   border: 1px solid rgba(201, 162, 74, 0.2);
-  background: rgba(27, 32, 41, 0.75);
+  background: rgba(27, 32, 41, var(--toast-bg-opacity));
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--toast-font-size);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   word-break: break-word;
   opacity: 1;
-  transition: opacity 0.4s ease;
+  transition: opacity var(--toast-fade-ms) ease;
 }
 
 .action-toast.out {
   opacity: 0;
+}
+
+.toast-preview-box {
+  display: flex;
+  padding: 16px;
+  border-radius: 6px;
+  background: #0d0f14;
+  margin-bottom: 8px;
 }
 
 iframe {
@@ -894,7 +905,17 @@ iframe {
 .drawer-body #feed,
 .drawer-body .bag-list,
 .drawer-body .worn-list,
-.drawer-body .coords-list {
+.drawer-body .coords-list,
+.drawer-body .presets-list {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Thoughts/Log tabs inside the Activity drawer panel, same treatment as the
+   Personality/Memory sub-tabs. */
+[data-drawer-panel='activity'] > [data-activity-panel] {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
 }
@@ -942,7 +963,7 @@ iframe {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  flex: 1;
+  margin-bottom: 6px;
 }
 
 .chip {
@@ -1135,6 +1156,63 @@ iframe {
 }
 
 .coords-form input {
+  margin-top: 0;
+}
+
+.presets-list {
+  overflow-y: auto;
+}
+
+.preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.preset-go {
+  flex: 1;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.preset-go:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--accent);
+}
+
+.preset-edit,
+.preset-delete {
+  flex: none;
+}
+
+.presets-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+  padding-top: 10px;
+}
+
+.presets-form .row {
+  display: flex;
+  gap: 6px;
+}
+
+.presets-form input {
+  margin-top: 0;
+}
+
+#presetPrompt {
+  height: 60px;
   margin-top: 0;
 }
 

@@ -731,6 +731,61 @@ ipcMain.handle('coordinates:delete', (_e, { characterId, id }) => {
   return { ok: true, list }
 })
 
+/// Player-saved dispatch presets, same scoping/shape as coordinates.
+function presetsPath(profileId, characterId) {
+  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
+  return path.join(app.getPath('userData'), 'presets', safe(profileId), `${safe(characterId)}.json`)
+}
+
+function readPresets(profileId, characterId) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(presetsPath(profileId, characterId), 'utf8'))
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writePresets(profileId, characterId, list) {
+  const file = presetsPath(profileId, characterId)
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  fs.writeFileSync(file, JSON.stringify(list))
+}
+
+ipcMain.handle('presets:list', (_e, { characterId }) => {
+  if (!characterId) return []
+  return readPresets(profileStore.selected().id, characterId)
+})
+
+ipcMain.handle('presets:add', (_e, { characterId, name, prompt }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const profileId = profileStore.selected().id
+  const list = readPresets(profileId, characterId)
+  list.push({ id: crypto.randomUUID(), name, prompt })
+  writePresets(profileId, characterId, list)
+  return { ok: true, list }
+})
+
+ipcMain.handle('presets:update', (_e, { characterId, id, name, prompt }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const profileId = profileStore.selected().id
+  const list = readPresets(profileId, characterId)
+  const preset = list.find((p) => p.id === id)
+  if (!preset) return { ok: false, error: 'Preset not found' }
+  preset.name = name
+  preset.prompt = prompt
+  writePresets(profileId, characterId, list)
+  return { ok: true, list }
+})
+
+ipcMain.handle('presets:delete', (_e, { characterId, id }) => {
+  if (!characterId) return { ok: false, error: 'No character selected' }
+  const profileId = profileStore.selected().id
+  const list = readPresets(profileId, characterId).filter((p) => p.id !== id)
+  writePresets(profileId, characterId, list)
+  return { ok: true, list }
+})
+
 /// Signing out has to take the agent with it: it holds a live session on the
 /// credential we are about to delete.
 ipcMain.handle('auth:signout', async () => {
