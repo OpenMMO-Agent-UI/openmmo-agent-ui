@@ -100,8 +100,12 @@ async function testConnection(serverUrl, terrainOrigin, fetchFn = fetch) {
   }
 
   if (terrainOrigin) {
-    const origin = new URL(terrainOrigin)
-    const res = await fetchFn(origin, {
+    // A bare HEAD to the origin only works where the origin also serves the
+    // static web client (prod, behind nginx) — a dev API server has nothing
+    // mounted at "/". Probe a real, public, GET-only route instead so the
+    // check means the same thing everywhere.
+    const url = new URL('/api/announcements', terrainOrigin)
+    const res = await fetchFn(url, {
       method: 'HEAD',
       redirect: 'follow',
       signal: AbortSignal.timeout(5000),
