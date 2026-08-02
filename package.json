@@ -1,6 +1,6 @@
 {
   "name": "openmmo-client",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "private": true,
   "description": "Desktop client for running an OpenMMO LLM agent: process control, model/prompt tuning, and a live 3D spectator view of your character.",
   "license": "MIT",
@@ -38,24 +38,53 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "build/resources/agent-client", "to": "agent-client" },
-      { "from": "build/resources/client", "to": "client" }
+      {
+        "from": "build/resources/agent-client",
+        "to": "agent-client"
+      },
+      {
+        "from": "build/resources/client",
+        "to": "client"
+      }
     ],
     "mac": {
       "category": "public.app-category.games",
-      "target": [{ "target": "zip", "arch": ["arm64"] }],
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "config/entitlements.mac.plist",
       "entitlementsInherit": "config/entitlements.mac.plist",
-      "binaries": ["Resources/agent-client/agent-client"]
+      "binaries": [
+        "Resources/agent-client/agent-client"
+      ]
     },
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "linux": {
       "category": "Game",
-      "target": [{ "target": "AppImage", "arch": ["x64"] }]
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     }
   }
 }

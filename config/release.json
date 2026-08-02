@@ -2,7 +2,8 @@
   "verifiedProtocols": [
     10,
     11,
-    12
+    12,
+    13
   ],
-  "fallbackProtocol": 11
+  "fallbackProtocol": 12
 }
