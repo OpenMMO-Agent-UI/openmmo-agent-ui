@@ -8,7 +8,15 @@ set -euo pipefail
 # launchd's environment is minimal (no shell profile sourced) — name every
 # directory this flow's tools live in explicitly rather than relying on a
 # login shell PATH.
-export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin:$HOME/.cargo/bin"
+#
+# rustup's shims MUST precede Homebrew's own cargo/rustc: rustup is
+# installed keg-only (it does not symlink into /opt/homebrew/bin, and does
+# not populate ~/.cargo/bin either) specifically so it doesn't clobber the
+# Homebrew rust other projects on this machine use — but that also means
+# Homebrew's plain rustc, which has no wasm32-unknown-unknown target, would
+# otherwise win by coming first. See "Local environment prerequisites" in
+# SKILL.md for how the rustup toolchain + target were installed.
+export PATH="/opt/homebrew/opt/rustup/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"

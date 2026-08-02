@@ -134,17 +134,39 @@ cd ..
 workflow file has changed since this was written, match the current
 version of it instead of this list.)
 
-Any failure here: stop. Do **not** push `tweak-agent-client` or tag it.
-`git rebase --abort` is not needed (rebase already finished; this is a
-separate, later gate) but do leave the local branch as-is for inspection —
-do not reset or discard it. Send one `PushNotification` naming the failing
-command and a one-line reason, then end the run.
+`build:wasm` regenerates `data/monster_attack_clips.json` from monster
+`.glb` models — if this checkout is missing LFS model assets, the
+generator happily overwrites it with `{}` (a false "no attack clips"
+state). Check `git status` after `build:wasm`/`npm test`/`generate:*`
+steps in this submodule; if that file shows modified, `git checkout --
+data/monster_attack_clips.json` before doing anything else. It's a
+build-artifact regeneration side effect, not a real change, and must never
+reach a commit.
+
+Any failure in the actual test/lint/fmt/clippy commands above: stop. Do
+**not** push `tweak-agent-client` or tag it. `git rebase --abort` is not
+needed (rebase already finished; this is a separate, later gate) but do
+leave the local branch as-is for inspection — do not reset or discard it.
+Send one `PushNotification` naming the failing command and a one-line
+reason, then end the run.
+
+If a command fails for a *local environment* reason rather than a code
+reason (a missing tool, e.g. `wasm-pack: command not found`, or a missing
+Rust target) — that's not a defect in the sync, it's this machine missing
+something the flow needs to ever succeed. Install what's missing (see
+"Local environment prerequisites" below for what this machine needed the
+first time) and retry, rather than treating it as a code-quality abort.
 
 ## Step 4: tag and push the submodule
 
+Helper scripts under `scripts/` resolve their own paths from `__dirname`,
+not from cwd or `git rev-parse --show-toplevel` — safe to call by absolute
+path from anywhere, including from inside this submodule (which is itself
+a git repo, so cwd-relative resolution would otherwise silently break).
+
 ```
 cd deps/OpenMMO   # if not already there
-node ../scripts/release-sync-next-tag.js <protocolVersion>
+node /Users/tony.pai/openmmo-client/scripts/release-sync-next-tag.js <protocolVersion>
 ```
 
 Read the fresh `PROTOCOL_VERSION` from `shared/src/lib.rs` on the rebased
@@ -189,16 +211,25 @@ npm version 0.16.0 --no-git-tag-version   # substitute the actual version
 git add package.json package-lock.json
 ```
 
-## Step 6: main-repo build+test gate
+## Step 6: commit, then the main-repo build+test gate
+
+`npm run validate:pin` (`scripts/release-plan.js`) reads the submodule
+pin from **`git ls-tree HEAD`** — the last commit, not the index. It can
+only pass after committing, so commit first here, then gate on it:
 
 ```
+git commit -m "Sync to OpenMMO <releaseTag> (protocol v<protocolVersion>)"
+```
+
+```
+npm ci
 npm run validate:pin
 ```
 
-This will only pass if Step 4 actually pushed — it checks the pinned SHA is
-reachable from a configured remote ref. If it fails here, something is
-wrong with Step 4 (or this step ran without it); don't paper over it by
-skipping ahead.
+`validate:pin` only passes if Step 4 actually pushed the submodule side —
+it checks the pinned SHA is reachable from a configured remote ref. If it
+fails here, something is wrong with Step 4 (or this step ran without it);
+don't paper over it by skipping ahead.
 
 ```
 npm test
@@ -208,19 +239,22 @@ npm --prefix deps/OpenMMO/client run check
 ```
 
 (Mirrors `.github/workflows/ci.yml`'s `test` job — match the current
-version of that file if it has diverged from this list.)
+version of that file if it has diverged from this list. Same LFS caveat
+as Step 3: revert `deps/OpenMMO/data/monster_attack_clips.json` with
+`git -C deps/OpenMMO checkout -- data/monster_attack_clips.json` if
+`build:wasm` here dirtied it again.)
 
-Any failure: stop. Do not commit or tag the main repo. The submodule side
-stays pushed (that's fine — the next run's Step 0 will see the pin still
-behind and retry from here). `git checkout -- .` / `git reset` the staged
-main-repo changes if you want a clean working tree, but don't touch
-anything under `deps/OpenMMO`. Send one `PushNotification` naming the
-failing command, then end the run.
+Any failure: **undo the commit** — `git reset --soft HEAD~1` — so the
+working tree keeps the staged changes for inspection, but master doesn't
+carry a commit that never passed its own gate. The submodule side stays
+pushed regardless (that's fine — the next run's Step 0 will see the main
+repo's pin still behind and retry from here). Don't touch anything under
+`deps/OpenMMO`. Send one `PushNotification` naming the failing command,
+then end the run.
 
-## Step 7: commit, tag, push the main repo
+## Step 7: tag and push the main repo
 
 ```
-git commit -m "Sync to OpenMMO <releaseTag> (protocol v<protocolVersion>)"
 git tag v<version>
 git push origin master
 git push origin v<version>
@@ -247,6 +281,35 @@ sleep) until that run completes.
   reporting success (new version, protocol version, release URL).
 - **On failure**: leave the draft as-is for manual inspection. Send one
   `PushNotification` naming which CI job failed and a link to the run.
+
+## Local environment prerequisites
+
+This machine needed the following one-time setup before Step 3 could pass
+(as of the first real run, 2026-08-02). If a future run hits the same
+missing-tool errors — e.g. on a rebuilt machine — redo these rather than
+treating them as a code failure:
+
+- `gh auth login` — Step 8 (and Step 0's release lookup) need `gh`
+  authenticated with `repo` + `workflow` scopes.
+- `brew install wasm-pack` — `npm run build:wasm` shells out to it.
+- Rust here is a plain Homebrew install (no rustup), which has no
+  `wasm32-unknown-unknown` target and no supported way to add one. Fix:
+  `brew install rustup` (keg-only, installs to
+  `/opt/homebrew/opt/rustup/bin` without touching the Homebrew `rustc`
+  already on `PATH`), then:
+  ```
+  export PATH="/opt/homebrew/opt/rustup/bin:$PATH"
+  rustup toolchain install stable --profile minimal
+  rustup default stable
+  rustup target add wasm32-unknown-unknown
+  ```
+  `scripts/release-sync-cron.sh` prepends that same directory to `PATH` so
+  scheduled runs pick up rustup's `cargo`/`rustc` (which have the target)
+  ahead of Homebrew's (which don't) — anything invoking cargo/rustc in
+  this flow must run with that `PATH` in effect.
+- The main repo's own `node_modules` (`npm ci` at the repo root, not just
+  inside `deps/OpenMMO/client`) — easy to miss since Steps 3's `npm ci`
+  only covers the submodule's client.
 
 ## Notes for future edits to this skill
 
