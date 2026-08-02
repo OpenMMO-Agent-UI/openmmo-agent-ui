@@ -7,7 +7,7 @@ description: Fully-unattended flow that syncs deps/OpenMMO (our fork of Julian-a
 
 This repo's game client talks to a server that rejects any connection whose
 `PROTOCOL_VERSION` doesn't match exactly (see `scripts/check-protocol.js`).
-`deps/OpenMMO` is a submodule pointing at `tpai/OpenMMO`, a fork of
+`deps/OpenMMO` is a submodule pointing at `OpenMMO-agent/OpenMMO`, a fork of
 `Julian-adv/OpenMMO`, carrying our customizations on the `tweak-agent-client`
 branch. When Julian cuts a new release, our fork and branch need to catch up
 or the deployed server and our client eventually speak different protocol
@@ -47,7 +47,7 @@ and `protocolVersion` are used throughout the rest of this flow.
 
 ## Step 1: fast-forward the fork's master to the release commit
 
-The fork's `master` (`tpai/OpenMMO`) is a pure mirror with no commits of its
+The fork's `master` (`OpenMMO-agent/OpenMMO`) is a pure mirror with no commits of its
 own — it should only ever fast-forward. Sync it to the **release commit**,
 not to whatever Julian's `master` HEAD has moved on to since (his master can
 be — and per his release history, currently is — a handful of commits
