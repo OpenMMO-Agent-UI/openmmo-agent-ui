@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(cargo *)",
+      "Bash(npm *)",
+      "Bash(gh *)",
+      "Bash(node *)",
+      "Bash(cd *)",
+      "Read",
+      "Edit",
+      "Write",
+      "PushNotification"
+    ]
+  }
+}

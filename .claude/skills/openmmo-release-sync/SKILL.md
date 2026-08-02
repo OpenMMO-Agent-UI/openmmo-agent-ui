@@ -1,0 +1,267 @@
+---
+name: openmmo-release-sync
+description: Fully-unattended flow that syncs deps/OpenMMO (our fork of Julian-adv/OpenMMO) to Julian's latest release, rebases our tweak-agent-client customizations onto it, and cuts a matching openmmo-client release. Runs on a schedule (launchd, every 8h) — invoke manually only to test the flow or force a run.
+---
+
+# OpenMMO release sync
+
+This repo's game client talks to a server that rejects any connection whose
+`PROTOCOL_VERSION` doesn't match exactly (see `scripts/check-protocol.js`).
+`deps/OpenMMO` is a submodule pointing at `tpai/OpenMMO`, a fork of
+`Julian-adv/OpenMMO`, carrying our customizations on the `tweak-agent-client`
+branch. When Julian cuts a new release, our fork and branch need to catch up
+or the deployed server and our client eventually speak different protocol
+versions.
+
+This skill runs the entire catch-up unattended: no step pauses for approval.
+Conflicts during rebase are resolved by your own judgment (see Step 3). The
+only thing that can stop the run early is a failed build/test gate — those
+are real safety nets, not confirmation checkpoints, and they abort rather
+than asking.
+
+Every run ends with exactly one `PushNotification` — success or failure, not
+both, and not one per step. If Step 1 finds nothing to do, exit quietly with
+no notification (that is the routine case, not news).
+
+## Step 0: orientation
+
+```
+cd <repo root>
+node scripts/release-sync-check.js
+```
+
+This prints JSON: `hasNewRelease`, `releaseTag`, `releaseSha`,
+`protocolVersion`, `forkHead`, `pinnedSha`. It compares Julian's latest
+non-draft release against **openmmo-client's current submodule pin**, not
+against the fork's master — so a prior run that pushed the fork/branch side
+but failed before the main-repo commit still shows `hasNewRelease: true`,
+and this run picks up wherever the last one stopped. Steps below are safe to
+re-run: pushing an already-pushed ref is a no-op, rebasing an
+already-rebased branch is a no-op, and the tag script only bumps `r` when
+there's something new to mark.
+
+If `hasNewRelease` is `false`, stop here. No notification.
+
+If it's `true`, keep the JSON output around — `releaseTag`, `releaseSha`,
+and `protocolVersion` are used throughout the rest of this flow.
+
+## Step 1: fast-forward the fork's master to the release commit
+
+The fork's `master` (`tpai/OpenMMO`) is a pure mirror with no commits of its
+own — it should only ever fast-forward. Sync it to the **release commit**,
+not to whatever Julian's `master` HEAD has moved on to since (his master can
+be — and per his release history, currently is — a handful of commits
+ahead of his last actual release; that gap is unreleased/unverified work we
+don't want to inherit early).
+
+```
+cd deps/OpenMMO
+git fetch https://github.com/Julian-adv/OpenMMO.git tag <releaseTag> --no-tags
+git tag -d <releaseTag>   # the fetch above still writes a local tag ref; drop it, we don't keep it
+git checkout master
+git merge-base --is-ancestor origin/master FETCH_HEAD && echo ok
+```
+
+If that ancestry check fails, `master` has diverged from a pure mirror
+(something was committed to it directly, out of band). That's outside this
+skill's authority to fix — abort the whole run and notify with what you
+found, don't force anything onto it.
+
+If it's ok:
+
+```
+git reset --hard <releaseSha>   # the SHA from FETCH_HEAD / the check script's releaseSha
+git push origin master
+```
+
+Plain `push`, not force — this must always be a fast-forward. If the push
+is rejected, someone/something moved the fork's master out from under this
+run; abort and notify rather than retrying with force.
+
+## Step 2: rebase tweak-agent-client onto the new master
+
+```
+git checkout tweak-agent-client   # or: git checkout -B tweak-agent-client origin/tweak-agent-client
+git rebase master
+```
+
+If it completes cleanly, move on to Step 3.
+
+**If it stops on a conflict**, resolve it yourself, per-hunk, using this
+policy — favor keeping our customization, *unless* Julian's side already
+implements the same thing:
+
+1. `git status` to see conflicted files; `git diff` to see the conflict
+   markers in context.
+2. For each conflicted file, read enough surrounding code (and, if it
+   clarifies intent, the upstream commit that introduced the conflicting
+   change — `git log -p master -- <file>`) to judge: does upstream's new
+   code already do what our customization was doing? If yes, take
+   upstream's side and drop ours (their version now covers it — keeping
+   ours too would duplicate or conflict with it going forward). If no —
+   upstream changed something unrelated, or removed/altered code near our
+   change without actually replacing its behavior — keep our
+   customization, re-applied on top of upstream's surrounding change.
+3. Edit the file to the resolved state, `git add <file>`.
+4. Once every conflicted file in that step is staged, `git rebase --continue`.
+5. Repeat for any further conflicting commits in the rebase.
+
+If a conflict is genuinely ambiguous — you cannot tell whether upstream
+already covers our customization's intent, even after reading the relevant
+history — do not guess. `git rebase --abort` to leave no partial rebase
+state behind, then abort this entire skill run and notify with which file
+and commit needs a human to look at it.
+
+## Step 3: submodule build+test gate
+
+Still inside `deps/OpenMMO`, on the rebased `tweak-agent-client`:
+
+```
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cd client
+npm ci
+npm run build:wasm
+npm test
+npm run check
+npm run lint
+npm run format:check
+cd ..
+```
+
+(These mirror `deps/OpenMMO/.github/workflows/ci.yml` exactly — if that
+workflow file has changed since this was written, match the current
+version of it instead of this list.)
+
+Any failure here: stop. Do **not** push `tweak-agent-client` or tag it.
+`git rebase --abort` is not needed (rebase already finished; this is a
+separate, later gate) but do leave the local branch as-is for inspection —
+do not reset or discard it. Send one `PushNotification` naming the failing
+command and a one-line reason, then end the run.
+
+## Step 4: tag and push the submodule
+
+```
+cd deps/OpenMMO   # if not already there
+node ../scripts/release-sync-next-tag.js <protocolVersion>
+```
+
+Read the fresh `PROTOCOL_VERSION` from `shared/src/lib.rs` on the rebased
+branch (not the value from Step 0's JSON — confirm they match; they should,
+since only upstream's release commit sets it, but re-reading here is the
+actual source of truth) and pass that to the script above. It prints
+`nextTag`.
+
+```
+git tag -a <nextTag> -m "Sync to <releaseTag>, protocol v<protocolVersion>"
+git push origin tweak-agent-client --force-with-lease
+git push origin <nextTag>
+```
+
+The branch push must be force (rebase rewrote its history) — use
+`--force-with-lease`, not plain `--force`, so a push landing on
+`tweak-agent-client` from anywhere else between fetch and push aborts
+loudly instead of getting silently overwritten.
+
+## Step 5: bump openmmo-client's pin and version
+
+Back in the repo root:
+
+```
+git add deps/OpenMMO
+node scripts/release-sync-update-protocols.js <protocolVersion>
+git add config/release.json
+```
+
+`release-sync-update-protocols.js` is idempotent and only touches the file
+when the version is new — this project's `config/release.json` gate
+(`verifiedProtocols`) exists to keep unverified protocols out of a release;
+this skill's build+test gate in Step 3 is treated as that verification.
+
+Determine the new main-repo version: strip the `agent-client-` prefix off
+`releaseTag` (e.g. `agent-client-v0.16.0` → `v0.16.0`, version string
+`0.16.0`). This is not an independent version bump — openmmo-client's
+version tracks Julian's release number directly.
+
+```
+npm version 0.16.0 --no-git-tag-version   # substitute the actual version
+git add package.json package-lock.json
+```
+
+## Step 6: main-repo build+test gate
+
+```
+npm run validate:pin
+```
+
+This will only pass if Step 4 actually pushed — it checks the pinned SHA is
+reachable from a configured remote ref. If it fails here, something is
+wrong with Step 4 (or this step ran without it); don't paper over it by
+skipping ahead.
+
+```
+npm test
+npm --prefix deps/OpenMMO/client run build:wasm
+npm --prefix deps/OpenMMO/client test
+npm --prefix deps/OpenMMO/client run check
+```
+
+(Mirrors `.github/workflows/ci.yml`'s `test` job — match the current
+version of that file if it has diverged from this list.)
+
+Any failure: stop. Do not commit or tag the main repo. The submodule side
+stays pushed (that's fine — the next run's Step 0 will see the pin still
+behind and retry from here). `git checkout -- .` / `git reset` the staged
+main-repo changes if you want a clean working tree, but don't touch
+anything under `deps/OpenMMO`. Send one `PushNotification` naming the
+failing command, then end the run.
+
+## Step 7: commit, tag, push the main repo
+
+```
+git commit -m "Sync to OpenMMO <releaseTag> (protocol v<protocolVersion>)"
+git tag v<version>
+git push origin master
+git push origin v<version>
+```
+
+Use the actual default branch name if it differs from `master` (check
+`git branch --show-current` — this repo's default is `master` as of this
+writing).
+
+## Step 8: wait for release CI, then publish
+
+Pushing the `v*` tag triggers `.github/workflows/release.yml`, which builds
+all three platform installers and opens a **draft** GitHub release.
+
+```
+gh run list --workflow=release.yml --branch=v<version> --limit=1
+```
+
+Poll (e.g. `gh run watch <run-id>`, or repeat the list command with a short
+sleep) until that run completes.
+
+- **On success**: publish the draft —
+  `gh release edit v<version> --draft=false`. Send one `PushNotification`
+  reporting success (new version, protocol version, release URL).
+- **On failure**: leave the draft as-is for manual inspection. Send one
+  `PushNotification` naming which CI job failed and a link to the run.
+
+## Notes for future edits to this skill
+
+- The three build/test command lists in Steps 3 and 6 are copied from
+  `deps/OpenMMO/.github/workflows/ci.yml` and this repo's
+  `.github/workflows/ci.yml`. If those workflows change, update this file
+  to match — the goal is "what CI actually checks", not "what this file
+  says".
+- `config/release.json`'s `fallbackProtocol` is set by
+  `release-sync-update-protocols.js` to whatever was the newest verified
+  protocol before this run. That field is otherwise a human's deliberate
+  choice of which older protocol to keep supporting — this skill only ever
+  advances it, never removes entries from `verifiedProtocols`.
+- Julian's release cadence is roughly daily, and this flow's trigger is
+  "there's a release we haven't synced" — not "the protocol version
+  changed". Expect roughly-daily runs of the full pipeline, most of which
+  will have `protocolVersion` unchanged from the last run (those just bump
+  the tag's `r` and cut a same-protocol release).
