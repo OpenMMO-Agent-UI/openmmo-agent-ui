@@ -1,0 +1,118 @@
+name: Publish downloads to wiki
+
+# Mirrors a published release's artifacts to the public wiki repo, which is
+# where players actually download from — this repository is private, so its
+# own release assets are not anonymously reachable.
+#
+# Triggered by `release: published`, not by the tag push that builds them:
+# release.yml leaves a draft for a human to check, and that gate is the whole
+# point. Publishing the draft is what makes a build public.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to mirror (e.g. v0.17.0)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-downloads
+  cancel-in-progress: false
+
+env:
+  WIKI_REPO: OpenMMO-Agent-UI/openmmo-agent-wiki
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve tag
+        id: tag
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${EVENT_TAG:-$INPUT_TAG}"
+          [[ -n "$tag" ]] || { echo "no tag to publish" >&2; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: gh release download "$TAG" --dir artifacts --clobber
+
+      - name: Rename to stable filenames
+        id: stage
+        working-directory: artifacts
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          # The wiki's download buttons point at /releases/latest/download/<name>,
+          # so the names must not carry the version or they'd need editing every
+          # release. Version and protocol live in the release notes instead.
+          protocol=""
+          for f in openmmo-agent-v"$VERSION"-p*-*; do
+            [[ -e "$f" ]] || continue
+            [[ "$f" =~ -p([0-9]+)- ]] && protocol="${BASH_REMATCH[1]}"
+            mv -- "$f" "${f/-v$VERSION-p$protocol/}"
+          done
+          [[ -n "$protocol" ]] || { echo "no protocol version found in artifact names" >&2; exit 1; }
+
+          rm -f SHA256SUMS.txt
+          sha256sum ./* > SHA256SUMS.txt
+          echo "protocol=$protocol" >> "$GITHUB_OUTPUT"
+          ls -la
+
+      - name: Write release notes
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+          PROTOCOL: ${{ steps.stage.outputs.protocol }}
+        run: |
+          cat > notes.md <<EOF
+          OpenMMO Agent v${VERSION} — protocol v${PROTOCOL}
+
+          Compatible with servers requiring protocol v${PROTOCOL}. The server
+          matches the protocol version exactly, so a newer client is not
+          automatically a working one.
+
+          These builds are unsigned: macOS Gatekeeper and Windows SmartScreen
+          will warn. See the install guide for how to get past it:
+          https://openmmo-agent-ui.github.io/openmmo-agent-wiki/client/install/
+
+          Verify your download against SHA256SUMS.txt.
+          EOF
+
+      - name: Publish to the wiki repo, keeping only this release
+        env:
+          GH_TOKEN: ${{ secrets.WIKI_RELEASE_TOKEN }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          PROTOCOL: ${{ steps.stage.outputs.protocol }}
+        run: |
+          [[ -n "$GH_TOKEN" ]] || {
+            echo "WIKI_RELEASE_TOKEN is not set — add a token with contents:write on $WIKI_REPO" >&2
+            exit 1
+          }
+          new_tag="client-v${VERSION}"
+
+          # Create first, prune second: a failed upload leaves the old download
+          # working rather than leaving the wiki with no release at all.
+          gh release create "$new_tag" artifacts/* \
+            --repo "$WIKI_REPO" \
+            --title "OpenMMO Agent v${VERSION} (protocol v${PROTOCOL})" \
+            --notes-file notes.md \
+            --latest
+
+          for old in $(gh release list --repo "$WIKI_REPO" --limit 100 --json tagName --jq '.[].tagName'); do
+            [[ "$old" == "$new_tag" ]] && continue
+            echo "removing superseded release $old"
+            gh release delete "$old" --repo "$WIKI_REPO" --cleanup-tag --yes
+          done

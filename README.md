@@ -30,7 +30,7 @@ commit identifies the exact web client, protocol, and native agent it builds.
 ## Setup
 
 ```bash
-git clone --recurse-submodules git@github.com:Daky/openmmo-client.git
+git clone --recurse-submodules git@github.com:OpenMMO-Agent-UI/openmmo-client.git
 cd openmmo-client
 npm install
 npm run build:resources
@@ -256,6 +256,37 @@ It creates an unsigned draft release with SHA-256 checksums and the full
 parent and OpenMMO commit SHAs in the notes. Rerunning the same immutable tag
 refreshes that draft. Once published, its artifacts cannot be replaced; make
 source fixes under a new patch version.
+
+### Publishing downloads to the wiki
+
+Players download from the public
+[wiki repo](https://github.com/OpenMMO-Agent-UI/openmmo-agent-wiki/releases),
+not from here — this repository is private, so its release assets return 404
+to anonymous visitors. `publish-downloads.yml` mirrors them across.
+
+It fires on `release: published`, not on the tag push: the draft is a human
+gate, and publishing it is the act that makes a build public. Manual reruns go
+through `workflow_dispatch` with a tag.
+
+The mirror strips the version and protocol out of the filenames, so the wiki's
+buttons can point at a URL that never changes:
+
+```
+https://github.com/OpenMMO-Agent-UI/openmmo-agent-wiki/releases/latest/download/openmmo-agent-macos-arm64.zip
+```
+
+Version and protocol move into the release title and notes. Checksums are
+regenerated against the renamed files. Only the newest release is kept — older
+ones are deleted after the new one uploads, so a failed run leaves the previous
+download working.
+
+Requires a `WIKI_RELEASE_TOKEN` secret: a fine-grained PAT with
+**Contents: Read and write** on `openmmo-agent-wiki` only. `github.token`
+cannot reach another repository.
+
+Artifacts run 99–129 MB, past GitHub's hard 100 MB per-file limit, so they
+cannot be committed to the wiki tree; Git LFS would work but bills for
+bandwidth on every download. Release assets have neither problem.
 
 ## Known limits
 
