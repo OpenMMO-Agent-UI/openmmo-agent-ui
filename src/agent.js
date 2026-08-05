@@ -6,7 +6,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { app } = require('electron')
 
-const { agentDir, buildInfo, packagedSeedDir, repoRoot, writeConfig } = require('./config')
+const { agentDir, buildInfo, packagedSeedDir, repoRoot } = require('./runtimeEnv')
+const { writeConfig } = require('./configToml')
 
 const LOG_CAP = 600
 const READY_TIMEOUT_MS = 20000

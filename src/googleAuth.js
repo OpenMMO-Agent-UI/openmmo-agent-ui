@@ -3,7 +3,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
-const { credentialPath } = require('./config')
+const { credentialPath } = require('./settingsStore')
 
 /// Client-owned Google sign-in (ADR 0001): the Electron app runs the device
 /// flow itself, writing the exact same cache file and shape agent-client's

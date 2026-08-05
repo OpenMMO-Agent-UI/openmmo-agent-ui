@@ -5,7 +5,10 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron')
 
-const config = require('./config')
+const settingsStore = require('./settingsStore')
+const personalityText = require('./personalityText')
+const { agentDir, seedRuntimeData } = require('./runtimeEnv')
+const { renderConfigToml } = require('./configToml')
 const { AgentProcess } = require('./agent')
 const { ClientServer, distReady } = require('./server')
 const { AgentProxy } = require('./proxy')
@@ -268,7 +271,7 @@ function selectedProfileSettings() {
 
 function applySelectedProfile() {
   const profile = selectedProfileSettings()
-  settings = config.save({
+  settings = settingsStore.save({
     ...settings,
     server: profile.serverUrl,
     terrain: profile.terrainOrigin,
@@ -283,7 +286,7 @@ function applySelectedProfile() {
 }
 
 function validateGlobalLlm() {
-  const backend = config.BACKENDS.find((candidate) => candidate.id === settings.llm)
+  const backend = settingsStore.BACKENDS.find((candidate) => candidate.id === settings.llm)
   if (!backend || backend.kind === 'none') {
     return { ok: false, error: 'Set up an LLM to use Automatic play' }
   }
@@ -411,19 +414,19 @@ function createPlaySession() {
 }
 
 app.whenReady().then(() => {
-  config.seedRuntimeData()
-  settings = config.importExistingConfig(config.load())
-  config.save(settings)
+  seedRuntimeData()
+  settings = settingsStore.importExistingConfig(settingsStore.load())
+  settingsStore.save(settings)
   const legacyRefreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
   profileStore = new ConnectionProfileStore({
     file: path.join(app.getPath('userData'), 'connection-profiles.json'),
     cipher: profileCipher(),
     builtin: {
       name: 'openmmo.to.nexus',
-      serverUrl: config.DEFAULTS.server,
-      terrainOrigin: config.DEFAULTS.terrain,
-      googleClientId: config.DEFAULTS.googleClientId,
-      googleClientSecret: config.DEFAULTS.googleClientSecret || '',
+      serverUrl: settingsStore.DEFAULTS.server,
+      terrainOrigin: settingsStore.DEFAULTS.terrain,
+      googleClientId: settingsStore.DEFAULTS.googleClientId,
+      googleClientSecret: settingsStore.DEFAULTS.googleClientSecret || '',
     },
     legacy: {
       server: settings.server,
@@ -473,14 +476,14 @@ app.on('before-quit', () => {
 
 ipcMain.handle('app:info', () => ({
   settings,
-  backends: config.BACKENDS,
-  classes: config.CLASSES,
-  agentDir: config.agentDir(),
+  backends: settingsStore.BACKENDS,
+  classes: settingsStore.CLASSES,
+  agentDir: agentDir(),
   status: agent.status(),
   log: agent.log,
   clientBuilt: distReady(),
-  signedIn: config.signedIn(),
-  credentialPath: config.credentialPath(),
+  signedIn: settingsStore.signedIn(),
+  credentialPath: settingsStore.credentialPath(),
 }))
 
 ipcMain.handle('profiles:list', () => profileStore.list())
@@ -518,11 +521,11 @@ ipcMain.handle('profiles:test', async (_e, id) => {
 })
 
 ipcMain.handle('settings:save', (_e, patch) => {
-  settings = config.save({ ...settings, ...patch, models: { ...settings.models, ...(patch.models || {}) } })
+  settings = settingsStore.save({ ...settings, ...patch, models: { ...settings.models, ...(patch.models || {}) } })
   return settings
 })
 
-ipcMain.handle('settings:validate', (_e, patch) => config.validate({ ...settings, ...patch }))
+ipcMain.handle('settings:validate', (_e, patch) => settingsStore.validate({ ...settings, ...patch }))
 
 ipcMain.handle('settings:apply', async (_e, patch) => {
   const candidate = {
@@ -530,21 +533,21 @@ ipcMain.handle('settings:apply', async (_e, patch) => {
     ...patch,
     models: { ...settings.models, ...(patch.models || {}) },
   }
-  const errors = config.validate(candidate)
+  const errors = settingsStore.validate(candidate)
   if (errors.length) return { ok: false, errors }
   const live = await validateLlmSettings(candidate)
   if (!live.ok) return { ok: false, errors: [live.error] }
-  settings = config.save(candidate)
+  settings = settingsStore.save(candidate)
   return { ok: true, settings }
 })
 
-ipcMain.handle('config:preview', () => config.renderConfigToml(settings))
+ipcMain.handle('config:preview', () => renderConfigToml(settings))
 
 /// agent-client talks to our loopback relay; the relay holds the only
 /// connection to the real server. `settings.server` stays the upstream URL —
 /// it is what the user configured and what the relay dials.
 async function startAgent() {
-  const errors = config.validate(settings)
+  const errors = settingsStore.validate(settings)
   if (errors.length) return { ok: false, errors }
   // The pre-flight session already resolved the exact character agent-client
   // is about to enter with (ADR 0001) — nothing left for it to do.
@@ -553,10 +556,10 @@ async function startAgent() {
   // agent-client hard-errors on a configured prompt file that doesn't exist —
   // guarantee both before every start, not just when the player opens the
   // personality-prompt editor.
-  config.ensureUserPrompt()
+  personalityText.ensureUserPrompt()
   if (settings.characterName) {
     materializePersonality(profileStore.selected().id, activeCharacterId, settings.characterName)
-    config.ensureInstancePrompt(settings.characterName)
+    personalityText.ensureInstancePrompt(settings.characterName)
   }
   try {
     await proxy.start(settings.server)
@@ -583,7 +586,7 @@ function personalityPath(profileId, characterId) {
 function materializePersonality(profileId, characterId, characterName) {
   if (!characterName) return
   const scoped = characterId ? personalityPath(profileId, characterId) : null
-  const legacy = config.instancePromptPath(characterName)
+  const legacy = personalityText.instancePromptPath(characterName)
   if (scoped && !fs.existsSync(scoped) && fs.existsSync(legacy)) {
     fs.mkdirSync(path.dirname(scoped), { recursive: true })
     fs.copyFileSync(legacy, scoped)
@@ -597,7 +600,7 @@ function materializePersonality(profileId, characterId, characterName) {
 /// Personality is isolated by connection profile and stable character ID.
 /// The name-based agent path is only a materialized compatibility copy. The
 /// file on disk also carries an app-managed sellable/dropable block (see
-/// config.composeInstanceText) that the textarea must never show or let the
+/// personalityText.composeInstanceText) that the textarea must never show or let the
 /// player accidentally overwrite — stripped here before it reaches the
 /// renderer.
 ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
@@ -605,7 +608,7 @@ ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
   const file = personalityPath(profileStore.selected().id, characterId)
   try {
     if (!fs.existsSync(file)) materializePersonality(profileStore.selected().id, characterId, characterName)
-    return config.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
+    return personalityText.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
   } catch {
     return ''
   }
@@ -618,7 +621,7 @@ ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(
     file,
-    config.composeInstanceText(text, characterStore.open('labels', profileId, characterId).read())
+    personalityText.composeInstanceText(text, characterStore.open('labels', profileId, characterId).read())
   )
   if (characterName) materializePersonality(profileId, characterId, characterName)
   return { ok: true, file }
@@ -626,12 +629,12 @@ ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
 
 /// Read-only view of what the agent itself has written to memory.txt (its
 /// own `memory_update` output, never edited by the player) — see
-/// config.memoryPath. Missing file (nothing remembered yet, or the agent has
+/// personalityText.memoryPath. Missing file (nothing remembered yet, or the agent has
 /// never run) just reads as empty.
 ipcMain.handle('memory:get', (_e, { characterName }) => {
   if (!characterName) return ''
   try {
-    return fs.readFileSync(config.memoryPath(characterName), 'utf8')
+    return fs.readFileSync(personalityText.memoryPath(characterName), 'utf8')
   } catch {
     return ''
   }
@@ -659,12 +662,12 @@ ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
   const file = personalityPath(profileId, characterId)
   let prose = ''
   try {
-    prose = config.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
+    prose = personalityText.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
   } catch {
     prose = ''
   }
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, config.composeInstanceText(prose, clean))
+  fs.writeFileSync(file, personalityText.composeInstanceText(prose, clean))
   if (characterName) materializePersonality(profileId, characterId, characterName)
   return { ok: true, labels: clean }
 })
@@ -742,8 +745,8 @@ ipcMain.handle('auth:signout', async () => {
   currentIdToken = null
   // A new sign-in may be a different account; last session's chosen
   // character shouldn't carry over silently.
-  settings = config.save({ ...settings, characterName: '' })
-  return { removed, wasRunning, signedIn: config.signedIn() }
+  settings = settingsStore.save({ ...settings, characterName: '' })
+  return { removed, wasRunning, signedIn: settingsStore.signedIn() }
 })
 
 /// Cheap, no-network check: is there a cached Google credential for the
@@ -893,7 +896,7 @@ ipcMain.handle('play:enter', async (_e, characterId) => {
   const character = currentCharacters.find((candidate) => candidate.id === characterId)
   if (!character) return { ok: false, error: 'That character is no longer in this account roster' }
   const characterName = character.name
-  settings = config.save({ ...settings, characterName })
+  settings = settingsStore.save({ ...settings, characterName })
   activeCharacterId = characterId
   profileStore.rememberSession(profileStore.selected().id, {
     account: profileStore.selected().lastSession?.account || null,

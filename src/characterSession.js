@@ -3,7 +3,7 @@
 const { WebSocket } = require('ws')
 
 const { encode, decode, variantOf } = require('./msgpack')
-const { protocolVersion } = require('./config')
+const { protocolVersion } = require('./runtimeEnv')
 
 /// The pre-flight session (ADR 0001): a direct, throwaway WebSocket
 /// connection to the game server — bypassing agent-client entirely — that
