@@ -1,7 +1,12 @@
 'use strict'
 
+import { $, showErrors, setScreen, confirmAction, readField, writeField } from './dom.js'
+import * as actionToasts from './actionToasts.js'
+import * as bagWorn from './bagWorn.js'
+import * as dispatchBook from './dispatchBook.js'
+import * as settingsPanel from './settingsPanel.js'
+
 const api = window.agentApp
-const $ = (id) => document.getElementById(id)
 
 let settings = null
 let backends = []
@@ -28,10 +33,6 @@ const feedHidden = new Set()
 let characters = []
 let selectedCharacterId = null
 let signInGeneration = 0
-
-// A directive (ADR 0003): best-effort, so its reply is tracked and shown
-// right next to what was sent rather than assumed to have landed.
-let pendingDirective = null
 
 /// monster_id -> display name, learned from "Monster: kobold [m1045_5] HP
 /// 5/5 ..." lines in the agent's own llm-prompt feed items (agent-client's
@@ -99,41 +100,12 @@ function backend() {
   return backends.find((b) => b.id === settings.llm) || { kind: 'none', models: [] }
 }
 
-function readField(id, type) {
-  const el = $(id)
-  if (type === 'bool') return el.checked
-  if (type === 'int') return parseInt(el.value, 10) || 0
-  if (type === 'float') return parseFloat(el.value) || 0
-  return el.value
-}
-
-function writeField(id, type, value) {
-  const el = $(id)
-  if (!el) return
-  if (type === 'bool') el.checked = Boolean(value)
-  else el.value = value == null ? '' : value
-}
-
 async function persist(patch) {
   settings = await api.saveSettings(patch)
   if (running) {
     dirtyWhileRunning = true
     $('restart').hidden = false
   }
-}
-
-/// One shared toast for whichever screen is showing — Play/Restart failures
-/// alike, so an error never depends on which screen happened to trigger it.
-function showErrors(errors) {
-  const box = $('errors')
-  const list = errors || []
-  box.hidden = list.length === 0
-  box.textContent = list.map((e) => `• ${e}`).join('\n')
-}
-
-/// Drives `body[data-screen]`, the single source of which screen is visible.
-function setScreen(name) {
-  document.body.dataset.screen = name
 }
 
 function renderClassOptions() {
@@ -204,7 +176,7 @@ function setStatus(state) {
     sceneUrl = null
     $('placeholder').hidden = false
     setVitals(null)
-    updateAudioAvailability()
+    settingsPanel.updateAudioAvailability()
   }
 }
 
@@ -437,9 +409,9 @@ async function enterCharacter(character) {
   selectedCharacterId = character.id
   await persist({ characterName: character.name })
   await loadInstancePrompt()
-  await loadCoords()
-  await loadPresets()
-  await loadBagLabels()
+  await dispatchBook.loadCoords(selectedCharacterId)
+  await dispatchBook.loadPresets(selectedCharacterId)
+  await bagWorn.loadBagLabels(selectedCharacterId)
   await workflow.chooseCharacter(character.id)
 }
 
@@ -450,9 +422,9 @@ function selectCharacter(id) {
   persist({ characterName: chosen ? chosen.name : '' })
   updatePlayEnabled()
   void loadInstancePrompt()
-  void loadCoords()
-  void loadPresets()
-  void loadBagLabels()
+  void dispatchBook.loadCoords(selectedCharacterId)
+  void dispatchBook.loadPresets(selectedCharacterId)
+  void bagWorn.loadBagLabels(selectedCharacterId)
 }
 
 /// Individual personality for whichever character is selected — reloaded on
@@ -533,171 +505,6 @@ function bindActivityTabs() {
   }
 }
 
-const BUILTIN_COORDS = [
-  { name: 'Aldermark', x: -1471.4, y: 0.9, z: 4741.2 },
-  { name: 'Merchant Rica', x: -1473.8, y: 1.1, z: 4735.5 },
-  { name: 'Fishing spot', x: -1501.6, y: 0.3, z: 4732.3 },
-  { name: 'Old Crypt', x: -1450, y: 0.7, z: 4720 },
-  { name: 'Orc Warren', x: -1616, y: 1.05, z: 4918 },
-]
-let customCoords = []
-
-/// Player-saved coordinates, reloaded on every character switch — scoped the
-/// same way as the personality text (per connection profile + character).
-async function loadCoords() {
-  customCoords = selectedCharacterId ? await api.listCoordinates(selectedCharacterId) : []
-  renderCoords()
-}
-
-function coordRow(coord, removable) {
-  const row = document.createElement('div')
-  row.className = 'coord-row'
-  const go = document.createElement('button')
-  go.type = 'button'
-  go.className = 'coord-go'
-  go.textContent = `${coord.name} (${coord.x}, ${coord.y}, ${coord.z})`
-  go.addEventListener('click', () => sendCoordDirective(coord))
-  row.appendChild(go)
-  if (removable) {
-    const del = document.createElement('button')
-    del.type = 'button'
-    del.className = 'ghost small coord-delete'
-    del.textContent = '×'
-    del.title = 'Remove'
-    del.addEventListener('click', async () => {
-      const res = await api.deleteCoordinate(selectedCharacterId, coord.id)
-      if (res.ok) {
-        customCoords = res.list
-        renderCoords()
-      }
-    })
-    row.appendChild(del)
-  }
-  return row
-}
-
-function renderCoords() {
-  const box = $('coordsList')
-  box.innerHTML = ''
-  for (const coord of BUILTIN_COORDS) box.appendChild(coordRow(coord, false))
-  for (const coord of customCoords) box.appendChild(coordRow(coord, true))
-}
-
-/// Same directive pipe as the Dispatch input (ADR 0003): a best-effort nudge
-/// for the NPC's next turn, so a clicked spot gets the same You/Agent
-/// feedback as anything typed by hand.
-async function sendCoordDirective(coord) {
-  const text = `Go to ${coord.name} (${coord.x}, ${coord.y}, ${coord.z}) immediately without questioning.`
-  const res = await api.sendDirective(text)
-  if (!res.ok) {
-    showErrors([res.error])
-    return
-  }
-  trackDirective(text)
-}
-
-const BUILTIN_PRESETS = [
-  { name: 'Idle', prompt: 'Stay at where you are and do nothing until ~Director~ give you instructions.' },
-  { name: 'Go Fishing', prompt: 'Go to Fishing spot and cast {"type": "fish"}' },
-  { name: 'Sell Items', prompt: 'Go find Merchant Rica and sell any sellable items.' },
-]
-let customPresets = []
-let editingPresetId = null
-
-/// Player-saved dispatch presets, reloaded on every character switch — same
-/// per-character scoping as Coordinates.
-async function loadPresets() {
-  customPresets = selectedCharacterId ? await api.listPresets(selectedCharacterId) : []
-  renderPresets()
-}
-
-function presetRow(preset, editable) {
-  const row = document.createElement('div')
-  row.className = 'preset-row'
-  const go = document.createElement('button')
-  go.type = 'button'
-  go.className = 'preset-go'
-  go.textContent = preset.name
-  go.title = preset.prompt
-  go.addEventListener('click', () => sendPresetDirective(preset))
-  row.appendChild(go)
-  if (editable) {
-    const edit = document.createElement('button')
-    edit.type = 'button'
-    edit.className = 'ghost small preset-edit'
-    edit.textContent = '✎'
-    edit.title = 'Edit'
-    edit.addEventListener('click', () => startEditPreset(preset))
-    row.appendChild(edit)
-
-    const del = document.createElement('button')
-    del.type = 'button'
-    del.className = 'ghost small preset-delete'
-    del.textContent = '×'
-    del.title = 'Remove'
-    del.addEventListener('click', async () => {
-      const res = await api.deletePreset(selectedCharacterId, preset.id)
-      if (res.ok) {
-        customPresets = res.list
-        if (editingPresetId === preset.id) cancelEditPreset()
-        renderPresets()
-      }
-    })
-    row.appendChild(del)
-  }
-  return row
-}
-
-function renderPresets() {
-  const box = $('presetsList')
-  box.innerHTML = ''
-  for (const preset of BUILTIN_PRESETS) box.appendChild(presetRow(preset, false))
-  for (const preset of customPresets) box.appendChild(presetRow(preset, true))
-  renderDirectivePresets()
-}
-
-/// One-click chips above the Dispatch input — same presets as the drawer,
-/// same immediate-send behavior as clicking a preset row there.
-function renderDirectivePresets() {
-  const box = $('directivePresets')
-  box.innerHTML = ''
-  for (const preset of [...BUILTIN_PRESETS, ...customPresets]) {
-    const chip = document.createElement('button')
-    chip.type = 'button'
-    chip.className = 'chip directive-preset-chip'
-    chip.textContent = preset.name
-    chip.title = preset.prompt
-    chip.addEventListener('click', () => sendPresetDirective(preset))
-    box.appendChild(chip)
-  }
-}
-
-/// Same directive pipe as Coordinates (ADR 0003) — a preset is just a
-/// pre-written directive.
-async function sendPresetDirective(preset) {
-  const res = await api.sendDirective(preset.prompt)
-  if (!res.ok) {
-    showErrors([res.error])
-    return
-  }
-  trackDirective(preset.prompt)
-}
-
-function startEditPreset(preset) {
-  editingPresetId = preset.id
-  $('presetName').value = preset.name
-  $('presetPrompt').value = preset.prompt
-  $('presetsSubmit').textContent = 'Save'
-  $('presetsCancelEdit').hidden = false
-}
-
-function cancelEditPreset() {
-  editingPresetId = null
-  $('presetsForm').reset()
-  $('presetsSubmit').textContent = 'Add'
-  $('presetsCancelEdit').hidden = true
-}
-
 async function deleteCharacterRow(id, name) {
   if (!(await confirmAction(`Delete ${name}? This cannot be undone.`))) return
   const res = await api.deleteCharacter(id)
@@ -750,195 +557,13 @@ function showViewProblem(message) {
   frame.removeAttribute('src')
   delete frame.dataset.url
   $('placeholder').hidden = false
-  updateAudioAvailability()
-}
-
-/// Every slot the game has (shared/src/inventory.rs EquipSlot), head down and
-/// then hands, so the list reads like a character sheet and an empty slot is
-/// as visible as a filled one — "no chest armour" is worth seeing.
-const WORN_SLOTS = [
-  ['head', 'Head'],
-  ['neck', 'Neck'],
-  ['ear', 'Ear'],
-  ['chest', 'Chest'],
-  ['shirt', 'Shirt'],
-  ['back', 'Back'],
-  ['belt', 'Belt'],
-  ['pants', 'Pants'],
-  ['boots', 'Boots'],
-  ['hands', 'Hands'],
-  ['main_hand', 'Main hand'],
-  ['off_hand', 'Off hand'],
-  ['ring', 'Ring'],
-  ['ring_left', 'Ring (left)'],
-]
-
-/// One label per parsed AgentAction (agent-client/src/driver/action.rs),
-/// shown next to the clock in the gamebar header.
-function actionLabel(action) {
-  if (!action || typeof action !== 'object') return ''
-  switch (action.type) {
-    case 'say': {
-      const msg = String(action.message ?? '')
-      return `Say "${msg.length > 24 ? `${msg.slice(0, 24)}…` : msg}"`
-    }
-    case 'attack': {
-      const id = action.monster_id ?? action.target ?? action.id ?? '?'
-      return `Attack→${monsterNames.get(id) ?? id}`
-    }
-    case 'move':
-      if (action.target) return `Move→${action.target}`
-      if (action.x != null || action.z != null) {
-        const x = action.x != null ? Math.round(action.x) : '?'
-        const z = action.z != null ? Math.round(action.z) : '?'
-        return `Move→(${x}, ${z})`
-      }
-      if (action.direction) return `Move→${action.direction}${action.distance != null ? ` ${action.distance}m` : ''}`
-      if (action.depth != null) return `Move→floor ${action.depth}`
-      return 'Move'
-    case 'respawn':
-      return 'Respawn'
-    case 'fish':
-      return 'Fish'
-    case 'stop_fishing':
-      return 'Stop fishing'
-    case 'offer_deal':
-      return `Offer→${action.item ?? '?'}${action.player ? ` to ${action.player}` : ''}`
-    case 'open_trade':
-      return `Trade→${action.player ?? '?'}`
-    case 'party_invite':
-      return `Invite→${action.player ?? '?'}`
-    case 'party_accept':
-      return 'Accept party'
-    case 'party_decline':
-      return 'Decline party'
-    case 'party_leave':
-      return 'Leave party'
-    case 'use':
-      return `Use→${action.item ?? '?'}`
-    case 'pickup':
-      return `Pickup→${action.item ?? '?'}`
-    case 'sell':
-      return `Sell→${action.item ?? '?'}`
-    case 'buy':
-      return `Buy→${action.item ?? '?'}`
-    case 'drop':
-      return `Drop→${action.item ?? '?'}`
-    case 'buyback':
-      return `Buyback→${action.item ?? '?'}`
-    case 'break_prop':
-      return `Break→prop ${action.prop_id ?? action.id ?? '?'}`
-    case 'open_chest':
-      return action.chest ? `Open chest→${action.chest}` : 'Open chest'
-    case 'reroll':
-      return 'Reroll'
-    case 'wait':
-      return 'Wait'
-    default:
-      return action.type ? String(action.type) : ''
-  }
-}
-
-function toastTtlMs() {
-  return (settings?.toastPersistSecs ?? 7) * 1000
-}
-function toastFadeMs() {
-  return (settings?.toastFadeSecs ?? 0.4) * 1000
-}
-function toastMaxCount() {
-  return settings?.toastMaxCount ?? 10
-}
-
-/// Pushes the settings-configurable toast look (font size, background
-/// transparency, fade duration) onto :root so every `.action-toast` —
-/// including the live preview in Settings — picks it up without threading
-/// the values through per-element inline styles.
-function applyToastCssVars() {
-  document.documentElement.style.setProperty('--toast-font-size', `${settings.toastFontSize}px`)
-  document.documentElement.style.setProperty('--toast-bg-opacity', String(settings.toastOpacity / 100))
-  document.documentElement.style.setProperty('--toast-fade-ms', `${toastFadeMs()}ms`)
-}
-
-/// A serialized signature of whichever `actions` array the last setVitals
-/// call already toasted. main.js resends the same actions every poll tick
-/// until a new turn lands — but each send crosses the main/renderer IPC
-/// boundary, which structured-clones the payload, so the renderer never
-/// receives the same array *instance* twice even when nothing changed.
-/// Comparing content instead of identity is what actually tells a genuinely
-/// new turn apart from the same stale value arriving again.
-let lastToastedActionsSignature = null
-
-/// Toast element -> its pending fade/remove timers, so a repeat of the same
-/// action (see pushActionToast) can cancel and restart them instead of
-/// leaving the old ones to fire early on a toast that just got reused.
-const actionToastTimers = new Map()
-
-function scheduleToastRemoval(el) {
-  const prev = actionToastTimers.get(el)
-  if (prev) {
-    clearTimeout(prev.fadeTimer)
-    clearTimeout(prev.removeTimer)
-  }
-  el.classList.remove('out')
-  const ttl = toastTtlMs()
-  const fade = toastFadeMs()
-  actionToastTimers.set(el, {
-    fadeTimer: setTimeout(() => el.classList.add('out'), Math.max(0, ttl - fade)),
-    removeTimer: setTimeout(() => {
-      actionToastTimers.delete(el)
-      el.remove()
-    }, ttl),
-  })
-}
-
-/// A repeated action (e.g. "Move→north" every turn while walking) collapses
-/// into the most recent toast instead of stacking a new one — otherwise a
-/// long walk reads as a wall of identical notifications.
-function pushActionToast(text) {
-  const box = $('actionToasts')
-  const last = box.lastElementChild
-  if (last && last.dataset.label === text) {
-    const count = Number(last.dataset.count) + 1
-    last.dataset.count = String(count)
-    last.textContent = `${text} ×${count}`
-    scheduleToastRemoval(last)
-    return
-  }
-  const el = document.createElement('div')
-  el.className = 'action-toast'
-  el.textContent = text
-  el.dataset.label = text
-  el.dataset.count = '1'
-  box.appendChild(el)
-  while (box.childElementCount > toastMaxCount()) box.removeChild(box.firstChild)
-  scheduleToastRemoval(el)
-}
-
-function pushActionToasts(actions) {
-  const signature = Array.isArray(actions) ? JSON.stringify(actions) : ''
-  if (signature === lastToastedActionsSignature) return
-  lastToastedActionsSignature = signature
-  if (!Array.isArray(actions)) return
-  for (const action of actions) {
-    const label = actionLabel(action)
-    if (label) pushActionToast(label)
-  }
-}
-
-function clearActionToasts() {
-  for (const { fadeTimer, removeTimer } of actionToastTimers.values()) {
-    clearTimeout(fadeTimer)
-    clearTimeout(removeTimer)
-  }
-  actionToastTimers.clear()
-  $('actionToasts').innerHTML = ''
-  lastToastedActionsSignature = null
+  settingsPanel.updateAudioAvailability()
 }
 
 /// Cached off the last vitals push so the Coordinates drawer's "Use current
-/// position" button (bound in bindActions) has something to read on click —
-/// the agent-client's /api/state already carries this in `self.position`,
-/// it just wasn't kept around anywhere before now.
+/// position" button (bound in dispatchBook.bind) has something to read on
+/// click — the agent-client's /api/state already carries this in
+/// `self.position`, it just wasn't kept around anywhere before now.
 let lastSelf = null
 
 function setVitals(v) {
@@ -946,9 +571,9 @@ function setVitals(v) {
     lastSelf = null
     $('coordUseCurrent').disabled = true
     $('vitals').textContent = ''
-    clearActionToasts()
-    renderBag([])
-    renderWorn({})
+    actionToasts.clear()
+    bagWorn.renderBag([])
+    bagWorn.renderWorn({})
     return
   }
   const s = v.self
@@ -963,178 +588,8 @@ function setVitals(v) {
     ? ` · (${s.position.x.toFixed(1)}, ${s.position.y.toFixed(1)}, ${s.position.z.toFixed(1)})`
     : ''
   $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}${coords}`
-  pushActionToasts(v.actions)
-  renderBag(v.bag)
-}
-
-/// item_def_id is a snake_case identifier ("healing_potion") — turn it into
-/// words, with the enchant level prefixed the way the game names enchanted
-/// gear ("+2 Iron Sword").
-function itemLabel(id, enchant) {
-  const words = id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-  return enchant ? `+${enchant} ${words}` : words
-}
-
-/// What the character has on, slot by slot, from the relay's view of the
-/// server's inventory frames (src/proxy.js) — the agent's own panel API
-/// reports the bag but never the gear.
-function renderWorn(worn) {
-  const box = $('wornList')
-  box.innerHTML = ''
-  const equipped = worn && typeof worn === 'object' ? worn : {}
-  let count = 0
-  for (const [slot, label] of WORN_SLOTS) {
-    const item = equipped[slot]
-    if (item) count++
-    const row = document.createElement('div')
-    row.className = item ? 'worn-row' : 'worn-row worn-bare'
-    const name = document.createElement('span')
-    name.className = 'worn-slot'
-    name.textContent = label
-    const value = document.createElement('span')
-    value.className = 'worn-item'
-    value.textContent = item ? itemLabel(item.itemDefId, item.enchant) : '—'
-    row.append(name, value)
-    box.appendChild(row)
-  }
-  // The slot list itself is always drawn, so the hint speaks to the gear:
-  // an all-empty sheet is the one case worth saying out loud.
-  $('wornEmpty').hidden = count > 0
-}
-
-/// Sellable/dropable marks for the currently loaded character — the source
-/// of truth is main.js's labels.json; instance.txt's own copy is just a
-/// rendering of this for agent-client to read (see config.composeInstanceText).
-/// Staged in-memory as Sets of "item_def_id#enchant" bag-row keys and only
-/// written to disk when Apply labels is clicked.
-let stagedLabels = { sellable: new Set(), dropable: new Set() }
-/// The bag rows from the most recent render, kept around so the Apply
-/// button can check for enchant collisions without re-deriving them.
-let currentBagRows = []
-
-async function loadBagLabels() {
-  stagedLabels = { sellable: new Set(), dropable: new Set() }
-  $('bagLabelsStatus').textContent = ''
-  if (!selectedCharacterId) return
-  const saved = await api.getBagLabels(selectedCharacterId)
-  stagedLabels = {
-    sellable: new Set(saved.sellable || []),
-    dropable: new Set(saved.dropable || []),
-  }
-}
-
-function bagMarkCheckbox(letter, title, checked, onChange) {
-  const label = document.createElement('label')
-  label.className = 'bag-mark'
-  label.title = title
-  const input = document.createElement('input')
-  input.type = 'checkbox'
-  input.checked = checked
-  input.addEventListener('change', () => onChange(input.checked))
-  const span = document.createElement('span')
-  span.textContent = letter
-  label.append(input, span)
-  return label
-}
-
-/// agent-client keeps each pickup as its own bag instance rather than
-/// merging stacks, so raw entries repeat the same item many times over —
-/// grouped by item + enchant here into one line each, with a total count.
-/// Each row carries its own Sellable/Dropable checkboxes, staged into
-/// stagedLabels until Apply labels commits them.
-function renderBag(bag) {
-  const box = $('bagList')
-  box.innerHTML = ''
-  const grouped = new Map()
-  for (const item of bag || []) {
-    const key = `${item.item_def_id}#${item.enchant || 0}`
-    grouped.set(key, (grouped.get(key) || 0) + (item.quantity || 1))
-  }
-  const rows = [...grouped.entries()]
-    .map(([key, quantity]) => {
-      const [id, enchant] = key.split('#')
-      return { key, id, enchant: Number(enchant), label: itemLabel(id, Number(enchant)), quantity }
-    })
-    .sort((a, b) => a.label.localeCompare(b.label))
-  currentBagRows = rows
-
-  $('bagEmpty').hidden = rows.length > 0
-  $('bagLabelsSubmit').hidden = rows.length === 0
-  for (const row of rows) {
-    const el = document.createElement('div')
-    el.className = 'bag-row'
-
-    const marks = document.createElement('span')
-    marks.className = 'bag-marks'
-    marks.append(
-      bagMarkCheckbox('S', 'Sellable', stagedLabels.sellable.has(row.key), (checked) => {
-        if (checked) stagedLabels.sellable.add(row.key)
-        else stagedLabels.sellable.delete(row.key)
-      }),
-      bagMarkCheckbox('D', 'Dropable', stagedLabels.dropable.has(row.key), (checked) => {
-        if (checked) stagedLabels.dropable.add(row.key)
-        else stagedLabels.dropable.delete(row.key)
-      }),
-    )
-
-    const name = document.createElement('span')
-    name.className = 'bag-name'
-    name.textContent = row.label
-    const qty = document.createElement('span')
-    qty.className = 'bag-qty'
-    qty.textContent = `×${row.quantity}`
-    el.append(marks, name, qty)
-    box.appendChild(el)
-  }
-}
-
-/// sell/drop actions take only an item_def_id, with no way to say which
-/// enchant level they mean (agent-client driver/action.rs) — so marking one
-/// enchant variant while carrying another is ambiguous: the model could act
-/// on either. Surfaced as one consolidated warning per Apply click, listing
-/// every item_def_id in the staged batch that has more than one enchant
-/// variant in the current bag.
-function enchantCollisions() {
-  const enchantsById = new Map()
-  for (const row of currentBagRows) {
-    if (!enchantsById.has(row.id)) enchantsById.set(row.id, new Set())
-    enchantsById.get(row.id).add(row.enchant)
-  }
-  const ids = new Set()
-  for (const key of [...stagedLabels.sellable, ...stagedLabels.dropable]) {
-    const id = key.split('#')[0]
-    if ((enchantsById.get(id)?.size || 0) > 1) ids.add(id)
-  }
-  return [...ids].map((id) => itemLabel(id)).sort()
-}
-
-async function submitBagLabels() {
-  if (!selectedCharacterId) {
-    $('bagLabelsStatus').textContent = 'No character selected.'
-    return
-  }
-  try {
-    const collisions = enchantCollisions()
-    if (collisions.length) {
-      const proceed = await confirmAction(
-        `${collisions.join(', ')} — you carry more than one enchant level, and sell/drop can't tell them apart. ` +
-          'The agent might act on the wrong one. Apply labels anyway?',
-        'Apply anyway',
-      )
-      if (!proceed) {
-        $('bagLabelsStatus').textContent = 'Cancelled.'
-        return
-      }
-    }
-    $('bagLabelsStatus').textContent = 'Applying…'
-    const res = await api.saveBagLabels(selectedCharacterId, settings.characterName, {
-      sellable: [...stagedLabels.sellable],
-      dropable: [...stagedLabels.dropable],
-    })
-    $('bagLabelsStatus').textContent = res.ok ? 'Labels applied.' : res.error || 'Failed to apply labels.'
-  } catch (err) {
-    $('bagLabelsStatus').textContent = err?.message || 'Failed to apply labels.'
-  }
+  actionToasts.push(settings, v.actions, monsterNames)
+  bagWorn.renderBag(v.bag)
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -1166,32 +621,13 @@ function appendFeed(items) {
     el.addEventListener('click', () => el.classList.toggle('open'))
     box.appendChild(el)
 
-    // Best-effort, not guaranteed (ADR 0003): show the agent's next turn
-    // right next to the directive, so a player can see whether it landed
-    // instead of trusting it silently worked.
-    if (pendingDirective && (item.k === 'llm-response' || item.k === 'llm-error') && item.t >= pendingDirective.sentAt) {
-      $('directiveReply').textContent = item.m
-      pendingDirective = null
-    }
+    dispatchBook.consumeReply(item)
   }
   while (box.childElementCount > 400) box.removeChild(box.firstChild)
   // Same contract as the Log pane's Follow: while it is on, the newest turn is
   // always in view, and turning it off holds the scroll position so a turn can
   // be read while the agent keeps going.
   if ($('feedFollow').checked) box.scrollTop = box.scrollHeight
-}
-
-/// Records what was sent so the reply (above) can be matched back to it.
-function trackDirective(text) {
-  pendingDirective = { text, sentAt: Date.now() }
-  $('directiveSent').textContent = text
-  $('directiveReply').textContent = 'waiting…'
-  $('directiveLog').hidden = false
-  // The one deliberate animation moment (see style.css) — a brief ember
-  // pulse marking that word was actually sent.
-  const panel = $('directivePanel')
-  panel.classList.add('sent')
-  setTimeout(() => panel.classList.remove('sent'), 900)
 }
 
 function renderFeedFilters() {
@@ -1219,9 +655,7 @@ function openSettings() {
   $('settingsModal').hidden = false
   settingsDirty = false
   $('settingsDirty').hidden = true
-  syncCadenceControls()
-  syncToastControls()
-  syncAudioControls()
+  settingsPanel.syncAll(settings)
 }
 
 function closeSettings() {
@@ -1231,154 +665,11 @@ function closeSettings() {
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
     renderClassOptions()
     renderBackend()
-    syncCadenceControls()
+    settingsPanel.syncCadence(settings)
   }
   settingsSnapshot = null
   settingsDirty = false
   $('settingsModal').hidden = true
-}
-
-const ACTIVE_CADENCES = [
-  ['Very fast', 3],
-  ['Fast', 5],
-  ['Balanced', 10],
-  ['Relaxed', 20],
-  ['Economical', 30],
-]
-const IDLE_CADENCES = [
-  ['Frequent', 30],
-  ['Normal', 60],
-  ['Occasional', 300],
-  ['Rare', 900],
-  ['Minimum', 3600],
-]
-
-function nearestCadenceIndex(options, seconds) {
-  let best = 0
-  for (let i = 1; i < options.length; i++) {
-    if (Math.abs(options[i][1] - seconds) < Math.abs(options[best][1] - seconds)) best = i
-  }
-  return best
-}
-
-function syncCadenceControls() {
-  $('activeCadence').value = nearestCadenceIndex(ACTIVE_CADENCES, settings.minIntervalSecs)
-  $('idleCadence').value = nearestCadenceIndex(IDLE_CADENCES, settings.idleIntervalSecs)
-  renderCadenceLabels()
-}
-
-function renderCadenceLabels() {
-  const active = ACTIVE_CADENCES[Number($('activeCadence').value)]
-  const idle = IDLE_CADENCES[Number($('idleCadence').value)]
-  $('activeCadenceLabel').textContent = `${active[0]} · ${active[1]} seconds`
-  $('activeCadenceHint').textContent = `At most about ${(60 / active[1]).toFixed(1)} calls/minute while active.`
-  $('idleCadenceLabel').textContent =
-    `${idle[0]} · ${idle[1] >= 60 ? `${idle[1] / 60} minute${idle[1] === 60 ? '' : 's'}` : `${idle[1]} seconds`}`
-  $('idleCadenceHint').textContent = `At most about ${(60 / idle[1]).toFixed(2)} calls/minute while quiet.`
-}
-
-function syncToastControls() {
-  $('toastFontSize').value = settings.toastFontSize
-  $('toastOpacity').value = settings.toastOpacity
-  $('toastPersistSecs').value = settings.toastPersistSecs
-  $('toastFadeSecs').value = settings.toastFadeSecs
-  $('toastMaxCount').value = settings.toastMaxCount
-  renderToastLabels()
-}
-
-function renderToastLabels() {
-  $('toastFontSizeLabel').textContent = `${settings.toastFontSize}px`
-  $('toastOpacityLabel').textContent = `${settings.toastOpacity}%`
-  $('toastPersistSecsLabel').textContent = `${settings.toastPersistSecs}s`
-  $('toastFadeSecsLabel').textContent = `${settings.toastFadeSecs}s`
-  $('toastMaxCountLabel').textContent = String(settings.toastMaxCount)
-}
-
-function bindToastControls() {
-  const numericFields = {
-    toastFontSize: 'int',
-    toastOpacity: 'int',
-    toastPersistSecs: 'int',
-    toastFadeSecs: 'float',
-    toastMaxCount: 'int',
-  }
-  for (const [id, type] of Object.entries(numericFields)) {
-    $(id).addEventListener('input', () => {
-      settings[id] = readField(id, type)
-      renderToastLabels()
-      applyToastCssVars()
-      persistImmediateSetting({ [id]: settings[id] })
-    })
-  }
-}
-
-/// Shared by toast look/timing and audio: both take effect immediately and
-/// save on every change — unlike LLM/Agent, there is nothing here for Apply
-/// & validate to check or restart agent-client over, so staging them behind
-/// that button would just add a click for a change that's purely cosmetic.
-async function persistImmediateSetting(patch) {
-  settings = await api.saveSettings(patch)
-}
-
-function renderAudioLabels() {
-  $('bgmVolumeLabel').textContent = settings.bgmMuted ? 'Muted' : `${settings.bgmVolume}%`
-  $('sfxVolumeLabel').textContent = settings.sfxMuted ? 'Muted' : `${settings.sfxVolume}%`
-}
-
-/// The game client's own BGM/SFX volume lives in its iframe's separate
-/// origin (127.0.0.1) — nothing here to relay a change into without a live
-/// spectator view, so the controls are disabled rather than lying about
-/// having an effect.
-function updateAudioAvailability() {
-  const available = Boolean($('frame').dataset.url)
-  for (const id of ['bgmVolume', 'bgmMuted', 'sfxVolume', 'sfxMuted']) $(id).disabled = !available
-  $('audioUnavailable').hidden = available
-}
-
-function syncAudioControls() {
-  $('bgmVolume').value = settings.bgmVolume
-  $('bgmMuted').checked = settings.bgmMuted
-  $('sfxVolume').value = settings.sfxVolume
-  $('sfxMuted').checked = settings.sfxMuted
-  renderAudioLabels()
-  updateAudioAvailability()
-}
-
-/// Pushed on every audio-control change and every time the spectator frame
-/// (re)loads — cross-origin, so this postMessage is the only way in (see
-/// App.svelte's matching listener in the fork).
-function sendAudioToView() {
-  const frame = $('frame')
-  if (!frame.dataset.url || !frame.contentWindow) return
-  frame.contentWindow.postMessage(
-    {
-      type: 'openmmo-set-audio',
-      bgmVolume: settings.bgmVolume / 100,
-      bgmMuted: settings.bgmMuted,
-      sfxVolume: settings.sfxVolume / 100,
-      sfxMuted: settings.sfxMuted,
-    },
-    '*',
-  )
-}
-
-function bindAudioControls() {
-  for (const id of ['bgmVolume', 'sfxVolume']) {
-    $(id).addEventListener('input', () => {
-      settings[id] = readField(id, 'int')
-      renderAudioLabels()
-      persistImmediateSetting({ [id]: settings[id] })
-      sendAudioToView()
-    })
-  }
-  for (const id of ['bgmMuted', 'sfxMuted']) {
-    $(id).addEventListener('change', () => {
-      settings[id] = $(id).checked
-      renderAudioLabels()
-      persistImmediateSetting({ [id]: settings[id] })
-      sendAudioToView()
-    })
-  }
 }
 
 function setSettingsTab(name) {
@@ -1416,26 +707,6 @@ function applyPlayState(state) {
     sceneUrl = state.viewUrl
     applyView()
   }
-}
-
-/// A destructive action's one guard: resolves true only if Delete is
-/// clicked, false for Cancel or dismissing any other way.
-function confirmAction(message, okLabel = 'Delete') {
-  return new Promise((resolve) => {
-    $('confirmMessage').textContent = message
-    $('confirmOk').textContent = okLabel
-    $('confirmModal').hidden = false
-    const finish = (result) => {
-      $('confirmModal').hidden = true
-      $('confirmOk').removeEventListener('click', onOk)
-      $('confirmCancel').removeEventListener('click', onCancel)
-      resolve(result)
-    }
-    const onOk = () => finish(true)
-    const onCancel = () => finish(false)
-    $('confirmOk').addEventListener('click', onOk)
-    $('confirmCancel').addEventListener('click', onCancel)
-  })
 }
 
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
@@ -1503,33 +774,9 @@ function bindFields() {
     $('settingsDirty').hidden = false
   })
 
-  $('activeCadence').addEventListener('input', () => {
-    settings.minIntervalSecs = ACTIVE_CADENCES[Number($('activeCadence').value)][1]
-    $('minIntervalSecs').value = settings.minIntervalSecs
-    settingsDirty = true
-    $('settingsDirty').hidden = false
-    renderCadenceLabels()
-  })
-  $('idleCadence').addEventListener('input', () => {
-    settings.idleIntervalSecs = IDLE_CADENCES[Number($('idleCadence').value)][1]
-    $('idleIntervalSecs').value = settings.idleIntervalSecs
-    settingsDirty = true
-    $('settingsDirty').hidden = false
-    renderCadenceLabels()
-  })
-  bindToastControls()
-  bindAudioControls()
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
     button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab))
   }
-}
-
-/// A validation error naming a field on a tab that isn't showing is useless —
-/// land on Create, the tab most validation failures (no character chosen, a
-/// class/gender mismatch) actually belong to. LLM/connection errors still
-/// read fine from the shared toast regardless of which tab is up.
-function expandCharacterSections() {
-  setCharacterTab('create')
 }
 
 function bindActions() {
@@ -1615,64 +862,6 @@ function bindActions() {
     await enterCharacter(res.character)
   })
 
-  $('directiveForm').addEventListener('submit', async (e) => {
-    e.preventDefault()
-    const input = $('directiveInput')
-    const text = input.value.trim()
-    if (!text) return
-    input.value = ''
-    const res = await api.sendDirective(text)
-    if (!res.ok) {
-      showErrors([res.error])
-      return
-    }
-    trackDirective(text)
-  })
-
-  $('coordUseCurrent').addEventListener('click', () => {
-    if (!lastSelf?.position) return
-    $('coordName').value = lastSelf.name || ''
-    $('coordX').value = lastSelf.position.x.toFixed(1)
-    $('coordY').value = lastSelf.position.y.toFixed(1)
-    $('coordZ').value = lastSelf.position.z.toFixed(1)
-  })
-
-  $('coordsForm').addEventListener('submit', async (e) => {
-    e.preventDefault()
-    const name = $('coordName').value.trim()
-    const x = Number($('coordX').value)
-    const y = Number($('coordY').value)
-    const z = Number($('coordZ').value)
-    if (!name || !selectedCharacterId || [x, y, z].some(Number.isNaN)) return
-    const res = await api.addCoordinate(selectedCharacterId, { name, x, y, z })
-    if (!res.ok) {
-      showErrors([res.error])
-      return
-    }
-    customCoords = res.list
-    renderCoords()
-    e.target.reset()
-  })
-
-  $('presetsForm').addEventListener('submit', async (e) => {
-    e.preventDefault()
-    const name = $('presetName').value.trim()
-    const prompt = $('presetPrompt').value.trim()
-    if (!name || !prompt || !selectedCharacterId) return
-    const res = editingPresetId
-      ? await api.updatePreset(selectedCharacterId, editingPresetId, { name, prompt })
-      : await api.addPreset(selectedCharacterId, { name, prompt })
-    if (!res.ok) {
-      showErrors([res.error])
-      return
-    }
-    customPresets = res.list
-    renderPresets()
-    cancelEditPreset()
-  })
-
-  $('presetsCancelEdit').addEventListener('click', () => cancelEditPreset())
-
   $('saveInstance').addEventListener('click', async () => {
     if (!settings.characterName) return
     showErrors([])
@@ -1703,7 +892,9 @@ function bindActions() {
     $('instanceFile').textContent = `Saved to ${res.file} — applied`
   })
 
-  $('bagLabelsSubmit').addEventListener('click', () => void submitBagLabels())
+  $('bagLabelsSubmit').addEventListener('click', () =>
+    void bagWorn.submitBagLabels(selectedCharacterId, settings.characterName),
+  )
 
   $('restart').addEventListener('click', async () => {
     showErrors([])
@@ -1807,9 +998,17 @@ window.addEventListener('message', (event) => {
 // every (re)load starts it fresh from its own localStorage, so re-push our
 // side's preference each time rather than only on the Settings modal.
 $('frame').addEventListener('load', () => {
-  updateAudioAvailability()
-  sendAudioToView()
+  settingsPanel.updateAudioAvailability()
+  settingsPanel.sendAudioToView(settings)
 })
+
+/// Shared by toast look/timing and audio: both take effect immediately and
+/// save on every change — unlike LLM/Agent, there is nothing here for Apply
+/// & validate to check or restart agent-client over, so staging them behind
+/// that button would just add a click for a change that's purely cosmetic.
+async function persistImmediateSetting(patch) {
+  settings = await api.saveSettings(patch)
+}
 
 async function init() {
   const info = await api.info()
@@ -1824,7 +1023,7 @@ async function init() {
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()
   renderBackend()
-  applyToastCssVars()
+  actionToasts.applyToastCssVars(settings)
 
   for (const item of info.log) appendLog(item)
 
@@ -1840,15 +1039,28 @@ async function init() {
   bindCharacterTabs()
   bindPersonalityTabs()
   bindActivityTabs()
+  dispatchBook.bind({ getLastSelf: () => lastSelf })
+  settingsPanel.bind({
+    getSettings: () => settings,
+    onCadenceChange: (patch) => {
+      settings = { ...settings, ...patch }
+      settingsDirty = true
+      $('settingsDirty').hidden = false
+    },
+    onImmediateChange: (patch) => {
+      settings = { ...settings, ...patch }
+      void persistImmediateSetting(patch)
+    },
+  })
 
   renderFeedFilters()
-  renderWorn({})
-  renderCoords()
-  renderPresets()
+  bagWorn.renderWorn({})
+  dispatchBook.renderCoords()
+  dispatchBook.renderPresets()
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
-  api.onWorn(renderWorn)
+  api.onWorn(bagWorn.renderWorn)
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
     if (urls && urls.mode) {
@@ -1864,7 +1076,7 @@ async function init() {
     frame.removeAttribute('src')
     delete frame.dataset.url
     $('placeholder').hidden = false
-    updateAudioAvailability()
+    settingsPanel.updateAudioAvailability()
   })
   api.onViewMemory((mb) => {
     $('mem').textContent = mb ? `${mb} MB` : ''
