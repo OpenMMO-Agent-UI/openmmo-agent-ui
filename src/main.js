@@ -12,6 +12,7 @@ const { AgentProxy } = require('./proxy')
 const googleAuth = require('./googleAuth')
 const characterSession = require('./characterSession')
 const { ConnectionProfileStore } = require('./connectionProfiles')
+const { CharacterStore } = require('./characterStore')
 const { PlaySessionCoordinator } = require('./playSession')
 const { validateLlmSettings } = require('./llmValidation')
 
@@ -35,6 +36,7 @@ let feedSeq = null
 let settings = null
 let win = null
 let profileStore = null
+let characterStore = null
 let currentIdToken = null
 let playSession = null
 let currentCharacters = []
@@ -433,6 +435,7 @@ app.whenReady().then(() => {
       account: null,
     },
   })
+  characterStore = new CharacterStore({ baseDir: app.getPath('userData') })
   applySelectedProfile()
   playSession = createPlaySession()
 
@@ -613,7 +616,10 @@ ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
   const profileId = profileStore.selected().id
   const file = personalityPath(profileId, characterId)
   fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, config.composeInstanceText(text, readLabels(profileId, characterId)))
+  fs.writeFileSync(
+    file,
+    config.composeInstanceText(text, characterStore.open('labels', profileId, characterId).read())
+  )
   if (characterName) materializePersonality(profileId, characterId, characterName)
   return { ok: true, file }
 })
@@ -631,36 +637,12 @@ ipcMain.handle('memory:get', (_e, { characterName }) => {
   }
 })
 
-/// Sellable/dropable marks on bag items, isolated the same way as the
-/// personality file and coordinates below. The source of truth for the bag
+/// Sellable/dropable marks on bag items — the source of truth for the bag
 /// drawer's checkboxes; instance.txt's own copy (below) is just a rendering
 /// of this for agent-client to read.
-function labelsPath(profileId, characterId) {
-  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
-  return path.join(app.getPath('userData'), 'labels', safe(profileId), `${safe(characterId)}.json`)
-}
-
-function readLabels(profileId, characterId) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(labelsPath(profileId, characterId), 'utf8'))
-    return {
-      sellable: Array.isArray(parsed.sellable) ? parsed.sellable : [],
-      dropable: Array.isArray(parsed.dropable) ? parsed.dropable : [],
-    }
-  } catch {
-    return { sellable: [], dropable: [] }
-  }
-}
-
-function writeLabels(profileId, characterId, labels) {
-  const file = labelsPath(profileId, characterId)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(labels))
-}
-
 ipcMain.handle('labels:get', (_e, { characterId }) => {
   if (!characterId) return { sellable: [], dropable: [] }
-  return readLabels(profileStore.selected().id, characterId)
+  return characterStore.open('labels', profileStore.selected().id, characterId).read()
 })
 
 ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
@@ -670,7 +652,7 @@ ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
     sellable: Array.isArray(labels?.sellable) ? [...new Set(labels.sellable)] : [],
     dropable: Array.isArray(labels?.dropable) ? [...new Set(labels.dropable)] : [],
   }
-  writeLabels(profileId, characterId, clean)
+  characterStore.open('labels', profileId, characterId).write(clean)
   // Re-render instance.txt's labels block from the character's existing
   // prose plus these new marks — mirrors instance:save, just triggered by a
   // label change instead of a personality edit.
@@ -687,102 +669,61 @@ ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
   return { ok: true, labels: clean }
 })
 
-/// Player-saved coordinates, isolated by connection profile and character —
-/// same scoping as the personality file, just JSON instead of plain text.
-function coordinatesPath(profileId, characterId) {
-  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
-  return path.join(app.getPath('userData'), 'coordinates', safe(profileId), `${safe(characterId)}.json`)
-}
-
-function readCoordinates(profileId, characterId) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(coordinatesPath(profileId, characterId), 'utf8'))
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writeCoordinates(profileId, characterId, list) {
-  const file = coordinatesPath(profileId, characterId)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(list))
-}
-
+/// Player-saved coordinates, isolated by connection profile and character.
 ipcMain.handle('coordinates:list', (_e, { characterId }) => {
   if (!characterId) return []
-  return readCoordinates(profileStore.selected().id, characterId)
+  return characterStore.open('coordinates', profileStore.selected().id, characterId).read()
 })
 
 ipcMain.handle('coordinates:add', (_e, { characterId, name, x, y, z }) => {
   if (!characterId) return { ok: false, error: 'No character selected' }
-  const profileId = profileStore.selected().id
-  const list = readCoordinates(profileId, characterId)
+  const { read, write } = characterStore.open('coordinates', profileStore.selected().id, characterId)
+  const list = read()
   list.push({ id: crypto.randomUUID(), name, x, y, z })
-  writeCoordinates(profileId, characterId, list)
+  write(list)
   return { ok: true, list }
 })
 
 ipcMain.handle('coordinates:delete', (_e, { characterId, id }) => {
   if (!characterId) return { ok: false, error: 'No character selected' }
-  const profileId = profileStore.selected().id
-  const list = readCoordinates(profileId, characterId).filter((c) => c.id !== id)
-  writeCoordinates(profileId, characterId, list)
+  const { read, write } = characterStore.open('coordinates', profileStore.selected().id, characterId)
+  const list = read().filter((c) => c.id !== id)
+  write(list)
   return { ok: true, list }
 })
 
 /// Player-saved dispatch presets, same scoping/shape as coordinates.
-function presetsPath(profileId, characterId) {
-  const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')
-  return path.join(app.getPath('userData'), 'presets', safe(profileId), `${safe(characterId)}.json`)
-}
-
-function readPresets(profileId, characterId) {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(presetsPath(profileId, characterId), 'utf8'))
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function writePresets(profileId, characterId, list) {
-  const file = presetsPath(profileId, characterId)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(file, JSON.stringify(list))
-}
-
 ipcMain.handle('presets:list', (_e, { characterId }) => {
   if (!characterId) return []
-  return readPresets(profileStore.selected().id, characterId)
+  return characterStore.open('presets', profileStore.selected().id, characterId).read()
 })
 
 ipcMain.handle('presets:add', (_e, { characterId, name, prompt }) => {
   if (!characterId) return { ok: false, error: 'No character selected' }
-  const profileId = profileStore.selected().id
-  const list = readPresets(profileId, characterId)
+  const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
+  const list = read()
   list.push({ id: crypto.randomUUID(), name, prompt })
-  writePresets(profileId, characterId, list)
+  write(list)
   return { ok: true, list }
 })
 
 ipcMain.handle('presets:update', (_e, { characterId, id, name, prompt }) => {
   if (!characterId) return { ok: false, error: 'No character selected' }
-  const profileId = profileStore.selected().id
-  const list = readPresets(profileId, characterId)
+  const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
+  const list = read()
   const preset = list.find((p) => p.id === id)
   if (!preset) return { ok: false, error: 'Preset not found' }
   preset.name = name
   preset.prompt = prompt
-  writePresets(profileId, characterId, list)
+  write(list)
   return { ok: true, list }
 })
 
 ipcMain.handle('presets:delete', (_e, { characterId, id }) => {
   if (!characterId) return { ok: false, error: 'No character selected' }
-  const profileId = profileStore.selected().id
-  const list = readPresets(profileId, characterId).filter((p) => p.id !== id)
-  writePresets(profileId, characterId, list)
+  const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
+  const list = read().filter((p) => p.id !== id)
+  write(list)
   return { ok: true, list }
 })
 
