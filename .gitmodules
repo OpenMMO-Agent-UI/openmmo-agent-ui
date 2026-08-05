@@ -1,3 +1,3 @@
 [submodule "deps/OpenMMO"]
 	path = deps/OpenMMO
-	url = https://github.com/OpenMMO-agent/OpenMMO.git
+	url = https://github.com/OpenMMO-Agent-UI/OpenMMO.git

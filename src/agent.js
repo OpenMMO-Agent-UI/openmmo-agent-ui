@@ -144,7 +144,7 @@ class AgentProcess extends EventEmitter {
     this.emit(
       'fatal',
       `The server speaks protocol v${match[1]}, this build speaks v${match[2]}.${built} ` +
-        `Run "node openmmo-client/scripts/check-protocol.js" for the commit to move to.`,
+        `Run "node openmmo-agent-ui/scripts/check-protocol.js" for the commit to move to.`,
     )
   }
 

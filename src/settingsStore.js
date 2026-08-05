@@ -259,7 +259,7 @@ function validate(s) {
   }
   // Under Google auth, the pre-flight session (characterSession.js) always
   // resolves an exact character before Play — agent-client should never fall
-  // back to its own characters.first()/auto-create guesswork (ADR 0001).
+  // back to its own characters.first()/auto-create guesswork.
   if (s.authMode === 'google' && !s.characterName) {
     errors.push('Choose or create a character first')
   }

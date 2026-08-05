@@ -1,9 +1,9 @@
 'use strict'
 
 /// Checks whether Julian-adv/OpenMMO has published a release we have not yet
-/// synced all the way into openmmo-client's submodule pin. "Synced" is
+/// synced all the way into this repo's submodule pin. "Synced" is
 /// derived from git ancestry rather than a state file: if the release
-/// commit is already reachable from the commit openmmo-client's HEAD
+/// commit is already reachable from the commit this repo's HEAD
 /// currently pins deps/OpenMMO to, there is nothing left to do.
 ///
 /// This checks the *main repo's pin*, not the fork's master — a run that

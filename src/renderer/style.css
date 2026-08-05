@@ -778,9 +778,9 @@ iframe {
 /* Always visible, docked below the game surface — not a rail drawer, and not
    an overlay on top of the scene either (it used to be, and covered the
    scene/HUD along the bottom edge). This is how a human overrides the
-   otherwise-autonomous agent, and ADR 0003 depends on the reply being seen
-   right next to what was sent, not found later in a log — but it earns that
-   visibility by taking its own space, not by floating over the view.
+   otherwise-autonomous agent, and the reply needs to be seen right next to
+   what was sent, not found later in a log — but it earns that visibility by
+   taking its own space, not by floating over the view.
 
    This is the signature moment: a directive reads as sending word to your
    character, not typing into a chat box. "You" sits in ember (it's the

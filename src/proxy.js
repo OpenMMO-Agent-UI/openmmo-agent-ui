@@ -5,7 +5,7 @@ const { WebSocket, WebSocketServer } = require('ws')
 
 const { encode, decode, variantOf, Float } = require('./msgpack')
 
-/// Sender name on every relay-forged directive whisper (ADR 0003). Fixed
+/// Sender name on every relay-forged directive whisper. Fixed
 /// rather than the player's Google display name, so the shipped default
 /// prompt can name it literally. Contains `~`, which the server's
 /// character-name charset rejects (server/src/auth.rs valid_name_char) — no
@@ -477,7 +477,7 @@ class AgentProxy {
     })
   }
 
-  /// A directive (ADR 0003): forges a `WhisperMessage` toward agent-client,
+  /// A directive: forges a `WhisperMessage` toward agent-client,
   /// as if the game server itself had sent it, addressed to the player's own
   /// character. Whispers already carry agent-client's highest scheduling
   /// priority and unconditional prompt inclusion — no agent-client patch

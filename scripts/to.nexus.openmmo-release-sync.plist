@@ -2,9 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Template: launchd needs literal absolute paths (no $HOME/env expansion),
-  so substitute /path/to/openmmo-client below with this checkout's actual
+  so substitute /path/to/openmmo-agent-ui below with this checkout's actual
   absolute path before `launchctl load`ing this file, e.g.:
-    sed "s#/path/to/openmmo-client#$(pwd)#g" scripts/to.nexus.openmmo-release-sync.plist \
+    sed "s#/path/to/openmmo-agent-ui#$(pwd)#g" scripts/to.nexus.openmmo-release-sync.plist \
       > ~/Library/LaunchAgents/to.nexus.openmmo-release-sync.plist
 -->
 <plist version="1.0">
@@ -13,15 +13,15 @@
 	<string>to.nexus.openmmo-release-sync</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/path/to/openmmo-client/scripts/release-sync-cron.sh</string>
+		<string>/path/to/openmmo-agent-ui/scripts/release-sync-cron.sh</string>
 	</array>
 	<key>StartInterval</key>
 	<integer>28800</integer>
 	<key>RunAtLoad</key>
 	<false/>
 	<key>StandardOutPath</key>
-	<string>/path/to/openmmo-client/.release-sync.log</string>
+	<string>/path/to/openmmo-agent-ui/.release-sync.log</string>
 	<key>StandardErrorPath</key>
-	<string>/path/to/openmmo-client/.release-sync.log</string>
+	<string>/path/to/openmmo-agent-ui/.release-sync.log</string>
 </dict>
 </plist>

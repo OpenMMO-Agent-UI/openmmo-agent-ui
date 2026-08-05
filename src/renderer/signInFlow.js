@@ -12,7 +12,7 @@ let profiles = []
 let selectedProfileId = null
 let editingProfileId = null
 
-// Pre-flight session state (ADR 0001): the character list fetched at sign-in,
+// Pre-flight session state: the character list fetched at sign-in,
 // and which one is chosen for this Play. Bumped on every sign-in attempt so
 // a stale device-flow poll (abandoned via "Start over") can't resolve later
 // and yank the screen back.
@@ -31,7 +31,7 @@ export function getSelectedCharacterId() {
   return selectedCharacterId
 }
 
-/// The Login screen's three mutually exclusive states (ADR 0001): checking
+/// The Login screen's three mutually exclusive states: checking
 /// the cache, a cached credential to continue with, or a fresh device code.
 function showLoginState(state) {
   $('loginChecking').hidden = state !== 'checking'
@@ -45,7 +45,7 @@ export function showDeviceCode(code) {
   showLoginState('code')
 }
 
-/// Runs the device flow (main process does the actual OAuth, ADR 0001).
+/// Runs the device flow (main process does the actual OAuth).
 /// Guarded by `signInGeneration` so a poll abandoned via "Start over" can't
 /// resolve later and yank the screen back to Character.
 async function beginSignIn() {
@@ -64,7 +64,7 @@ async function enterLoginScreen() {
 
 /// Shared tail of Continue and the device flow: land on Character with
 /// whatever the pre-flight session found, or stay put on failure — a protocol
-/// mismatch (ADR 0002) or a refused sign-in alike. Login is the first screen
+/// mismatch or a refused sign-in alike. Login is the first screen
 /// now, so there is nowhere behind it to bounce to: leave the error in the
 /// toast and offer whichever sign-in action can still be retried, rather than
 /// the "checking…" pulse it was mid-way through.
@@ -215,7 +215,7 @@ function bindCharacterTabs() {
 }
 
 /// One row per existing character (max 3, server-enforced): pick it, or
-/// delete it. Pre-flight session fully owns this CRUD (ADR 0001) — nothing
+/// delete it. Pre-flight session fully owns this CRUD — nothing
 /// here talks to agent-client.
 function renderCharacterList() {
   const box = $('characterList')

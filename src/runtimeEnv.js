@@ -88,7 +88,7 @@ function protocolVersionInCheckout(root) {
   }
 }
 
-/// What the pre-flight session puts in `ClientInfo` (ADR 0002's guard). This
+/// What the pre-flight session puts in `ClientInfo` (the protocol guard). This
 /// follows OpenMMO instead of being hand-maintained, because the two can only
 /// ever be wrong together: the version travels with the binary and the client
 /// we bundle, all three staged from one checkout by
@@ -99,8 +99,9 @@ function protocolVersionInCheckout(root) {
 ///
 /// Two sources, in order: the number stamped into `build-info.json` at stage
 /// time (the packaged case — there is no checkout inside a .app to read), then
-/// the checkout itself (`npm start` in dev). ADR 0002 originally rejected
-/// deriving this at all, but for a case that no longer applies: it was reading
+/// the checkout itself (`npm start` in dev). An earlier version of this
+/// function rejected deriving this at all, but for a case that no longer
+/// applies: it was reading
 /// from `settings.binaryPath`, which could point at a bare binary outside any
 /// checkout (`~/Downloads/agent-client`) with no `shared/src/lib.rs` anywhere
 /// near it. Neither source here can land in that state — the stamp is written

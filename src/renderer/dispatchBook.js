@@ -4,7 +4,7 @@ import { $, showErrors } from './dom.js'
 
 const api = window.agentApp
 
-/// A directive (ADR 0003): best-effort, so its reply is tracked and shown
+/// A directive: best-effort, so its reply is tracked and shown
 /// right next to what was sent rather than assumed to have landed.
 let pendingDirective = null
 
@@ -21,7 +21,7 @@ export function trackDirective(text) {
   setTimeout(() => panel.classList.remove('sent'), 900)
 }
 
-/// Best-effort, not guaranteed (ADR 0003): show the agent's next turn right
+/// Best-effort, not guaranteed: show the agent's next turn right
 /// next to the directive, so a player can see whether it landed instead of
 /// trusting it silently worked. Called from the feed panel as items arrive.
 export function consumeReply(item) {

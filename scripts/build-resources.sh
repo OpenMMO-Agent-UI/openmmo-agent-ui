@@ -27,7 +27,7 @@ checkout="${1:-"$root/deps/OpenMMO"}"
 checkout="$(cd "$checkout" && pwd)"
 
 # Both helper scripts resolve the checkout from OPENMMO_CHECKOUT or from
-# wherever git says they are — the latter finds openmmo-client's own repo when
+# wherever git says they are — the latter finds this repo's own root when
 # the two are siblings, not the checkout. Be explicit rather than lucky.
 export OPENMMO_CHECKOUT="$checkout"
 

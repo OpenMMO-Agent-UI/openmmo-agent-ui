@@ -3,3 +3,4 @@ dist/
 out/
 build/
 .release-sync.log
+.DS_Store

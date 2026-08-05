@@ -2,7 +2,7 @@
 
 /// Ask the live server which wire protocol it speaks, and say what to do about it.
 ///
-///   node openmmo-client/scripts/check-protocol.js [wss://host/ws]
+///   node openmmo-agent-ui/scripts/check-protocol.js [wss://host/ws]
 ///
 /// The server compares versions exactly and refuses anything else, and the
 /// deployed build is not always upstream's tip — it has been both ahead of and
@@ -20,7 +20,7 @@ const { WebSocket } = require('ws')
 const { encode, decode, variantOf } = require('./../src/msgpack')
 
 // `../..` from this script only finds the OpenMMO checkout when
-// openmmo-client is cloned *inside* it (the README's documented layout) —
+// this repo is cloned *inside* it (the README's documented layout) —
 // checked out as siblings instead, it silently lands one directory too
 // shallow. See link.sh, which had the identical bug.
 function findRoot() {

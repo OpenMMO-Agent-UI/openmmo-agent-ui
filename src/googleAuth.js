@@ -5,7 +5,7 @@ const path = require('node:path')
 
 const { credentialPath } = require('./settingsStore')
 
-/// Client-owned Google sign-in (ADR 0001): the Electron app runs the device
+/// Client-owned Google sign-in: the Electron app runs the device
 /// flow itself, writing the exact same cache file and shape agent-client's
 /// own `google_auth.rs` reads (`CachedToken { client_id, refresh_token }`) —
 /// so agent-client, launched afterward, finds a valid cache and never runs

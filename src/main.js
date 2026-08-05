@@ -46,7 +46,7 @@ let currentCharacters = []
 let activeCharacterId = null
 let manualReadiness = null
 let authGeneration = 0
-// The pre-flight session (ADR 0001): open for the lifetime of the Character
+// The pre-flight session: open for the lifetime of the Character
 // screen, closed once Play launches agent-client or the app signs out.
 let preflightSession = null
 
@@ -550,7 +550,7 @@ async function startAgent() {
   const errors = settingsStore.validate(settings)
   if (errors.length) return { ok: false, errors }
   // The pre-flight session already resolved the exact character agent-client
-  // is about to enter with (ADR 0001) — nothing left for it to do.
+  // is about to enter with — nothing left for it to do.
   closePreflightSession()
   currentCharacters = []
   // agent-client hard-errors on a configured prompt file that doesn't exist —
@@ -751,7 +751,7 @@ ipcMain.handle('auth:signout', async () => {
 
 /// Cheap, no-network check: is there a cached Google credential for the
 /// currently configured client? Drives the Login screen's initial
-/// Continue-vs-sign-in state (ADR 0001).
+/// Continue-vs-sign-in state.
 ipcMain.handle('auth:status', () => ({
   signedIn: Boolean(profileStore.credential(profileStore.selected().id)),
 }))
@@ -930,7 +930,7 @@ ipcMain.handle('play:leave', async (_e, destination) => {
   return { ok: true, destination }
 })
 
-/// A directive (ADR 0003): best-effort, delivered as a relay-forged whisper.
+/// A directive: best-effort, delivered as a relay-forged whisper.
 /// Only meaningful once agent-client is actually running and connected.
 ipcMain.handle('directive:send', (_e, text) => {
   if (!agent.running) return { ok: false, error: 'Not running' }

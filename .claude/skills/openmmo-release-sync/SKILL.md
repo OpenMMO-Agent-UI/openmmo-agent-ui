@@ -1,13 +1,13 @@
 ---
 name: openmmo-release-sync
-description: Fully-unattended flow that syncs deps/OpenMMO (our fork of Julian-adv/OpenMMO) to Julian's latest release, rebases our tweak-agent-client customizations onto it, and cuts a matching openmmo-client release. Runs on a schedule (launchd, every 8h) — invoke manually only to test the flow or force a run.
+description: Fully-unattended flow that syncs deps/OpenMMO (our fork of Julian-adv/OpenMMO) to Julian's latest release, rebases our tweak-agent-client customizations onto it, and cuts a matching openmmo-agent-ui release. Runs on a schedule (launchd, every 8h) — invoke manually only to test the flow or force a run.
 ---
 
 # OpenMMO release sync
 
 This repo's game client talks to a server that rejects any connection whose
 `PROTOCOL_VERSION` doesn't match exactly (see `scripts/check-protocol.js`).
-`deps/OpenMMO` is a submodule pointing at `OpenMMO-agent/OpenMMO`, a fork of
+`deps/OpenMMO` is a submodule pointing at `OpenMMO-Agent-UI/OpenMMO`, a fork of
 `Julian-adv/OpenMMO`, carrying our customizations on the `tweak-agent-client`
 branch. When Julian cuts a new release, our fork and branch need to catch up
 or the deployed server and our client eventually speak different protocol
@@ -32,7 +32,7 @@ node scripts/release-sync-check.js
 
 This prints JSON: `hasNewRelease`, `releaseTag`, `releaseSha`,
 `protocolVersion`, `forkHead`, `pinnedSha`. It compares Julian's latest
-non-draft release against **openmmo-client's current submodule pin**, not
+non-draft release against **this repo's current submodule pin**, not
 against the fork's master — so a prior run that pushed the fork/branch side
 but failed before the main-repo commit still shows `hasNewRelease: true`,
 and this run picks up wherever the last one stopped. Steps below are safe to
@@ -47,7 +47,7 @@ and `protocolVersion` are used throughout the rest of this flow.
 
 ## Step 1: fast-forward the fork's master to the release commit
 
-The fork's `master` (`OpenMMO-agent/OpenMMO`) is a pure mirror with no commits of its
+The fork's `master` (`OpenMMO-Agent-UI/OpenMMO`) is a pure mirror with no commits of its
 own — it should only ever fast-forward. Sync it to the **release commit**,
 not to whatever Julian's `master` HEAD has moved on to since (his master can
 be — and per his release history, currently is — a handful of commits
@@ -186,7 +186,7 @@ The branch push must be force (rebase rewrote its history) — use
 `tweak-agent-client` from anywhere else between fetch and push aborts
 loudly instead of getting silently overwritten.
 
-## Step 5: bump openmmo-client's pin and version
+## Step 5: bump this repo's pin and version
 
 Back in the repo root:
 
@@ -203,7 +203,7 @@ this skill's build+test gate in Step 3 is treated as that verification.
 
 Determine the new main-repo version: strip the `agent-client-` prefix off
 `releaseTag` (e.g. `agent-client-v0.16.0` → `v0.16.0`, version string
-`0.16.0`). This is not an independent version bump — openmmo-client's
+`0.16.0`). This is not an independent version bump — this repo's
 version tracks Julian's release number directly.
 
 ```

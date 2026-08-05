@@ -5,7 +5,7 @@ const { WebSocket } = require('ws')
 const { encode, decode, variantOf } = require('./msgpack')
 const { protocolVersion } = require('./runtimeEnv')
 
-/// The pre-flight session (ADR 0001): a direct, throwaway WebSocket
+/// The pre-flight session: a direct, throwaway WebSocket
 /// connection to the game server — bypassing agent-client entirely — that
 /// signs in and owns all character list/create/delete. agent-client is
 /// launched only afterward, with `character_name` set to an exact,
@@ -13,7 +13,7 @@ const { protocolVersion } = require('./runtimeEnv')
 /// activates. Only this narrow, deliberately stable corner of the wire
 /// protocol is hand-encoded here — never movement, combat, or inventory.
 ///
-/// The protocol guard (ADR 0002) fails closed: a version mismatch here means
+/// The protocol guard fails closed: a version mismatch here means
 /// the real game session would fail too, just later and less clearly, so
 /// this throws instead of falling back to the plain character-name field.
 
@@ -120,7 +120,7 @@ function authErrorMessage(name, body) {
 }
 
 /// Opens the pre-flight session: connects, sends the protocol-guard
-/// handshake (failing closed on a version mismatch per ADR 0002), signs in
+/// handshake (failing closed on a version mismatch), signs in
 /// with the given Google id_token, and returns { accountName, characters,
 /// createCharacter, deleteCharacter, close }.
 async function openSession(serverUrl, idToken) {
