@@ -42,6 +42,22 @@ let pendingDirective = null
 const monsterNames = new Map()
 const MONSTER_LINE_RE = /Monster:\s*(\S+)\s*\[([^\]]+)\]/g
 
+/// Mirrors agent-client's shop_info::format_price and the fork's
+/// splitGold/GoldAmount.svelte: 1g = 100s = 10,000c, smallest unit (copper)
+/// in, omitting denominations that are zero (but always showing copper if
+/// the whole amount is).
+function formatGold(copper) {
+  const total = Math.trunc(Math.abs(copper))
+  const gold = Math.trunc(total / 10000)
+  const silver = Math.trunc((total % 10000) / 100)
+  const bronze = total % 100
+  const parts = []
+  if (gold > 0) parts.push(`${gold}g`)
+  if (silver > 0) parts.push(`${silver}s`)
+  if (bronze > 0 || parts.length === 0) parts.push(`${bronze}c`)
+  return `${copper < 0 ? '-' : ''}${parts.join(' ')}`
+}
+
 function learnMonsterNames(text) {
   MONSTER_LINE_RE.lastIndex = 0
   let match
@@ -172,6 +188,9 @@ function setStatus(state) {
   $('dot').className = `dot${running ? ' on' : ''}`
   $('status').textContent = running ? `running (pid ${state.pid})` : 'stopped'
   $('restart').hidden = !(running && dirtyWhileRunning)
+  $('pauseAgent').textContent = running ? '⏸' : '▶'
+  $('pauseAgent').title = running ? 'Pause the agent' : 'Resume the agent'
+  $('pauseAgent').setAttribute('aria-label', $('pauseAgent').title)
   $('directiveInput').disabled = !running
   $('directiveInput').placeholder = running
     ? 'Send word to your character…'
@@ -185,6 +204,7 @@ function setStatus(state) {
     sceneUrl = null
     $('placeholder').hidden = false
     setVitals(null)
+    updateAudioAvailability()
   }
 }
 
@@ -730,6 +750,7 @@ function showViewProblem(message) {
   frame.removeAttribute('src')
   delete frame.dataset.url
   $('placeholder').hidden = false
+  updateAudioAvailability()
 }
 
 /// Every slot the game has (shared/src/inventory.rs EquipSlot), head down and
@@ -937,7 +958,7 @@ function setVitals(v) {
     v.time && v.time.hour != null
       ? ` · ${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
-  const gold = v.gold == null ? '' : ` · ${v.gold}g`
+  const gold = v.gold == null ? '' : ` · ${formatGold(v.gold)}`
   const coords = s.position
     ? ` · (${s.position.x.toFixed(1)}, ${s.position.y.toFixed(1)}, ${s.position.z.toFixed(1)})`
     : ''
@@ -1200,6 +1221,7 @@ function openSettings() {
   $('settingsDirty').hidden = true
   syncCadenceControls()
   syncToastControls()
+  syncAudioControls()
 }
 
 function closeSettings() {
@@ -1272,10 +1294,6 @@ function renderToastLabels() {
   $('toastMaxCountLabel').textContent = String(settings.toastMaxCount)
 }
 
-/// Toast look/timing take effect immediately and save on every drag tick —
-/// unlike LLM/Automatic-play, there is nothing here for Apply & validate to
-/// check or restart agent-client over, so staging them behind that button
-/// would just add a click for a change that's purely cosmetic.
 function bindToastControls() {
   const numericFields = {
     toastFontSize: 'int',
@@ -1289,13 +1307,78 @@ function bindToastControls() {
       settings[id] = readField(id, type)
       renderToastLabels()
       applyToastCssVars()
-      persistToastSetting({ [id]: settings[id] })
+      persistImmediateSetting({ [id]: settings[id] })
     })
   }
 }
 
-async function persistToastSetting(patch) {
+/// Shared by toast look/timing and audio: both take effect immediately and
+/// save on every change — unlike LLM/Agent, there is nothing here for Apply
+/// & validate to check or restart agent-client over, so staging them behind
+/// that button would just add a click for a change that's purely cosmetic.
+async function persistImmediateSetting(patch) {
   settings = await api.saveSettings(patch)
+}
+
+function renderAudioLabels() {
+  $('bgmVolumeLabel').textContent = settings.bgmMuted ? 'Muted' : `${settings.bgmVolume}%`
+  $('sfxVolumeLabel').textContent = settings.sfxMuted ? 'Muted' : `${settings.sfxVolume}%`
+}
+
+/// The game client's own BGM/SFX volume lives in its iframe's separate
+/// origin (127.0.0.1) — nothing here to relay a change into without a live
+/// spectator view, so the controls are disabled rather than lying about
+/// having an effect.
+function updateAudioAvailability() {
+  const available = Boolean($('frame').dataset.url)
+  for (const id of ['bgmVolume', 'bgmMuted', 'sfxVolume', 'sfxMuted']) $(id).disabled = !available
+  $('audioUnavailable').hidden = available
+}
+
+function syncAudioControls() {
+  $('bgmVolume').value = settings.bgmVolume
+  $('bgmMuted').checked = settings.bgmMuted
+  $('sfxVolume').value = settings.sfxVolume
+  $('sfxMuted').checked = settings.sfxMuted
+  renderAudioLabels()
+  updateAudioAvailability()
+}
+
+/// Pushed on every audio-control change and every time the spectator frame
+/// (re)loads — cross-origin, so this postMessage is the only way in (see
+/// App.svelte's matching listener in the fork).
+function sendAudioToView() {
+  const frame = $('frame')
+  if (!frame.dataset.url || !frame.contentWindow) return
+  frame.contentWindow.postMessage(
+    {
+      type: 'openmmo-set-audio',
+      bgmVolume: settings.bgmVolume / 100,
+      bgmMuted: settings.bgmMuted,
+      sfxVolume: settings.sfxVolume / 100,
+      sfxMuted: settings.sfxMuted,
+    },
+    '*',
+  )
+}
+
+function bindAudioControls() {
+  for (const id of ['bgmVolume', 'sfxVolume']) {
+    $(id).addEventListener('input', () => {
+      settings[id] = readField(id, 'int')
+      renderAudioLabels()
+      persistImmediateSetting({ [id]: settings[id] })
+      sendAudioToView()
+    })
+  }
+  for (const id of ['bgmMuted', 'sfxMuted']) {
+    $(id).addEventListener('change', () => {
+      settings[id] = $(id).checked
+      renderAudioLabels()
+      persistImmediateSetting({ [id]: settings[id] })
+      sendAudioToView()
+    })
+  }
 }
 
 function setSettingsTab(name) {
@@ -1315,6 +1398,7 @@ function applyPlayState(state) {
   $('modeAi').classList.toggle('on', playMode === 'ai')
   $('modeManual').disabled = state.phase === 'switching'
   $('modeAi').disabled = state.phase === 'switching'
+  $('pauseAgent').disabled = state.phase === 'switching'
   clearInterval(retryCountdownTimer)
   retryCountdownTimer = null
   const startedAt = Date.now()
@@ -1434,6 +1518,7 @@ function bindFields() {
     renderCadenceLabels()
   })
   bindToastControls()
+  bindAudioControls()
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
     button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab))
   }
@@ -1630,6 +1715,19 @@ function bindActions() {
     }
   })
 
+  // Pause stops agent-client outright (not a mode switch) so personality,
+  // bag labels, and dispatch presets can be edited without it racing a save.
+  // Resuming reuses the same start path as Apply & restart — any personality
+  // edit made while paused just applies on the way back up.
+  $('pauseAgent').addEventListener('click', async () => {
+    showErrors([])
+    $('pauseAgent').disabled = true
+    const res = running ? await api.stop() : await api.restart()
+    $('pauseAgent').disabled = false
+    if (!res.ok) showErrors(res.errors)
+    else setStatus(res.status)
+  })
+
   $('banner-open').addEventListener('click', () =>
     api.open($('loginCode').dataset.url || 'https://www.google.com/device'),
   )
@@ -1705,6 +1803,14 @@ window.addEventListener('message', (event) => {
   }
 })
 
+// The game client's audio settings live in its iframe's own origin —
+// every (re)load starts it fresh from its own localStorage, so re-push our
+// side's preference each time rather than only on the Settings modal.
+$('frame').addEventListener('load', () => {
+  updateAudioAvailability()
+  sendAudioToView()
+})
+
 async function init() {
   const info = await api.info()
   settings = info.settings
@@ -1758,6 +1864,7 @@ async function init() {
     frame.removeAttribute('src')
     delete frame.dataset.url
     $('placeholder').hidden = false
+    updateAudioAvailability()
   })
   api.onViewMemory((mb) => {
     $('mem').textContent = mb ? `${mb} MB` : ''

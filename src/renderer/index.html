@@ -109,6 +109,7 @@
         <span class="spacer"></span>
         <span class="mem" id="mem"></span>
         <button id="reloadView" class="ghost" title="Reload the spectator view">↻</button>
+        <button id="pauseAgent" class="ghost" title="Pause the agent" aria-label="Pause the agent">⏸</button>
         <button id="restart" class="ghost" hidden>Apply &amp; restart</button>
         <div class="mode-overlay" aria-label="Play mode">
           <button id="modeManual" class="mode-button" title="Manual play" aria-label="Manual play">
@@ -277,9 +278,9 @@
         </div>
         <div class="tabs" id="settingsTabs" role="tablist">
           <button class="tab on" data-settings-tab="llm">LLM</button>
-          <button class="tab" data-settings-tab="automatic">Automatic play</button>
-          <button class="tab" data-settings-tab="advanced">Advanced</button>
-          <button class="tab" data-settings-tab="toasts">Actions</button>
+          <button class="tab" data-settings-tab="agent">Agent</button>
+          <button class="tab" data-settings-tab="display">Display</button>
+          <button class="tab" data-settings-tab="audio">Audio</button>
         </div>
         <div class="modal-body">
           <div data-settings-panel="llm">
@@ -299,7 +300,7 @@
             <p class="hint" id="backendHint"></p>
             <p class="hint">Apply checks CLI sign-in or sends one disclosed one-token request to the selected HTTP provider.</p>
           </div>
-          <div data-settings-panel="automatic" hidden>
+          <div data-settings-panel="agent" hidden>
             <label>Active response: <strong id="activeCadenceLabel"></strong>
               <input id="activeCadence" type="range" min="0" max="4" step="1" />
             </label>
@@ -310,8 +311,6 @@
             <p class="hint" id="idleCadenceHint"></p>
             <label class="check"><input type="checkbox" id="alwaysActive" /> Continue adventuring while alone</label>
             <p class="hint">Turn this off to pause AI calls when no other player is nearby.</p>
-          </div>
-          <div data-settings-panel="advanced" hidden>
             <div class="row">
               <label>Active interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
               <label>Idle interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
@@ -327,7 +326,8 @@
               <label>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
             </div>
           </div>
-          <div data-settings-panel="toasts" hidden>
+          <div data-settings-panel="display" hidden>
+            <h3 class="settings-section">Actions</h3>
             <label>Font size: <strong id="toastFontSizeLabel"></strong>
               <input id="toastFontSize" type="range" min="10" max="20" step="1" />
             </label>
@@ -347,6 +347,18 @@
             <div class="toast-preview-box">
               <div id="toastPreview" class="action-toast">Move → north</div>
             </div>
+          </div>
+          <div data-settings-panel="audio" hidden>
+            <p class="hint" id="audioUnavailable">Start the agent to control its game audio here.</p>
+            <label>BGM volume: <strong id="bgmVolumeLabel"></strong>
+              <input id="bgmVolume" type="range" min="0" max="100" step="1" />
+            </label>
+            <label class="check"><input type="checkbox" id="bgmMuted" /> Mute BGM</label>
+            <label>Sound effects: <strong id="sfxVolumeLabel"></strong>
+              <input id="sfxVolume" type="range" min="0" max="100" step="1" />
+            </label>
+            <label class="check"><input type="checkbox" id="sfxMuted" /> Mute sound effects</label>
+            <p class="hint">Controls the game client's own audio, mirrored from the spectator view.</p>
           </div>
           <p id="settingsDirty" class="hint" hidden>Changes are staged until you apply them.</p>
           <button id="settingsApply" class="primary block">Save &amp; validate</button>

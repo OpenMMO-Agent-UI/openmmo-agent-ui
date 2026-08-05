@@ -97,6 +97,13 @@ const DEFAULTS = {
   toastPersistSecs: 7,
   toastFadeSecs: 0.4,
   toastMaxCount: 10,
+  /// The game client's own BGM/SFX volume (percent, 0-100), mirrored into its
+  /// iframe via postMessage — its real storage is that iframe's own
+  /// localStorage (a different origin), this is only what gets pushed to it.
+  bgmVolume: 100,
+  bgmMuted: false,
+  sfxVolume: 100,
+  sfxMuted: false,
 }
 
 const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret']

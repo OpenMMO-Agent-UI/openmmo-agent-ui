@@ -1295,6 +1295,15 @@ iframe {
   overflow-y: auto;
 }
 
+.settings-section {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
 .confirm-actions {
   justify-content: flex-end;
   margin-bottom: 0;
