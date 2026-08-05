@@ -4,7 +4,14 @@ const http = require('node:http')
 const { WebSocket, WebSocketServer } = require('ws')
 
 const { encode, decode, variantOf, Float } = require('./msgpack')
-const { DIRECTIVE_SENDER } = require('./config')
+
+/// Sender name on every relay-forged directive whisper (ADR 0003). Fixed
+/// rather than the player's Google display name, so the shipped default
+/// prompt can name it literally. Contains `~`, which the server's
+/// character-name charset rejects (server/src/auth.rs valid_name_char) — no
+/// real player can ever register this name and have a genuine whisper
+/// impersonate a directive.
+const DIRECTIVE_SENDER = '~Director~'
 
 /// Sits between agent-client and the game server, on loopback:
 ///

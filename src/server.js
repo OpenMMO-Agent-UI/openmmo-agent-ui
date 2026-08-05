@@ -5,7 +5,7 @@ const http = require('node:http')
 const path = require('node:path')
 const { app } = require('electron')
 
-const { repoRoot } = require('./config')
+const { repoRoot } = require('./runtimeEnv')
 
 /// Serves the built web client to the spectator view. It has to be a real
 /// origin rather than a file:// page: the client resolves the terrain API from

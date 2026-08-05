@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
 
-const { AppWorkflow } = require('../src/workflow')
+const workflowPromise = import('../src/workflow.js')
 
 function deferred() {
   let resolve
@@ -13,7 +13,8 @@ function deferred() {
   return { promise, resolve }
 }
 
-function fixture(overrides = {}) {
+async function fixture(overrides = {}) {
+  const { AppWorkflow } = await workflowPromise
   const calls = []
   const api = {
     listProfiles: async () => [
@@ -44,7 +45,7 @@ function fixture(overrides = {}) {
 }
 
 test('cold launch always starts at server selection with the last profile selected', async () => {
-  const { workflow } = fixture()
+  const { workflow } = await fixture()
 
   const state = await workflow.start()
 
@@ -53,7 +54,7 @@ test('cold launch always starts at server selection with the last profile select
 })
 
 test('valid cached OAuth skips login and shows characters with the last character first', async () => {
-  const { workflow, calls } = fixture()
+  const { workflow, calls } = await fixture()
   await workflow.start()
 
   const state = await workflow.continueWithProfile('official')
@@ -65,7 +66,7 @@ test('valid cached OAuth skips login and shows characters with the last characte
 })
 
 test('profile validation failure stays on server selection with an actionable error', async () => {
-  const { workflow } = fixture({
+  const { workflow } = await fixture({
     testProfile: async () => ({ ok: false, error: 'Protocol v10 required' }),
   })
   await workflow.start()
@@ -78,7 +79,7 @@ test('profile validation failure stays on server selection with an actionable er
 
 test('late OAuth completion is ignored after returning to server selection', async () => {
   const login = deferred()
-  const { workflow } = fixture({
+  const { workflow } = await fixture({
     authStatus: async () => ({ signedIn: false }),
     authSignIn: () => login.promise,
   })
@@ -95,7 +96,7 @@ test('late OAuth completion is ignored after returning to server selection', asy
 })
 
 test('selecting a character enters the game immediately without a Play step', async () => {
-  const { workflow } = fixture()
+  const { workflow } = await fixture()
   await workflow.start()
   await workflow.continueWithProfile('official')
 
@@ -113,7 +114,7 @@ test('selecting a character enters the game immediately without a Play step', as
 /// undo state the caller just set for the character being entered — see the
 /// selectedCharacterId-reset bug this was written to lock in behavior for.
 test('chooseCharacter republishes the current screen, unchanged, before it resolves', async () => {
-  const { workflow, states } = fixture()
+  const { workflow, states } = await fixture()
   await workflow.start()
   await workflow.continueWithProfile('official')
   states.length = 0
