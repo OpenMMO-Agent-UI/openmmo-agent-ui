@@ -166,7 +166,7 @@ a git repo, so cwd-relative resolution would otherwise silently break).
 
 ```
 cd deps/OpenMMO   # if not already there
-node /Users/tony.pai/openmmo-client/scripts/release-sync-next-tag.js <protocolVersion>
+node <repo root>/scripts/release-sync-next-tag.js <protocolVersion>
 ```
 
 Read the fresh `PROTOCOL_VERSION` from `shared/src/lib.rs` on the rebased
