@@ -28,7 +28,7 @@
   },
   "build": {
     "appId": "to.nexus.openmmo.agent",
-    "productName": "openmmo-agent-ui",
+    "productName": "OpenMMO Agent UI",
     "directories": {
       "output": "out"
     },

@@ -81,7 +81,7 @@ helper app individually, hand-rolled rather than electron-builder's own
 signing, skipping `--timestamp` on everything but the outer bundle to keep
 it fast) but not notarized — so Gatekeeper still refuses to open it from a
 double-click; right-click → Open once, or run
-`xattr -cr "openmmo-agent-ui.app"`. Windows and Linux artifacts are unsigned;
+`xattr -cr "OpenMMO Agent UI.app"`. Windows and Linux artifacts are unsigned;
 Windows SmartScreen has an equivalent "Run anyway" prompt.
 
 A single top-level signature is not enough on its own: several of Electron's

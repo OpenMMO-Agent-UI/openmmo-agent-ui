@@ -221,7 +221,7 @@ jobs:
           # recoverable "Apple could not verify this app is free of malware"
           # warning on first launch (right-click > Open bypasses it) — that's
           # expected and distinct from the "damaged" failure above.
-          app="out/mac-arm64/openmmo-agent-ui.app"
+          app="out/mac-arm64/OpenMMO Agent UI.app"
           [[ -d "$app" ]] || { echo "expected app bundle not found at $app" >&2; exit 1; }
 
           sign() {
@@ -309,12 +309,12 @@ jobs:
           if [[ "$RELEASE_ACTION" == "create" ]]; then
             gh release create "$RELEASE_TAG" artifacts/* \
               --draft \
-              --title "openmmo-agent-ui v${APP_VERSION}" \
+              --title "OpenMMO Agent UI v${APP_VERSION}" \
               --notes-file release-notes.md
           elif [[ "$RELEASE_ACTION" == "refresh" ]]; then
             gh release edit "$RELEASE_TAG" \
               --draft \
-              --title "openmmo-agent-ui v${APP_VERSION}" \
+              --title "OpenMMO Agent UI v${APP_VERSION}" \
               --notes-file release-notes.md
             gh release upload "$RELEASE_TAG" artifacts/* --clobber
           else

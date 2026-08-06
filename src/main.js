@@ -4,6 +4,12 @@ const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron')
+const { preserveLegacyUserData } = require('./appPaths')
+
+// productName controls Electron's default userData directory. Keep the
+// pre-rename location so an upgrade retains profiles, secrets, and character
+// data while the visible application name changes.
+preserveLegacyUserData(app)
 
 const settingsStore = require('./settingsStore')
 const personalityText = require('./personalityText')
@@ -66,7 +72,7 @@ function createWindow() {
     minWidth: 1080,
     minHeight: 680,
     backgroundColor: '#12141a',
-    title: 'openmmo-agent-ui',
+    title: 'OpenMMO Agent UI',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
