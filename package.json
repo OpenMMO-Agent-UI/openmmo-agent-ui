@@ -28,7 +28,7 @@
   },
   "build": {
     "appId": "to.nexus.openmmo.agent",
-    "productName": "OpenMMO Agent",
+    "productName": "openmmo-agent-ui",
     "directories": {
       "output": "out"
     },
@@ -48,6 +48,7 @@
       }
     ],
     "mac": {
+      "icon": "assets/icon.icns",
       "category": "public.app-category.games",
       "target": [
         {
@@ -66,6 +67,7 @@
       ]
     },
     "win": {
+      "icon": "assets/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -76,6 +78,7 @@
       ]
     },
     "linux": {
+      "icon": "assets/icon.png",
       "category": "Game",
       "target": [
         {

@@ -78,7 +78,7 @@ jobs:
           PROTOCOL: ${{ steps.stage.outputs.protocol }}
         run: |
           cat > notes.md <<EOF
-          OpenMMO Agent v${VERSION} — protocol v${PROTOCOL}
+          openmmo-agent-ui v${VERSION} — protocol v${PROTOCOL}
 
           Compatible with servers requiring protocol v${PROTOCOL}. The server
           matches the protocol version exactly, so a newer client is not
@@ -102,7 +102,7 @@ jobs:
             exit 1
           }
           new_tag="client-v${VERSION}"
-          title="OpenMMO Agent v${VERSION} (protocol v${PROTOCOL})"
+          title="openmmo-agent-ui v${VERSION} (protocol v${PROTOCOL})"
 
           # Publish first, prune second: a failed upload leaves the old download
           # working rather than leaving the wiki with no release at all.

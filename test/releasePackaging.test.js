@@ -53,6 +53,18 @@ test('distribution commands never let electron-builder publish implicitly', () =
   }
 })
 
+test('desktop packages use the public app identity and branded icons', () => {
+  const manifest = require('../package.json')
+
+  assert.equal(manifest.name, 'openmmo-agent-ui')
+  assert.equal(manifest.build.productName, 'openmmo-agent-ui')
+  for (const platform of ['mac', 'win', 'linux']) {
+    const icon = manifest.build[platform].icon
+    assert.match(icon, /^assets\/icon\.(?:icns|ico|png)$/)
+    assert.ok(fs.statSync(path.join(ROOT, icon)).size > 0, `${platform} icon is empty`)
+  }
+})
+
 test('draft release commands have explicit repository context', () => {
   const workflow = fs.readFileSync(
     path.join(ROOT, '.github', 'workflows', 'release.yml'),

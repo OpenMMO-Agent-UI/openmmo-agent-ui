@@ -66,7 +66,7 @@ function createWindow() {
     minWidth: 1080,
     minHeight: 680,
     backgroundColor: '#12141a',
-    title: 'OpenMMO Agent',
+    title: 'openmmo-agent-ui',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
