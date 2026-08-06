@@ -153,8 +153,8 @@ jobs:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
-          # We sign shallow (see the step below), not via electron-builder's own
-          # deep-signing — so all this needs to do is get the Developer ID
+          # We sign by hand (see the step below), not via electron-builder's
+          # own deep-signing — so all this needs to do is get the Developer ID
           # identity into a keychain `codesign` can use. No intermediate-cert
           # bundling required: macOS ships Apple's Developer ID CA/WWDR
           # intermediates in its System Roots trust store already, which is
@@ -189,37 +189,63 @@ jobs:
           # Leave electron-builder's own mac signing off. It only knows how to
           # deep-sign (re-sign every nested framework/locale file, each with
           # an Apple-timestamped codesign call) and auto-notarize once an
-          # identity is visible — both of which the shallow step below skips
-          # on purpose, for the sake of build time.
+          # identity is visible — both of which the step below replaces with
+          # a faster hand-rolled equivalent.
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run ${{ matrix.command }} -- --config.extraMetadata.version="$APP_VERSION" --config.artifactName="$ARTIFACT_NAME"
-      - name: Sign app bundle (shallow) and repackage
+      - name: Sign app bundle and repackage
         if: matrix.os == 'macos-14'
         env:
           ARTIFACT_NAME: ${{ matrix.artifact }}
         run: |
-          # Shallow signing: one `codesign` pass over the top-level .app, no
-          # --deep and no notarization. The nested Electron frameworks/helper
-          # apps keep whatever signature they shipped with upstream — that's
-          # fine because config/entitlements.mac.plist sets
-          # com.apple.security.cs.disable-library-validation, which is exactly
-          # the entitlement that lets hardened runtime load code signed by a
-          # different (or no) identity. Verified locally: codesign --verify
-          # passes and the packaged app launches cleanly. What this does NOT
-          # get you: notarization, so a copy downloaded from the internet
-          # still trips Gatekeeper's "unidentified developer" warning on first
-          # launch (right-click > Open bypasses it) — see the release notes
-          # below.
+          # A single top-level `codesign` pass is NOT enough here: Electron's
+          # npm package ships several nested frameworks and helper apps
+          # (Squirrel.framework, Mantle.framework, ReactiveObjC.framework, the
+          # GPU/Renderer/Plugin helper .apps) with an incomplete signature —
+          # ad-hoc, no resource seal — that passes loose `codesign --verify`
+          # but fails the *strict* check Gatekeeper runs on a quarantined
+          # (i.e. downloaded) app, producing "OpenMMO Agent is damaged and
+          # can't be opened" with no bypass. Confirmed by reproducing it with
+          # `spctl -a -t exec` against a real release artifact. Every nested
+          # bundle has to be individually re-signed to get a valid resource
+          # seal, same as electron-builder's own deep-signing would do.
+          #
+          # What we skip, on purpose, is `--timestamp` on the nested items:
+          # that's what made electron-builder's own deep-sign take ~20
+          # minutes (~100 files, each a network round-trip to Apple's
+          # timestamp authority). Only the outer bundle's signature benefits
+          # from a timestamp, so only it gets `--timestamp` — that's one
+          # network call, not a hundred.
+          #
+          # This still is not notarized, so Gatekeeper correctly shows the
+          # recoverable "Apple could not verify this app is free of malware"
+          # warning on first launch (right-click > Open bypasses it) — that's
+          # expected and distinct from the "damaged" failure above.
           app="out/mac-arm64/OpenMMO Agent.app"
           [[ -d "$app" ]] || { echo "expected app bundle not found at $app" >&2; exit 1; }
+
+          sign() {
+            codesign --force \
+              --sign "$SIGNING_IDENTITY" \
+              --keychain "$SIGNING_KEYCHAIN" \
+              --options runtime \
+              --entitlements config/entitlements.mac.plist \
+              "$1"
+          }
+
+          while IFS= read -r -d '' item; do
+            sign "$item"
+          done < <(find "$app/Contents/Frameworks" -maxdepth 1 \( -iname '*.framework' -o -iname '*.app' \) -print0)
+          sign "$app/Contents/Resources/agent-client/agent-client"
 
           codesign --force \
             --sign "$SIGNING_IDENTITY" \
             --keychain "$SIGNING_KEYCHAIN" \
             --options runtime \
+            --timestamp \
             --entitlements config/entitlements.mac.plist \
             "$app"
-          codesign --verify --verbose=2 "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
 
           # electron-builder already zipped the unsigned build under this same
           # name; replace it with a zip of the now-signed bundle. Use ditto,

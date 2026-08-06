@@ -76,11 +76,20 @@ the bundled `agent-client` always agree. Heavy client assets (`textures/`,
 runtime instead.
 
 GitHub Actions builds each target on its native runner. The macOS artifact is
-signed with a Developer ID certificate — shallow, single top-level `codesign`
-pass, not deep-signed and not notarized — so Gatekeeper still refuses to open
-it from a double-click; right-click → Open once, or run
+deep-signed with a Developer ID certificate (every nested framework and
+helper app individually, hand-rolled rather than electron-builder's own
+signing, skipping `--timestamp` on everything but the outer bundle to keep
+it fast) but not notarized — so Gatekeeper still refuses to open it from a
+double-click; right-click → Open once, or run
 `xattr -cr "OpenMMO Agent.app"`. Windows and Linux artifacts are unsigned;
 Windows SmartScreen has an equivalent "Run anyway" prompt.
+
+A single top-level signature is not enough on its own: several of Electron's
+bundled frameworks (Squirrel.framework, Mantle.framework, ReactiveObjC.framework)
+and helper apps ship from upstream with an incomplete signature that fails
+Gatekeeper's strict check on a downloaded (quarantined) copy — "OpenMMO Agent
+is damaged and can't be opened," with no bypass. That is why every nested
+item gets re-signed.
 
 ### Creating a release
 
