@@ -1,4 +1,4 @@
-name: Unsigned release
+name: Release
 
 on:
   push:
@@ -147,54 +147,37 @@ jobs:
         with:
           tool: wasm-pack
       - run: npm ci
-      - name: Configure Apple signing & notarization
+      - name: Import Developer ID certificate
         if: matrix.os == 'macos-14'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          # electron-builder imports CSC_LINK into an isolated temp keychain and runs
-          # `security find-identity -v <that keychain>` scoped to it alone — certs
-          # imported elsewhere (e.g. login.keychain) aren't visible to that check.
-          # So bundle the Developer ID intermediates into the same p12 CSC_LINK
-          # provides, ensuring they land in the temp keychain alongside the leaf cert.
-          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG1CA.cer" https://www.apple.com/certificateauthority/DeveloperIDCA.cer
-          curl -fsSL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
-          openssl x509 -inform DER -in "$RUNNER_TEMP/DeveloperIDG1CA.cer" -out "$RUNNER_TEMP/DeveloperIDG1CA.pem"
-          openssl x509 -inform DER -in "$RUNNER_TEMP/DeveloperIDG2CA.cer" -out "$RUNNER_TEMP/DeveloperIDG2CA.pem"
-          cat "$RUNNER_TEMP/DeveloperIDG1CA.pem" "$RUNNER_TEMP/DeveloperIDG2CA.pem" > "$RUNNER_TEMP/intermediates.pem"
+          # We sign shallow (see the step below), not via electron-builder's own
+          # deep-signing — so all this needs to do is get the Developer ID
+          # identity into a keychain `codesign` can use. No intermediate-cert
+          # bundling required: macOS ships Apple's Developer ID CA/WWDR
+          # intermediates in its System Roots trust store already, which is
+          # why plain `codesign --verify` validates without us adding them.
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -base64 24)"
+          p12_path="$RUNNER_TEMP/cert.p12"
+          printf '%s' "$CSC_LINK" | base64 --decode > "$p12_path"
 
-          original_p12="$RUNNER_TEMP/original.p12"
-          printf '%s' "$CSC_LINK" | base64 -D > "$original_p12"
-          openssl version
-          openssl pkcs12 -in "$original_p12" -nodes -passin "pass:$CSC_KEY_PASSWORD" -out "$RUNNER_TEMP/leaf.pem" 2>"$RUNNER_TEMP/openssl_err.log" || {
-            echo "plain pkcs12 extraction failed, retrying with -legacy"
-            cat "$RUNNER_TEMP/openssl_err.log"
-            openssl pkcs12 -in "$original_p12" -nodes -legacy -passin "pass:$CSC_KEY_PASSWORD" -out "$RUNNER_TEMP/leaf.pem"
-          }
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$p12_path" -k "$keychain" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
+          security list-keychain -d user -s "$keychain" login.keychain-db
 
-          combined_p12="$RUNNER_TEMP/signing-chain.p12"
-          openssl pkcs12 -export \
-            -in "$RUNNER_TEMP/leaf.pem" \
-            -inkey "$RUNNER_TEMP/leaf.pem" \
-            -certfile "$RUNNER_TEMP/intermediates.pem" \
-            -passout "pass:$CSC_KEY_PASSWORD" \
-            -out "$combined_p12"
+          identity="$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application:[^"]*"' | head -1 | tr -d '"')"
+          [[ -n "$identity" ]] || { echo "no Developer ID Application identity found in the imported certificate" >&2; exit 1; }
 
           {
-            echo "CSC_LINK=$combined_p12"
-            echo "CSC_KEY_PASSWORD<<CSC_KEY_PASSWORD_EOF"
-            echo "$CSC_KEY_PASSWORD"
-            echo "CSC_KEY_PASSWORD_EOF"
-            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
-            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+            echo "SIGNING_KEYCHAIN=$keychain"
+            echo "SIGNING_IDENTITY=$identity"
           } >> "$GITHUB_ENV"
-          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
-          printf '%s' "$APPLE_API_KEY_CONTENT" > "$api_key_path"
-          echo "APPLE_API_KEY=$api_key_path" >> "$GITHUB_ENV"
       - name: Build package
         shell: bash
         env:
@@ -203,7 +186,49 @@ jobs:
           DESKTOP_BUILD_SHA: ${{ needs.validate.outputs.parent-sha }}
           OPENMMO_BUILD_SHA: ${{ needs.validate.outputs.openmmo-sha }}
           OPENMMO_PROTOCOL_VERSION: ${{ needs.validate.outputs.protocol }}
+          # Leave electron-builder's own mac signing off. It only knows how to
+          # deep-sign (re-sign every nested framework/locale file, each with
+          # an Apple-timestamped codesign call) and auto-notarize once an
+          # identity is visible — both of which the shallow step below skips
+          # on purpose, for the sake of build time.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run ${{ matrix.command }} -- --config.extraMetadata.version="$APP_VERSION" --config.artifactName="$ARTIFACT_NAME"
+      - name: Sign app bundle (shallow) and repackage
+        if: matrix.os == 'macos-14'
+        env:
+          ARTIFACT_NAME: ${{ matrix.artifact }}
+        run: |
+          # Shallow signing: one `codesign` pass over the top-level .app, no
+          # --deep and no notarization. The nested Electron frameworks/helper
+          # apps keep whatever signature they shipped with upstream — that's
+          # fine because config/entitlements.mac.plist sets
+          # com.apple.security.cs.disable-library-validation, which is exactly
+          # the entitlement that lets hardened runtime load code signed by a
+          # different (or no) identity. Verified locally: codesign --verify
+          # passes and the packaged app launches cleanly. What this does NOT
+          # get you: notarization, so a copy downloaded from the internet
+          # still trips Gatekeeper's "unidentified developer" warning on first
+          # launch (right-click > Open bypasses it) — see the release notes
+          # below.
+          app="out/mac-arm64/OpenMMO Agent.app"
+          [[ -d "$app" ]] || { echo "expected app bundle not found at $app" >&2; exit 1; }
+
+          codesign --force \
+            --sign "$SIGNING_IDENTITY" \
+            --keychain "$SIGNING_KEYCHAIN" \
+            --options runtime \
+            --entitlements config/entitlements.mac.plist \
+            "$app"
+          codesign --verify --verbose=2 "$app"
+
+          # electron-builder already zipped the unsigned build under this same
+          # name; replace it with a zip of the now-signed bundle. Use ditto,
+          # not `zip`, so the signature and extended attributes survive.
+          rm -f "out/$ARTIFACT_NAME" "out/$ARTIFACT_NAME.blockmap"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "out/$ARTIFACT_NAME"
+      - name: Clean up signing keychain
+        if: always() && matrix.os == 'macos-14'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -232,7 +257,7 @@ jobs:
           PROTOCOL: ${{ needs.validate.outputs.protocol }}
         run: |
           cat > release-notes.md <<EOF
-          Unsigned preview build
+          Preview build
 
           App version: ${APP_VERSION}
           Parent commit: ${PARENT_SHA}
@@ -241,10 +266,13 @@ jobs:
 
           Compatible with servers requiring protocol v${PROTOCOL}.
 
-          macOS Gatekeeper and Windows SmartScreen may warn because these artifacts are unsigned.
+          macOS build is signed with a Developer ID certificate but not notarized —
+          Gatekeeper will still warn on first launch; right-click the app and choose
+          Open to bypass. Windows and Linux builds are unsigned; Windows SmartScreen
+          may warn similarly.
           Verify downloads against SHA256SUMS.txt before testing.
           EOF
-      - name: Create or refresh unsigned draft release
+      - name: Create or refresh draft release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -255,12 +283,12 @@ jobs:
           if [[ "$RELEASE_ACTION" == "create" ]]; then
             gh release create "$RELEASE_TAG" artifacts/* \
               --draft \
-              --title "OpenMMO Agent v${APP_VERSION} (unsigned)" \
+              --title "OpenMMO Agent v${APP_VERSION}" \
               --notes-file release-notes.md
           elif [[ "$RELEASE_ACTION" == "refresh" ]]; then
             gh release edit "$RELEASE_TAG" \
               --draft \
-              --title "OpenMMO Agent v${APP_VERSION} (unsigned)" \
+              --title "OpenMMO Agent v${APP_VERSION}" \
               --notes-file release-notes.md
             gh release upload "$RELEASE_TAG" artifacts/* --clobber
           else

@@ -75,12 +75,14 @@ the bundled `agent-client` always agree. Heavy client assets (`textures/`,
 `server.js` proxies and caches them from the configured terrain origin at
 runtime instead.
 
-GitHub Actions builds each target on its native runner. All artifacts are
-unsigned: macOS Gatekeeper refuses to open one from a double-click, so
-right-click → Open once, or run `xattr -cr "OpenMMO Agent.app"`; Windows
-SmartScreen has an equivalent "Run anyway" prompt.
+GitHub Actions builds each target on its native runner. The macOS artifact is
+signed with a Developer ID certificate — shallow, single top-level `codesign`
+pass, not deep-signed and not notarized — so Gatekeeper still refuses to open
+it from a double-click; right-click → Open once, or run
+`xattr -cr "OpenMMO Agent.app"`. Windows and Linux artifacts are unsigned;
+Windows SmartScreen has an equivalent "Run anyway" prompt.
 
-### Creating an unsigned release
+### Creating a release
 
 Only a valid `v<semver>` tag on `master` triggers the release workflow. The
 tag supplies the app version; do not edit `package.json` or `build-info.json`.
@@ -103,7 +105,7 @@ openmmo-agent-v0.15.0-p11-windows-x64.exe
 openmmo-agent-v0.15.0-p11-linux-x64.AppImage
 ```
 
-It creates an unsigned draft release with SHA-256 checksums and the full
+It creates a draft release with SHA-256 checksums and the full
 parent and OpenMMO commit SHAs in the notes. Rerunning the same immutable tag
 refreshes that draft. Once published, its artifacts cannot be replaced; make
 source fixes under a new patch version.
