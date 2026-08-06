@@ -147,38 +147,40 @@ jobs:
         with:
           tool: wasm-pack
       - run: npm ci
-      - name: Import Developer ID certificate
+      - name: Configure Apple signing and notarization
         if: matrix.os == 'macos-14'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          # We sign by hand (see the step below), not via electron-builder's
-          # own deep-signing — so all this needs to do is get the Developer ID
-          # identity into a keychain `codesign` can use. No intermediate-cert
-          # bundling required: macOS ships Apple's Developer ID CA/WWDR
-          # intermediates in its System Roots trust store already, which is
-          # why plain `codesign --verify` validates without us adding them.
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          keychain_password="$(openssl rand -base64 24)"
-          p12_path="$RUNNER_TEMP/cert.p12"
-          printf '%s' "$CSC_LINK" | base64 --decode > "$p12_path"
+          [[ -n "$CSC_LINK" && -n "$CSC_KEY_PASSWORD" ]] || {
+            echo "Developer ID signing secrets are missing" >&2
+            exit 1
+          }
+          [[ -n "$APPLE_API_KEY_CONTENT" && -n "$APPLE_API_KEY_ID" && -n "$APPLE_API_ISSUER" ]] || {
+            echo "Apple notarization secrets are missing" >&2
+            exit 1
+          }
 
-          security create-keychain -p "$keychain_password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$keychain_password" "$keychain"
-          security import "$p12_path" -k "$keychain" -P "$CSC_KEY_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain"
-          security list-keychain -d user -s "$keychain" login.keychain-db
-
-          identity="$(security find-identity -v -p codesigning "$keychain" | grep -o '"Developer ID Application:[^"]*"' | head -1 | tr -d '"')"
-          [[ -n "$identity" ]] || { echo "no Developer ID Application identity found in the imported certificate" >&2; exit 1; }
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_CONTENT" > "$api_key_path"
+          chmod 600 "$api_key_path"
 
           {
-            echo "SIGNING_KEYCHAIN=$keychain"
-            echo "SIGNING_IDENTITY=$identity"
+            echo "CSC_LINK<<CSC_LINK_EOF"
+            echo "$CSC_LINK"
+            echo "CSC_LINK_EOF"
+            echo "CSC_KEY_PASSWORD<<CSC_KEY_PASSWORD_EOF"
+            echo "$CSC_KEY_PASSWORD"
+            echo "CSC_KEY_PASSWORD_EOF"
+            echo "APPLE_API_KEY=$api_key_path"
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
           } >> "$GITHUB_ENV"
-      - name: Build package
+      - name: Build package, sign, and notarize
         shell: bash
         env:
           APP_VERSION: ${{ needs.validate.outputs.version }}
@@ -186,75 +188,15 @@ jobs:
           DESKTOP_BUILD_SHA: ${{ needs.validate.outputs.parent-sha }}
           OPENMMO_BUILD_SHA: ${{ needs.validate.outputs.openmmo-sha }}
           OPENMMO_PROTOCOL_VERSION: ${{ needs.validate.outputs.protocol }}
-          # Leave electron-builder's own mac signing off. It only knows how to
-          # deep-sign (re-sign every nested framework/locale file, each with
-          # an Apple-timestamped codesign call) and auto-notarize once an
-          # identity is visible — both of which the step below replaces with
-          # a faster hand-rolled equivalent.
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run ${{ matrix.command }} -- --config.extraMetadata.version="$APP_VERSION" --config.artifactName="$ARTIFACT_NAME"
-      - name: Sign app bundle and repackage
+      - name: Verify macOS notarization
         if: matrix.os == 'macos-14'
-        env:
-          ARTIFACT_NAME: ${{ matrix.artifact }}
         run: |
-          # A single top-level `codesign` pass is NOT enough here: Electron's
-          # npm package ships several nested frameworks and helper apps
-          # (Squirrel.framework, Mantle.framework, ReactiveObjC.framework, the
-          # GPU/Renderer/Plugin helper .apps) with an incomplete signature —
-          # ad-hoc, no resource seal — that passes loose `codesign --verify`
-          # but fails the *strict* check Gatekeeper runs on a quarantined
-          # (i.e. downloaded) app, producing "OpenMMO Agent is damaged and
-          # can't be opened" with no bypass. Confirmed by reproducing it with
-          # `spctl -a -t exec` against a real release artifact. Every nested
-          # bundle has to be individually re-signed to get a valid resource
-          # seal, same as electron-builder's own deep-signing would do.
-          #
-          # What we skip, on purpose, is `--timestamp` on the nested items:
-          # that's what made electron-builder's own deep-sign take ~20
-          # minutes (~100 files, each a network round-trip to Apple's
-          # timestamp authority). Only the outer bundle's signature benefits
-          # from a timestamp, so only it gets `--timestamp` — that's one
-          # network call, not a hundred.
-          #
-          # This still is not notarized, so Gatekeeper correctly shows the
-          # recoverable "Apple could not verify this app is free of malware"
-          # warning on first launch (right-click > Open bypasses it) — that's
-          # expected and distinct from the "damaged" failure above.
           app="out/mac-arm64/OpenMMO Agent UI.app"
           [[ -d "$app" ]] || { echo "expected app bundle not found at $app" >&2; exit 1; }
-
-          sign() {
-            codesign --force \
-              --sign "$SIGNING_IDENTITY" \
-              --keychain "$SIGNING_KEYCHAIN" \
-              --options runtime \
-              --entitlements config/entitlements.mac.plist \
-              "$1"
-          }
-
-          while IFS= read -r -d '' item; do
-            sign "$item"
-          done < <(find "$app/Contents/Frameworks" -maxdepth 1 \( -iname '*.framework' -o -iname '*.app' \) -print0)
-          sign "$app/Contents/Resources/agent-client/agent-client"
-
-          codesign --force \
-            --sign "$SIGNING_IDENTITY" \
-            --keychain "$SIGNING_KEYCHAIN" \
-            --options runtime \
-            --timestamp \
-            --entitlements config/entitlements.mac.plist \
-            "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
-
-          # electron-builder already zipped the unsigned build under this same
-          # name; replace it with a zip of the now-signed bundle. Use ditto,
-          # not `zip`, so the signature and extended attributes survive.
-          rm -f "out/$ARTIFACT_NAME" "out/$ARTIFACT_NAME.blockmap"
-          ditto -c -k --sequesterRsrc --keepParent "$app" "out/$ARTIFACT_NAME"
-      - name: Clean up signing keychain
-        if: always() && matrix.os == 'macos-14'
-        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=4 "$app"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -292,10 +234,8 @@ jobs:
 
           Compatible with servers requiring protocol v${PROTOCOL}.
 
-          macOS build is signed with a Developer ID certificate but not notarized —
-          Gatekeeper will still warn on first launch; right-click the app and choose
-          Open to bypass. Windows and Linux builds are unsigned; Windows SmartScreen
-          may warn similarly.
+          macOS build is signed with a Developer ID certificate and notarized by Apple.
+          Windows and Linux builds are unsigned; Windows SmartScreen may warn.
           Verify downloads against SHA256SUMS.txt before testing.
           EOF
       - name: Create or refresh draft release

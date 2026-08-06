@@ -60,11 +60,9 @@
       ],
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
+      "notarize": true,
       "entitlements": "config/entitlements.mac.plist",
-      "entitlementsInherit": "config/entitlements.mac.plist",
-      "binaries": [
-        "Resources/agent-client/agent-client"
-      ]
+      "entitlementsInherit": "config/entitlements.mac.plist"
     },
     "win": {
       "icon": "assets/icon.ico",

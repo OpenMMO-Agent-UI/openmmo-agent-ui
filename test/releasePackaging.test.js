@@ -58,6 +58,7 @@ test('desktop packages use the public app identity and branded icons', () => {
 
   assert.equal(manifest.name, 'openmmo-agent-ui')
   assert.equal(manifest.build.productName, 'OpenMMO Agent UI')
+  assert.equal(manifest.build.mac.notarize, true)
   for (const platform of ['mac', 'win', 'linux']) {
     const icon = manifest.build[platform].icon
     assert.match(icon, /^assets\/icon\.(?:icns|ico|png)$/)
@@ -72,4 +73,18 @@ test('draft release commands have explicit repository context', () => {
   )
 
   assert.match(workflow, /GH_REPO: \$\{\{ github\.repository \}\}/)
+})
+
+test('macOS releases require Apple notarization and Gatekeeper verification', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'release.yml'),
+    'utf8',
+  )
+
+  assert.match(workflow, /secrets\.APPLE_API_KEY/)
+  assert.match(workflow, /secrets\.APPLE_API_KEY_ID/)
+  assert.match(workflow, /secrets\.APPLE_API_ISSUER/)
+  assert.match(workflow, /xcrun stapler validate "\$app"/)
+  assert.match(workflow, /spctl --assess --type execute --verbose=4 "\$app"/)
+  assert.doesNotMatch(workflow, /CSC_IDENTITY_AUTO_DISCOVERY/)
 })
