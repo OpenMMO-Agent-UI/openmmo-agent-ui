@@ -84,8 +84,9 @@ jobs:
           matches the protocol version exactly, so a newer client is not
           automatically a working one.
 
-          These builds are unsigned: macOS Gatekeeper and Windows SmartScreen
-          will warn. See the install guide for how to get past it:
+          The macOS build is signed with a Developer ID certificate and
+          notarized by Apple. Windows and Linux builds are unsigned; Windows
+          SmartScreen may warn on first run — see the install guide:
           https://openmmo-agent-ui.github.io/openmmo-agent-wiki/client/install/
 
           Verify your download against SHA256SUMS.txt.
