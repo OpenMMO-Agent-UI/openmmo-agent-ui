@@ -89,6 +89,9 @@ jobs:
           https://openmmo-agent-ui.github.io/openmmo-agent-wiki/client/install/
 
           Verify your download against SHA256SUMS.txt.
+
+          OpenMMO Agent is free and open source — if you enjoy it, you can
+          support development at https://ko-fi.com/dakywang ☕
           EOF
 
       - name: Publish to the wiki repo, keeping only this release

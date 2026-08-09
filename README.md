@@ -1,5 +1,7 @@
 # OpenMMO Agent UI
 
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support_this_project-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/dakywang)
+
 A desktop client for playing [OpenMMO](https://openmmo.to.nexus) manually or
 with an LLM at the controls. Pick a server, sign in with Google, choose a
 character — it enters play immediately, Automatic if an LLM is configured,
@@ -193,6 +195,12 @@ carries the event name, app version, and OS name — never your account,
 characters, prompts, API keys, or server URLs, and no persistent device id.
 Turn it off any time under **Settings → Display → Privacy**; off means
 nothing is sent.
+
+## Support
+
+OpenMMO Agent is free and open source. If it's been fun,
+[buy the developer a coffee](https://ko-fi.com/dakywang) ☕ — it helps cover
+release signing and keeps development going.
 
 ## License
 
