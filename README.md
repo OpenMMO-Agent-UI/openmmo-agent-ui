@@ -185,6 +185,15 @@ RELEASE.md                    maintainer-facing: model choice, dependency pin, r
 test/                         node:test suites, run via `npm test`
 ```
 
+## Anonymous usage statistics
+
+The app counts app starts and which play modes get used, via
+[Aptabase](https://aptabase.com) (open source, privacy-first). Each event
+carries the event name, app version, and OS name — never your account,
+characters, prompts, API keys, or server URLs, and no persistent device id.
+Turn it off any time under **Settings → Display → Privacy**; off means
+nothing is sent.
+
 ## License
 
 MIT. OpenMMO itself is a separate project under its own license.

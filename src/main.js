@@ -24,6 +24,7 @@ const { ConnectionProfileStore } = require('./connectionProfiles')
 const { CharacterStore } = require('./characterStore')
 const { PlaySessionCoordinator } = require('./playSession')
 const { validateLlmSettings } = require('./llmValidation')
+const telemetry = require('./telemetry')
 
 const agent = new AgentProcess()
 const clientServer = new ClientServer()
@@ -423,6 +424,8 @@ app.whenReady().then(() => {
   seedRuntimeData()
   settings = settingsStore.importExistingConfig(settingsStore.load())
   settingsStore.save(settings)
+  telemetry.init(() => settings?.telemetry !== false)
+  telemetry.track('app_started')
   const legacyRefreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
   profileStore = new ConnectionProfileStore({
     file: path.join(app.getPath('userData'), 'connection-profiles.json'),
@@ -569,7 +572,14 @@ async function startAgent() {
   }
   try {
     await proxy.start(settings.server)
-    return { ok: true, status: await agent.start({ ...settings, server: proxy.agentUrl }) }
+    const status = await agent.start({ ...settings, server: proxy.agentUrl })
+    // Which backends/models people actually run Automatic play with — model
+    // ids only, never keys or prompts.
+    telemetry.track('agent_started', {
+      backend: settings.llm,
+      model: settings.models[settings.llm] || '',
+    })
+    return { ok: true, status }
   } catch (err) {
     return { ok: false, errors: [err.message] }
   }
@@ -910,6 +920,7 @@ ipcMain.handle('play:enter', async (_e, characterId) => {
   })
   try {
     const session = await playSession.enter({ characterId, characterName })
+    telemetry.track('play_entered', { mode: session?.mode || 'unknown' })
     return { ok: true, session }
   } catch (err) {
     return { ok: false, error: err.message }
@@ -918,7 +929,9 @@ ipcMain.handle('play:enter', async (_e, characterId) => {
 
 ipcMain.handle('play:switch', async (_e, mode) => {
   try {
-    return { ok: true, session: await playSession.switchTo(mode) }
+    const session = await playSession.switchTo(mode)
+    telemetry.track('mode_switched', { mode })
+    return { ok: true, session }
   } catch (err) {
     return { ok: false, error: err.message }
   }

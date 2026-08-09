@@ -9,6 +9,10 @@ import * as signInFlow from './signInFlow.js'
 
 const api = window.agentApp
 
+/// Where the in-app "buy the developer a coffee" button lands (Settings
+/// footer). Kept next to `api` so a future page move is a one-line change.
+const SUPPORT_URL = 'https://ko-fi.com/dakywang'
+
 let settings = null
 let backends = []
 let classes = []
@@ -362,6 +366,7 @@ function openSettings() {
   settingsDirty = false
   $('settingsDirty').hidden = true
   settingsPanel.syncAll(settings)
+  $('telemetryEnabled').checked = settings.telemetry !== false
 }
 
 function closeSettings() {
@@ -608,6 +613,19 @@ function bindActions() {
 
   $('openSettingsFromGame').addEventListener('click', openSettings)
   $('settingsClose').addEventListener('click', closeSettings)
+
+  $('supportProject').addEventListener('click', () => api.open(SUPPORT_URL))
+
+  // Saves immediately, like toast/audio: there is nothing for Apply &
+  // validate to check, and a privacy choice should never sit staged behind
+  // an unrelated LLM validation round-trip. Main gates every event on the
+  // stored value at send time, so this takes effect on the very next event.
+  $('telemetryEnabled').addEventListener('change', () => {
+    const patch = { telemetry: $('telemetryEnabled').checked }
+    settings = { ...settings, ...patch }
+    if (settingsSnapshot) settingsSnapshot.telemetry = patch.telemetry
+    void persistImmediateSetting(patch)
+  })
 }
 
 window.addEventListener('message', (event) => {

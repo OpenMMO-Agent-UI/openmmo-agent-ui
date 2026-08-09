@@ -96,6 +96,9 @@ const DEFAULTS = {
   bgmMuted: false,
   sfxVolume: 100,
   sfxMuted: false,
+  /// Anonymous usage analytics (src/telemetry.js). Checked at send time, so
+  /// the Settings toggle takes effect immediately, no restart needed.
+  telemetry: true,
 }
 
 const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret']
