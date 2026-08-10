@@ -572,7 +572,13 @@ function bindActions() {
   $('banner-open').addEventListener('click', () =>
     api.open($('loginCode').dataset.url || 'https://www.google.com/device'),
   )
-  $('banner-copy').addEventListener('click', () => navigator.clipboard.writeText($('banner-code').textContent))
+  // A copy button with no reply leaves you re-clicking it to be sure — and this
+  // code is being carried to another window, so "did that work" matters.
+  $('banner-copy').addEventListener('click', async () => {
+    await navigator.clipboard.writeText($('banner-code').textContent)
+    $('banner-copy').textContent = 'Copied'
+    setTimeout(() => ($('banner-copy').textContent = 'Copy'), 1500)
+  })
 
   $('clearLog').addEventListener('click', () => ($('log').textContent = ''))
   $('clearFeed').addEventListener('click', () => ($('feed').textContent = ''))

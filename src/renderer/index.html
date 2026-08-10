@@ -19,14 +19,17 @@
         <p class="wordmark">OpenMMO</p>
         <h1 class="display">Choose a server</h1>
         <p class="lede">A server profile keeps the world and its Google sign-in together.</p>
-        <div id="profileList" class="profile-list"></div>
+        <div id="profileList" class="profile-list" role="listbox" aria-label="Servers"></div>
         <div class="profile-actions">
-          <button id="profileNew" class="ghost">New</button>
-          <button id="profileEdit" class="ghost">Edit</button>
-          <button id="profileDuplicate" class="ghost">Duplicate</button>
-          <button id="profileDelete" class="ghost danger-outline">Delete</button>
+          <button id="profileNew" class="ghost small">New</button>
+          <button id="profileEdit" class="ghost small">Edit</button>
+          <button id="profileDuplicate" class="ghost small">Duplicate</button>
+          <button id="profileDelete" class="ghost small danger-outline">Delete</button>
+          <span class="spacer"></span>
+          <button id="profileTest" class="ghost small">Test connection</button>
         </div>
         <div id="profileEditor" class="profile-editor" hidden>
+          <p id="profileEditorTitle" class="editor-title">New server</p>
           <label>Profile name<input id="profileName" /></label>
           <label>Game server<input id="profileServer" placeholder="wss://realm.example/ws" /></label>
           <label>Terrain origin <span class="optional">(derived automatically)</span><input id="profileTerrain" placeholder="https://realm.example" /></label>
@@ -38,10 +41,7 @@
           </div>
         </div>
         <p id="profileStatus" class="hint"></p>
-        <div class="row">
-          <button id="profileTest" class="ghost">Test connection</button>
-          <button id="profileContinue" class="primary grow">Continue</button>
-        </div>
+        <button id="profileContinue" class="primary block">Continue</button>
       </div>
     </section>
 
@@ -58,45 +58,56 @@
 
         <div id="loginCode" hidden>
           <h1 class="display">Sign in to continue</h1>
-          <ol class="steps">
-            <li>open <button id="banner-open" class="linklike-inline">https://www.google.com/device</button></li>
-            <li>enter code <code id="banner-code" class="inline-code">—</code> <button id="banner-copy" class="ghost small">Copy</button></li>
-          </ol>
+          <p class="lede">Open the Google device page, then enter this code.</p>
+          <button id="banner-open" class="primary block">Open google.com/device</button>
+          <div class="code-block">
+            <code id="banner-code" class="device-code">—</code>
+            <button id="banner-copy" class="ghost small">Copy</button>
+          </div>
           <p class="hint pulsing">Waiting for you to finish in the browser…</p>
+        </div>
+
+        <div id="loginFailed" hidden>
+          <h1 class="display">Sign-in didn't finish</h1>
+          <p class="lede">Nothing on this machine changed. Try again, or go back and pick a different server.</p>
+          <button id="loginRetry" class="primary block">Try again</button>
         </div>
 
         <button id="loginCancel" class="linklike">Back to servers</button>
       </div>
     </section>
 
-    <!-- CHARACTER -->
+    <!-- CHARACTER — three numbered slots, because the server caps an account at
+         three (server/src/auth.rs). Numbering them is how the cap is stated: an
+         empty slot is a slot you still have, and it is the only way into the
+         create form, so no sentence has to say "up to 3". -->
     <section id="screen-character" class="screen screen-entry">
       <div class="glow"></div>
       <div class="card wide">
-        <p class="wordmark">Character Selection</p>
-        <div class="account-line"><span id="accountName"></span><button id="switchAccount" class="linklike-inline">Switch account</button></div>
-
-        <div class="tabs" id="characterTabs" role="tablist">
-          <button class="tab on" data-tab="pick" role="tab">Choose your character</button>
-          <button class="tab" data-tab="create" role="tab">Create a new character</button>
+        <p class="wordmark">OpenMMO</p>
+        <div class="account-line">
+          <span id="accountName"></span>
+          <button id="switchAccount" class="linklike-inline">Switch account</button>
+          <button id="openSettingsFromCharacter" class="linklike-inline">Settings</button>
         </div>
 
-        <div data-tab-panel="pick">
-          <p class="lede">Pick a character to play — up to 3 per account.</p>
-          <div id="characterList" class="character-list"></div>
+        <div id="rosterPanel">
+          <h1 class="display">Choose your character</h1>
+          <p class="lede">Pick one to enter the world.</p>
+          <div id="characterList" class="roster"></div>
         </div>
 
-        <div data-tab-panel="create" hidden>
-          <p class="lede">Create a new character — up to 3 per account.</p>
+        <div id="createPanel" hidden>
+          <button id="backToRoster" class="linklike-inline back">‹ Back to your characters</button>
+          <h1 class="display">Create a character</h1>
           <label>Character name<input id="newCharacterName" placeholder="unique across the server" /></label>
           <div class="row">
             <label>Class<select id="characterClass"></select></label>
             <label>Gender<select id="gender"></select></label>
           </div>
           <p class="hint" id="genderHint"></p>
-          <button id="createCharacter" class="ghost">Create</button>
+          <button id="createCharacter" class="primary block">Create and enter the world</button>
         </div>
-
       </div>
     </section>
 

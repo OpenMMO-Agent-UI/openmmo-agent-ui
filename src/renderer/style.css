@@ -15,6 +15,9 @@
   --verdigris: #5e9078;
   --err: #d1495b;
   --display-font: 'Big Caslon', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  /* The third type role: things that really are machine text — server URLs,
+     levels, slot numerals, the device code — rather than prose about them. */
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, monospace;
   --toast-font-size: 13px;
   --toast-bg-opacity: 0.75;
   --toast-fade-ms: 400ms;
@@ -60,6 +63,17 @@ button {
 
 button:hover {
   border-color: #3d4454;
+}
+
+/* There was no disabled styling at all, so Continue with nothing selected, and
+   Continue mid-connect, both looked exactly like Continue ready to go. */
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+button:disabled:hover {
+  border-color: var(--line);
 }
 
 button.primary {
@@ -161,7 +175,7 @@ input[type='checkbox'] {
 textarea {
   height: 220px;
   resize: vertical;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 12px;
 }
 
@@ -190,7 +204,7 @@ pre {
   border-radius: 6px;
   background: #0d0f14;
   color: #c6cddc;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -279,23 +293,34 @@ body[data-screen='game'] #screen-game {
   max-width: 680px;
 }
 
+/* ---------- server chooser ----------
+   A row is a ledger entry: a lamp for whether the world answered, the name it
+   goes by, and the address it really is (mono, because that is machine text
+   and not prose). Verification copy lives in exactly one place — the status
+   line under the list — so a long error is never truncated into a URL. */
+
 .profile-list {
   display: grid;
-  gap: 8px;
-  max-height: 260px;
-  margin-bottom: 12px;
+  gap: 6px;
+  max-height: 264px;
+  margin-bottom: 14px;
   overflow-y: auto;
 }
 
 .profile-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 11px 14px;
   text-align: left;
   background: var(--panel-2);
 }
 
 .profile-row.on {
-  border-color: var(--accent);
+  border-color: rgba(201, 162, 74, 0.45);
+  background: #262d38;
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -309,16 +334,66 @@ body[data-screen='game'] #screen-game {
 }
 
 .profile-meta {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
+  font-family: var(--mono-font);
   font-size: 11px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.profile-flags {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* Whether the world answered, at a glance: lit verdigris for verified, ember
+   for refused, an unlit ring for never tried. */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-dot[data-tone='ok'] {
+  background: var(--verdigris);
+  box-shadow: 0 0 7px rgba(94, 144, 120, 0.55);
+}
+
+.status-dot[data-tone='bad'] {
+  background: var(--ember);
+}
+
+.status-dot[data-tone='unknown'] {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.tag {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tag.brass {
+  border-color: rgba(201, 162, 74, 0.35);
+  color: var(--accent);
+}
+
+/* Managing profiles is housekeeping, not the reason anyone opened the app:
+   one quiet strip, with Continue below it carrying all the weight. */
 .profile-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 14px;
 }
 
@@ -330,6 +405,15 @@ body[data-screen='game'] #screen-game {
   background: rgba(0, 0, 0, 0.12);
 }
 
+.editor-title {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .profile-editor-actions {
   justify-content: flex-end;
   margin-bottom: 0;
@@ -337,10 +421,6 @@ body[data-screen='game'] #screen-game {
 
 .danger-outline {
   color: var(--ember);
-}
-
-.grow {
-  flex: 1;
 }
 
 .optional,
@@ -383,26 +463,28 @@ body[data-screen='game'] #screen-game {
   color: var(--muted);
 }
 
-.steps {
-  margin: 4px 0 16px;
-  padding-left: 22px;
-  color: var(--text);
+/* The code is the only thing on this screen the player has to carry to another
+   window, so it is set to be read across a desk and typed without a second
+   look — not tucked inline in a sentence the way it used to be. */
+.code-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 0 16px;
 }
 
-.steps li {
-  margin-bottom: 10px;
-}
-
-.inline-code {
-  padding: 3px 9px;
-  border-radius: 5px;
+.device-code {
+  padding: 10px 18px;
+  border-radius: 6px;
   background: #0d0f14;
   border: 1px solid #4a3f24;
   color: var(--accent);
-  font-size: 14px;
+  font-family: var(--mono-font);
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-shadow: 0 0 14px rgba(201, 162, 74, 0.35);
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 18px rgba(201, 162, 74, 0.35);
 }
 
 .pulsing {
@@ -410,7 +492,10 @@ body[data-screen='game'] #screen-game {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .pulsing {
+  .pulsing,
+  /* A button waiting on a server it may not reach — the same breathing as the
+     copy that waits, so "still going" never depends on a spinner. */
+  button.working {
     animation: pulse 2.2s ease-in-out infinite;
   }
 }
@@ -425,64 +510,215 @@ body[data-screen='game'] #screen-game {
   }
 }
 
-.character-list {
-  margin-bottom: 14px;
+/* ---------- the muster roll ----------
+   Always three slots, because the server caps an account at three. Numbering
+   them is how that cap is stated: a slot you have not filled is drawn as one
+   you still hold, and it is the only way into the create form — so nothing has
+   to say "up to 3 per account" in words. A name is a proper noun and gets the
+   display serif; the level is a stamped number and gets the mono. */
+
+.roster {
+  display: grid;
+  gap: 8px;
 }
 
-.character-row {
+.slot {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  align-items: stretch;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-2);
-  cursor: pointer;
 }
 
-.character-row:hover {
-  border-color: #3d4454;
-}
-
-.character-row.on {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
-}
-
-.character-row input[type='radio'] {
-  width: auto;
-  margin: 0;
-}
-
-.character-row .character-info {
+.slot-pick {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 14px;
   flex: 1;
+  min-width: 0;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.slot-pick:hover:not(:disabled) {
+  background: rgba(201, 162, 74, 0.06);
+}
+
+/* Both buttons run to the slot's edges, and the slot clips (for the entering
+   sweep), so the focus ring has to sit inside them or it gets cut off. */
+.slot-pick:focus-visible,
+.slot-delete:focus-visible {
+  outline-offset: -3px;
+}
+
+/* Right-aligned so I / II / III stack into a column the way a ruled ledger
+   numbers its lines, instead of fraying leftward. */
+.slot-no {
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+.slot-id {
   min-width: 0;
 }
 
-.character-row .character-name {
+.slot-name {
   display: block;
-  color: var(--text);
-  font-weight: 600;
+  font-family: var(--display-font);
+  font-size: 19px;
+  line-height: 1.25;
 }
 
-.character-row .character-meta {
+.slot-class {
   display: block;
+  margin-top: 1px;
   color: var(--muted);
   font-size: 12px;
 }
 
-/* Same ember-for-destructive language as the confirm dialog's Delete
-   button, just quieter until you actually reach for it. */
-.character-row button:hover {
-  border-color: var(--ember);
+.slot-flags {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* Fixed width and tabular figures so "Lv 7" and "Lv 24" put the level — and the
+   cue after it — at the same place down every row. */
+.slot-level {
+  min-width: 4.5ch;
+  color: var(--accent);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.slot-cue {
+  min-width: 12px;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: right;
+}
+
+/* Deleting a character is rare, but it has to be findable without hunting for
+   it — so it stays visible rather than waiting on hover, takes the slot's full
+   height as its hit target, and is fenced off from the play area by a rule so
+   the two can never read as one control. Ember only once you reach for it. */
+.slot-delete {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  align-items: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.slot-delete svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.slot-delete:hover:not(:disabled),
+.slot-delete:focus-visible {
+  border-left-color: rgba(193, 85, 59, 0.5);
+  background: rgba(193, 85, 59, 0.12);
   color: var(--ember);
 }
 
-.character-empty {
-  margin: 0 0 14px;
+.slot-empty {
+  border-style: dashed;
+  background: transparent;
+}
+
+.slot-empty .slot-pick {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+
+.slot-empty-label {
   color: var(--muted);
-  font-size: 13px;
+}
+
+.slot-empty:hover {
+  border-color: rgba(201, 162, 74, 0.4);
+}
+
+.slot-empty:hover .slot-empty-label {
+  color: var(--text);
+}
+
+/* Entering the world takes several round-trips. The slot says which character
+   is going and the rest of the roll goes quiet, so a second click cannot start
+   a second join. */
+.roster[aria-busy='true'] .slot:not(.entering) {
+  opacity: 0.4;
+}
+
+.slot.entering {
+  border-color: rgba(201, 162, 74, 0.5);
+}
+
+.slot.entering .slot-pick:disabled {
+  opacity: 1;
+}
+
+.slot.entering .slot-cue {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The one animated moment in the whole entry flow: a lamp travelling along
+     the slot of the character actually being taken into the world. */
+  .slot.entering::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 30%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: sweep 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(330%);
+  }
+}
+
+button.back {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+button.back:hover {
+  color: var(--accent);
 }
 
 .tabs {
@@ -510,24 +746,6 @@ body[data-screen='game'] #screen-game {
   color: var(--accent);
   background: var(--panel-2);
   box-shadow: inset 0 -2px 0 var(--accent);
-}
-
-.expander {
-  margin: 4px 0 4px;
-  padding-top: 4px;
-  border-top: 1px solid var(--line);
-}
-
-.expander > div {
-  margin-top: 14px;
-}
-
-/* Nested expanders (Customize prompt, inside LLM & behavior settings) sit
-   flush with their parent's already-indented content instead of doubling
-   the top border. */
-.expander .expander {
-  border-top: none;
-  padding-top: 0;
 }
 
 /* ---------- game screen ---------- */
@@ -1012,7 +1230,7 @@ iframe {
 }
 
 .feed-body {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
