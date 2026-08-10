@@ -1124,6 +1124,46 @@ iframe {
   border-bottom: 1px solid var(--line);
 }
 
+/* ---------- trained skills ---------- */
+
+.skills-list {
+  overflow-y: auto;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.skill-name {
+  flex: none;
+  color: var(--muted);
+}
+
+.skill-level {
+  flex: none;
+  color: var(--text);
+}
+
+/* The bar takes the leftover width so the level reads at a fixed spot down
+   the column, the way the worn rows line up. */
+.skill-track {
+  flex: 1;
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.skill-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
 /* ---------- coordinates ---------- */
 
 .coords-list {

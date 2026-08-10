@@ -59,6 +59,67 @@ export function renderWorn(worn) {
   $('wornEmpty').hidden = count > 0
 }
 
+/// Player-facing skill names (shared/src/skills.rs SkillId::display_name).
+/// Anything the server trains that isn't listed falls back to its raw id, so a
+/// new upstream skill shows up as a row rather than vanishing.
+const SKILL_NAMES = { fishing: 'Fishing' }
+
+/// The game's XP curve, ported from shared/src/skills.rs: cumulative XP for a
+/// level is `Σ 100·l²` = `100·n(n+1)(2n+1)/6`, capped at level 30. Duplicated
+/// rather than shared because that crate reaches the web client through wasm,
+/// which this renderer has no part of.
+const SKILL_LEVEL_CAP = 30
+function skillXpForLevel(level) {
+  const n = Math.min(level, SKILL_LEVEL_CAP)
+  return (100 * n * (n + 1) * (2 * n + 1)) / 6
+}
+
+/// How far into the current level the character is, 0–100. A capped skill
+/// reads full: there is no next level to be partway to.
+export function skillProgressPct(progress) {
+  if (progress.level >= SKILL_LEVEL_CAP) return 100
+  const start = skillXpForLevel(progress.level)
+  const next = skillXpForLevel(progress.level + 1)
+  return Math.max(0, Math.min(100, ((progress.xp - start) / (next - start)) * 100))
+}
+
+/// Trained skills, from the relay's view of the server's owner-private skill
+/// frames (src/proxy.js) — the same blind spot in the agent's panel API that
+/// makes `renderWorn` necessary. Unlike gear there is no fixed slot list: a
+/// skill has no row until it is first trained.
+export function renderSkills(skills) {
+  const box = $('skillsList')
+  box.innerHTML = ''
+  const rows = Object.entries(skills && typeof skills === 'object' ? skills : {})
+    .map(([id, progress]) => ({ id, name: SKILL_NAMES[id] || id, progress }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  $('skillsEmpty').hidden = rows.length > 0
+  for (const row of rows) {
+    const el = document.createElement('div')
+    el.className = 'skill-row'
+    const name = document.createElement('span')
+    name.className = 'skill-name'
+    name.textContent = row.name
+    const level = document.createElement('span')
+    level.className = 'skill-level'
+    level.textContent = `Lv ${row.progress.level}`
+    const pct = skillProgressPct(row.progress)
+    const track = document.createElement('div')
+    track.className = 'skill-track'
+    track.setAttribute('role', 'progressbar')
+    track.setAttribute('aria-valuemin', '0')
+    track.setAttribute('aria-valuemax', '100')
+    track.setAttribute('aria-valuenow', String(Math.round(pct)))
+    track.title = `${row.progress.xp} XP`
+    const fill = document.createElement('span')
+    fill.className = 'skill-fill'
+    fill.style.width = `${pct}%`
+    track.appendChild(fill)
+    el.append(name, level, track)
+    box.appendChild(el)
+  }
+}
+
 /// Sellable/dropable marks for the currently loaded character — the source
 /// of truth is main.js's labels.json; instance.txt's own copy is just a
 /// rendering of this for agent-client to read (see config.composeInstanceText).

@@ -231,6 +231,25 @@ function bindPersonalityTabs() {
   }
 }
 
+/// Its own attribute names rather than the `data-subtab` the Personality
+/// drawer uses: that handler hides every `[data-subtab-panel]` in the
+/// document, so sharing the names would make one drawer's tabs blank the
+/// other's panels.
+function setCharacterTab(name) {
+  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
+    btn.classList.toggle('on', btn.dataset.characterTab === name)
+  }
+  for (const panel of document.querySelectorAll('[data-character-panel]')) {
+    panel.hidden = panel.dataset.characterPanel !== name
+  }
+}
+
+function bindCharacterTabs() {
+  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
+    btn.addEventListener('click', () => setCharacterTab(btn.dataset.characterTab))
+  }
+}
+
 function setActivityTab(name) {
   for (const btn of document.querySelectorAll('#activityTabs .tab')) {
     btn.classList.toggle('on', btn.dataset.activityTab === name)
@@ -284,6 +303,7 @@ function setVitals(v) {
     actionToasts.clear()
     bagWorn.renderBag([])
     bagWorn.renderWorn({})
+    bagWorn.renderSkills({})
     return
   }
   const s = v.self
@@ -422,7 +442,7 @@ function applyPlayState(state) {
 
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality & Memory', activity: 'Activity', presets: 'Dispatch Presets', coords: 'Coordinates' }
+  const titles = { worn: 'Character', bag: 'Bag', prompt: 'Personality & Memory', activity: 'Activity', presets: 'Dispatch Presets', coords: 'Coordinates' }
   for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
     btn.addEventListener('click', () => {
       const kind = btn.dataset.drawer
@@ -448,6 +468,7 @@ function bindRail() {
       else stopMemoryPolling()
       // Same reasoning as Personality/Memory: always land on Thoughts.
       if (kind === 'activity') setActivityTab('thoughts')
+      if (kind === 'worn') setCharacterTab('worn')
     })
   }
   $('drawerClose').addEventListener('click', () => {
@@ -680,6 +701,7 @@ async function init() {
   bindRail()
   bindPersonalityTabs()
   bindActivityTabs()
+  bindCharacterTabs()
   dispatchBook.bind({ getLastSelf: () => lastSelf })
   signInFlow.init({
     getSettings: () => settings,
@@ -702,12 +724,14 @@ async function init() {
 
   renderFeedFilters()
   bagWorn.renderWorn({})
+  bagWorn.renderSkills({})
   dispatchBook.renderCoords()
   dispatchBook.renderPresets()
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
+  api.onSkills(bagWorn.renderSkills)
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
     if (urls && urls.mode) {

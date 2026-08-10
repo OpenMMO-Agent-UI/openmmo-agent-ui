@@ -380,3 +380,73 @@ test('an inventory frame in a shape we cannot read is ignored, not reported as n
 
   assert.strictEqual(worn.length, 0)
 })
+
+/// Both shapes verified against `rmp_serde::to_vec` on the real types:
+/// `SkillsUpdate` wraps the map twice (the message struct, then `Skills`), its
+/// keys are `SkillId`'s serde names, and `SkillProgress` is [level, xp].
+const skillsUpdateFrame = (map) => encode({ SkillsUpdate: [[map]] })
+/// [skill, xp_amount, total_xp, new_level, leveled_up]
+const skillXpFrame = (skill, xpAmount, totalXp, newLevel, leveledUp = false) =>
+  encode({ SkillXpGained: [skill, xpAmount, totalXp, newLevel, leveledUp] })
+
+test('trained skills are read off the join-time skills frame', () => {
+  const skills = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    (s) => skills.push(s),
+  )
+  proxy.onServerFrame(skillsUpdateFrame({ fishing: [4, 1600] }))
+
+  assert.deepStrictEqual(skills.at(-1), { fishing: { level: 4, xp: 1600 } })
+})
+
+test('an XP gain restates its own skill and leaves the others alone', () => {
+  const skills = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    (s) => skills.push(s),
+  )
+  proxy.onServerFrame(skillsUpdateFrame({ fishing: [4, 1600], mining: [1, 100] }))
+  // The gain carries the running totals, so the panel never has to re-derive
+  // a level from the XP curve.
+  proxy.onServerFrame(skillXpFrame('fishing', 900, 2500, 5, true))
+
+  assert.deepStrictEqual(skills.at(-1), {
+    fishing: { level: 5, xp: 2500 },
+    mining: { level: 1, xp: 100 },
+  })
+})
+
+test('a new agent session clears the skills the previous one had trained', () => {
+  const skills = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    (s) => skills.push(s),
+  )
+  proxy.onServerFrame(skillsUpdateFrame({ fishing: [4, 1600] }))
+
+  proxy.upstreamUrl = 'ws://127.0.0.1:1/ws'
+  proxy.attachAgent(fakeAgentSocket())
+
+  assert.deepStrictEqual(skills.at(-1), {}, 'attaching a fresh agent should empty the panel')
+  // And the emptied map is what a later gain builds on, not the old session's.
+  proxy.onServerFrame(skillXpFrame('fishing', 100, 100, 1))
+  assert.deepStrictEqual(skills.at(-1), { fishing: { level: 1, xp: 100 } })
+  proxy.stop()
+})
+
+test('a skills frame in a shape we cannot read is ignored, not reported as untrained', () => {
+  const skills = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    (s) => skills.push(s),
+  )
+  proxy.onServerFrame(encode({ SkillsUpdate: ['not-a-skill-map'] }))
+  proxy.onServerFrame(encode({ SkillXpGained: [null, 1, 1, 1, false] }))
+
+  assert.strictEqual(skills.length, 0)
+})

@@ -128,7 +128,7 @@
              who it is (personality, the one panel you edit), then what it has
              been doing (turns, log). -->
         <nav class="rail">
-          <button data-drawer="worn" title="Equipment" aria-label="Equipment">
+          <button data-drawer="worn" title="Character" aria-label="Character">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.4" /><path d="M4.5 20v-1.5a5 5 0 0 1 5-5h5a5 5 0 0 1 5 5V20" /></svg>
           </button>
           <button data-drawer="bag" title="Bag" aria-label="Bag">
@@ -240,8 +240,18 @@
               </div>
             </div>
             <div data-drawer-panel="worn" hidden>
-              <div id="wornList" class="worn-list"></div>
-              <p class="hint" id="wornEmpty">Nothing worn yet.</p>
+              <div class="tabs subtabs" id="characterTabs" role="tablist">
+                <button class="tab on" data-character-tab="worn" role="tab">Equipment</button>
+                <button class="tab" data-character-tab="skills" role="tab">Skills</button>
+              </div>
+              <div data-character-panel="worn">
+                <div id="wornList" class="worn-list"></div>
+                <p class="hint" id="wornEmpty">Nothing worn yet.</p>
+              </div>
+              <div data-character-panel="skills" hidden>
+                <div id="skillsList" class="skills-list"></div>
+                <p class="hint" id="skillsEmpty">No skills trained yet.</p>
+              </div>
             </div>
             <div data-drawer-panel="bag" hidden>
               <p class="hint">Mark what the agent may Sell or Drop, then Apply.</p>
