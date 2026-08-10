@@ -292,101 +292,117 @@
 
     <!-- GLOBAL LLM / AUTOMATIC PLAY SETTINGS -->
     <div id="settingsModal" class="modal" hidden>
-      <div class="modal-card">
+      <div class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="modal-head">
-          <span>Settings</span>
-          <button id="settingsClose" class="ghost">×</button>
+          <span id="settingsTitle">Settings</span>
+          <button id="settingsClose" class="ghost" aria-label="Close settings">×</button>
         </div>
-        <div class="tabs" id="settingsTabs" role="tablist">
-          <button class="tab on" data-settings-tab="llm">LLM</button>
-          <button class="tab" data-settings-tab="agent">Agent</button>
-          <button class="tab" data-settings-tab="display">Display</button>
-          <button class="tab" data-settings-tab="audio">Audio</button>
+        <div class="tabs" id="settingsTabs" role="tablist" aria-label="Settings sections">
+          <button class="tab on" id="tab-llm" data-settings-tab="llm" role="tab" aria-selected="true" aria-controls="panel-llm">LLM</button>
+          <button class="tab" id="tab-agent" data-settings-tab="agent" role="tab" aria-selected="false" aria-controls="panel-agent">Agent</button>
+          <button class="tab" id="tab-display" data-settings-tab="display" role="tab" aria-selected="false" aria-controls="panel-display">Display</button>
+          <button class="tab" id="tab-audio" data-settings-tab="audio" role="tab" aria-selected="false" aria-controls="panel-audio">Audio</button>
+          <button class="tab" id="tab-about" data-settings-tab="about" role="tab" aria-selected="false" aria-controls="panel-about">About</button>
         </div>
         <div class="modal-body">
-          <div data-settings-panel="llm">
+          <div id="panel-llm" data-settings-panel="llm" role="tabpanel" aria-labelledby="tab-llm">
+            <h3 class="settings-section">Provider</h3>
             <label>Backend<select id="llm"></select></label>
             <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
             <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
-            <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted" /></label>
+            <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted by this machine" /></label>
             <label data-for="openai">Reasoning effort<select id="reasoningEffort">
-                <option value="none">none</option><option value="low">low</option>
-                <option value="medium">medium</option><option value="high">high</option>
-                <option value="">(omit)</option>
+                <option value="none">None</option><option value="low">Low</option>
+                <option value="medium">Medium</option><option value="high">High</option>
+                <option value="">Provider default</option>
               </select></label>
+            <p class="hint" id="backendHint"></p>
+            <h3 class="settings-section">Limits</h3>
             <div class="row">
               <label>Maximum tokens<input id="maxTokens" type="number" min="1" /></label>
               <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" /></label>
             </div>
-            <p class="hint" id="backendHint"></p>
-            <p class="hint">Apply checks CLI sign-in or sends one disclosed one-token request to the selected HTTP provider.</p>
+            <p class="hint">Apply checks your CLI sign-in, or sends one disclosed one-token request to the provider.</p>
           </div>
-          <div data-settings-panel="agent" hidden>
-            <label>Active response: <strong id="activeCadenceLabel"></strong>
+          <div id="panel-agent" data-settings-panel="agent" role="tabpanel" aria-labelledby="tab-agent" hidden>
+            <h3 class="settings-section">Pace</h3>
+            <label class="slider">Thinking while busy <strong id="activeCadenceLabel"></strong>
               <input id="activeCadence" type="range" min="0" max="4" step="1" />
             </label>
             <p class="hint" id="activeCadenceHint"></p>
-            <label>Quiet-world patrol: <strong id="idleCadenceLabel"></strong>
+            <label class="slider">Thinking while quiet <strong id="idleCadenceLabel"></strong>
               <input id="idleCadence" type="range" min="0" max="4" step="1" />
             </label>
             <p class="hint" id="idleCadenceHint"></p>
-            <label class="check"><input type="checkbox" id="alwaysActive" /> Continue adventuring while alone</label>
-            <p class="hint">Turn this off to pause AI calls when no other player is nearby.</p>
-            <div class="row">
-              <label>Active interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
-              <label>Idle interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
-            </div>
-            <div class="row">
-              <label>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>
-              <label>Log level<select id="rustLog">
-                  <option value="info">info</option><option value="debug">debug</option><option value="warn">warn</option>
-                </select></label>
-            </div>
-            <div class="row">
-              <label>Concurrent LLM calls<input type="number" id="maxConcurrent" min="1" /></label>
-              <label>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
-            </div>
+            <label class="check"><input type="checkbox" id="alwaysActive" /> Keep adventuring while alone</label>
+            <p class="hint">Turn this off to stop calling the model when no other player is nearby.</p>
+
+            <details class="advanced">
+              <summary>Advanced</summary>
+              <div class="row">
+                <label>Busy interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
+                <label>Quiet interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
+              </div>
+              <p class="hint">Exact seconds, for a pace between the named steps above.</p>
+              <div class="row">
+                <label>Concurrent calls<input type="number" id="maxConcurrent" min="1" /></label>
+                <label>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
+              </div>
+              <div class="row">
+                <label>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>
+                <label>Log level<select id="rustLog">
+                    <option value="info">info</option><option value="debug">debug</option><option value="warn">warn</option>
+                  </select></label>
+              </div>
+            </details>
           </div>
-          <div data-settings-panel="display" hidden>
-            <h3 class="settings-section">Actions</h3>
-            <label>Font size: <strong id="toastFontSizeLabel"></strong>
+          <div id="panel-display" data-settings-panel="display" role="tabpanel" aria-labelledby="tab-display" hidden>
+            <h3 class="settings-section">Action captions</h3>
+            <p class="hint">The lines that appear over the world as your character acts. Repeats of one action collapse into a count.</p>
+            <div class="toast-preview-box">
+              <div id="toastPreview" class="action-toast">Move→north ×3</div>
+            </div>
+            <label class="slider">Text size <strong id="toastFontSizeLabel"></strong>
               <input id="toastFontSize" type="range" min="10" max="20" step="1" />
             </label>
-            <label>Background transparency: <strong id="toastOpacityLabel"></strong>
+            <label class="slider">Background opacity <strong id="toastOpacityLabel"></strong>
               <input id="toastOpacity" type="range" min="0" max="100" step="1" />
             </label>
-            <label>Persist time: <strong id="toastPersistSecsLabel"></strong>
+            <label class="slider">Stays on screen <strong id="toastPersistSecsLabel"></strong>
               <input id="toastPersistSecs" type="range" min="2" max="20" step="1" />
             </label>
-            <label>Fade duration: <strong id="toastFadeSecsLabel"></strong>
+            <label class="slider">Fades over <strong id="toastFadeSecsLabel"></strong>
               <input id="toastFadeSecs" type="range" min="0.1" max="2" step="0.1" />
             </label>
-            <label>Max toasts shown: <strong id="toastMaxCountLabel"></strong>
+            <label class="slider">Shown at once <strong id="toastMaxCountLabel"></strong>
               <input id="toastMaxCount" type="range" min="1" max="20" step="1" />
             </label>
-            <p class="hint">Preview</p>
-            <div class="toast-preview-box">
-              <div id="toastPreview" class="action-toast">Move → north</div>
-            </div>
-            <h3 class="settings-section">Privacy</h3>
-            <label class="check"><input type="checkbox" id="telemetryEnabled" /> Share anonymous usage statistics</label>
-            <p class="hint">Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
           </div>
-          <div data-settings-panel="audio" hidden>
-            <p class="hint" id="audioUnavailable">Start the agent to control its game audio here.</p>
-            <label>BGM volume: <strong id="bgmVolumeLabel"></strong>
+          <div id="panel-audio" data-settings-panel="audio" role="tabpanel" aria-labelledby="tab-audio" hidden>
+            <p class="notice" id="audioUnavailable">Start the agent to control its game audio here.</p>
+            <p class="hint">Sets the game client's own volume, mirrored from the spectator view.</p>
+            <label class="slider">Music <strong id="bgmVolumeLabel"></strong>
               <input id="bgmVolume" type="range" min="0" max="100" step="1" />
             </label>
-            <label class="check"><input type="checkbox" id="bgmMuted" /> Mute BGM</label>
-            <label>Sound effects: <strong id="sfxVolumeLabel"></strong>
+            <label class="check"><input type="checkbox" id="bgmMuted" /> Mute music</label>
+            <label class="slider">Sound effects <strong id="sfxVolumeLabel"></strong>
               <input id="sfxVolume" type="range" min="0" max="100" step="1" />
             </label>
             <label class="check"><input type="checkbox" id="sfxMuted" /> Mute sound effects</label>
-            <p class="hint">Controls the game client's own audio, mirrored from the spectator view.</p>
           </div>
-          <p id="settingsDirty" class="hint" hidden>Changes are staged until you apply them.</p>
-          <button id="settingsApply" class="primary block">Save &amp; validate</button>
-          <p class="support-row">Free and open source — <button id="supportProject" class="linklike-inline">☕ buy the developer a coffee</button></p>
+          <div id="panel-about" data-settings-panel="about" role="tabpanel" aria-labelledby="tab-about" hidden>
+            <h3 class="settings-section">Privacy</h3>
+            <label class="check"><input type="checkbox" id="telemetryEnabled" /> Share anonymous usage statistics</label>
+            <p class="hint">Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
+            <h3 class="settings-section">This app</h3>
+            <p class="hint">OpenMMO Agent UI is free and open source. It runs the agent on your own machine, under your own model quota.</p>
+            <button id="supportProject" class="ghost">☕ Buy the developer a coffee</button>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <p id="settingsDirty" class="foot-note" hidden>Changes are staged until you apply them.</p>
+          <p id="settingsAuto" class="foot-note" hidden>Changes here save as you make them.</p>
+          <button id="settingsApply" class="primary">Apply</button>
         </div>
       </div>
     </div>

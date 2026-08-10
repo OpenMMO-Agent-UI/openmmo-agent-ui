@@ -167,9 +167,12 @@ textarea {
   font: inherit;
 }
 
+/* A checked box was the one stock system-blue thing left in the app, and on
+   the Agent tab it was the loudest color on screen. */
 input[type='checkbox'] {
   width: auto;
   margin: 0;
+  accent-color: var(--accent);
 }
 
 textarea {
@@ -955,14 +958,6 @@ body[data-mode='manual'] .gamesurface {
   opacity: 0;
 }
 
-.toast-preview-box {
-  display: flex;
-  padding: 16px;
-  border-radius: 6px;
-  background: #0d0f14;
-  margin-bottom: 8px;
-}
-
 iframe {
   width: 100%;
   height: 100%;
@@ -1509,7 +1504,11 @@ iframe {
   opacity: 0.6;
 }
 
-/* ---------- settings modal ---------- */
+/* ---------- settings modal ----------
+   The one window that never got the app's own language: it was stock form
+   rows and stock browser sliders. It reads as the same night-desk now —
+   ruled section headings like the profile editor's, machine values in brass
+   mono, and the action pinned to a footer instead of scrolling away. */
 
 .modal {
   position: fixed;
@@ -1533,6 +1532,11 @@ iframe {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
 }
 
+.settings-card {
+  max-width: 520px;
+  max-height: 86vh;
+}
+
 .modal-head {
   display: flex;
   align-items: center;
@@ -1551,22 +1555,218 @@ iframe {
 .modal-body {
   padding: 18px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
+/* Tighter than the entry screens' forms: a settings panel is a list of
+   settled decisions being adjusted, not a form being filled in for the first
+   time, so the label/control/hint groups sit closer together. */
+.modal-body label {
+  margin-bottom: 14px;
+}
+
+/* Same specificity as the rule above, so the paired-field rows have to
+   restate their own zero here or the later declaration wins and breaks the
+   row's baseline. */
+.modal-body .row > label {
+  margin-bottom: 0;
+}
+
+.modal-body .hint {
+  margin: -8px 0 14px;
+}
+
+/* Same letterhead idiom as .wordmark and .editor-title, with the rule running
+   out to the panel edge so a heading divides the tab rather than floating in
+   it. */
 .settings-section {
-  margin: 0 0 10px;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
 }
 
-.support-row {
-  margin: 12px 0 0;
-  text-align: center;
-  font-size: 12px;
+.settings-section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(201, 162, 74, 0.22);
+}
+
+.settings-section:not(:first-child) {
+  margin-top: 24px;
+}
+
+/* Port, log level, timeouts: real controls, but nothing anyone opens Settings
+   to change. Native disclosure, so the Pace decisions are what the tab is. */
+.advanced {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.advanced > summary {
+  margin-bottom: 14px;
   color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+}
+
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced > summary::before {
+  content: '▸ ';
+}
+
+.advanced[open] > summary::before {
+  content: '▾ ';
+}
+
+.advanced > summary:hover {
+  color: var(--accent);
+}
+
+/* ---------- the brass lever ----------
+   Nine of the controls in this window are sliders, and they were the last
+   stock browser chrome left in the app. A slug of brass on a dark ruled
+   track: the setting's name on the left, what it currently means on the
+   right, in the same mono the rest of the app reserves for machine values. */
+
+.modal-body label.slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.modal-body label.slider > strong {
+  color: var(--accent);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-body input[type='range'] {
+  grid-column: 1 / -1;
+  height: 20px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.modal-body input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0d0f14;
+}
+
+.modal-body input[type='range']::-webkit-slider-thumb {
+  width: 13px;
+  height: 19px;
+  margin-top: -7px;
+  border: 1px solid #8a6f2e;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #e2c078, var(--accent) 55%, #a8842f);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.modal-body input[type='range']:hover::-webkit-slider-thumb {
+  border-color: var(--accent);
+}
+
+.modal-body input[type='range']:disabled::-webkit-slider-thumb {
+  background: var(--line);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+/* A control that cannot be used should look it — inputs got no disabled
+   styling at all, only buttons did. */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* An aside the app is telling you, rather than a caption under a control:
+   the brass edge marks it as the app's own voice, same as .editor-title. */
+.notice {
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 1px solid rgba(201, 162, 74, 0.25);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: rgba(201, 162, 74, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Right-aligned inside its own dark plate, because that is where action
+   captions actually sit over the world. */
+.toast-preview-box {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  padding: 26px 14px 14px;
+  margin-bottom: 18px;
+  border-radius: 6px;
+  background: #0d0f14;
+}
+
+.toast-preview-box::before {
+  content: 'Preview';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Apply used to scroll away with the body — on the LLM tab you had to go
+   looking for the button that does the thing you came to do. */
+.modal-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.foot-note {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.modal-foot button {
+  flex: none;
+  margin-left: auto;
+  padding: 7px 18px;
 }
 
 .confirm-actions {

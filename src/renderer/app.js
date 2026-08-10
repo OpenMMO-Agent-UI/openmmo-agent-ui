@@ -22,6 +22,10 @@ let playMode = 'ai'
 let settingsDirty = false
 let retryCountdownTimer = null
 let settingsSnapshot = null
+/// Whatever had focus when Settings opened (the rail button, the Character
+/// screen's link), so closing hands focus back instead of dropping it on
+/// <body> and stranding keyboard users at the top of the document.
+let settingsOpener = null
 /// The spectator scene's URL, once the relay is listening and the agent has a
 /// session to mirror. One view, so one URL: there is nothing to switch between.
 let sceneUrl = null
@@ -171,6 +175,9 @@ function setStatus(state) {
     setVitals(null)
     settingsPanel.updateAudioAvailability()
   }
+  // The staged-changes note says whether Apply will also restart the agent,
+  // so it has to follow the agent starting or stopping under an open modal.
+  updateSettingsFooter()
 }
 
 function appendLog(item) {
@@ -380,17 +387,44 @@ function renderFeedFilters() {
   }
 }
 
+/// Display/Audio/About save on every change; LLM/Agent stage behind Apply.
+/// The footer says which of the two you are looking at, so Apply is never
+/// offered for a tab where there is nothing staged to apply — but it comes
+/// back the moment something *is* staged, so switching tabs can never hide
+/// the button for work waiting on it.
+const IMMEDIATE_TABS = new Set(['display', 'audio', 'about'])
+let settingsTab = 'llm'
+
+function updateSettingsFooter() {
+  const immediate = IMMEDIATE_TABS.has(settingsTab) && !settingsDirty
+  $('settingsApply').hidden = immediate
+  $('settingsAuto').hidden = !immediate
+  $('settingsDirty').hidden = !settingsDirty
+  // Applying restarts a live agent (see the settingsApply handler) — that is
+  // a session interruption, and it should be on the button, not a surprise.
+  $('settingsDirty').textContent = running
+    ? 'Applying saves these changes and restarts the agent.'
+    : 'Changes are staged until you apply them.'
+}
+
+function markSettingsDirty() {
+  settingsDirty = true
+  updateSettingsFooter()
+}
+
 function openSettings() {
+  settingsOpener = document.activeElement
   settingsSnapshot = structuredClone(settings)
   $('settingsModal').hidden = false
   settingsDirty = false
-  $('settingsDirty').hidden = true
   settingsPanel.syncAll(settings)
   $('telemetryEnabled').checked = settings.telemetry !== false
+  updateSettingsFooter()
+  $('settingsTabs').querySelector('.tab.on').focus()
 }
 
-function closeSettings() {
-  if (settingsDirty && !window.confirm('Discard unapplied settings changes?')) return
+async function closeSettings() {
+  if (settingsDirty && !(await confirmAction('Discard unapplied settings changes?', 'Discard'))) return
   if (settingsDirty && settingsSnapshot) {
     settings = settingsSnapshot
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
@@ -401,15 +435,21 @@ function closeSettings() {
   settingsSnapshot = null
   settingsDirty = false
   $('settingsModal').hidden = true
+  if (settingsOpener) settingsOpener.focus()
+  settingsOpener = null
 }
 
 function setSettingsTab(name) {
+  settingsTab = name
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
-    button.classList.toggle('on', button.dataset.settingsTab === name)
+    const on = button.dataset.settingsTab === name
+    button.classList.toggle('on', on)
+    button.setAttribute('aria-selected', String(on))
   }
   for (const panel of document.querySelectorAll('[data-settings-panel]')) {
     panel.hidden = panel.dataset.settingsPanel !== name
   }
+  updateSettingsFooter()
 }
 
 function applyPlayState(state) {
@@ -485,25 +525,26 @@ function bindFields() {
     el.addEventListener('change', () => {
       const value = readField(id, type)
       settings[id] = value
-      settingsDirty = true
-      $('settingsDirty').hidden = false
+      markSettingsDirty()
       if (id === 'characterClass') {
         renderGenderOptions()
       }
       if (id === 'llm') renderBackend()
+      // The Advanced seconds fields and the Pace sliders are two views of one
+      // value; typing an exact interval has to move the slider that claims to
+      // show it.
+      if (id === 'minIntervalSecs' || id === 'idleIntervalSecs') settingsPanel.syncCadence(settings)
     })
   }
 
   $('model').addEventListener('change', () => {
     settings.models[settings.llm] = $('model').value
-    settingsDirty = true
-    $('settingsDirty').hidden = false
+    markSettingsDirty()
   })
   $('apiKey').addEventListener('change', () => {
     const key = settings.llm === 'openrouter' ? 'openrouterKey' : 'openaiKey'
     settings[key] = $('apiKey').value
-    settingsDirty = true
-    $('settingsDirty').hidden = false
+    markSettingsDirty()
   })
 
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
@@ -627,7 +668,7 @@ function bindActions() {
     }
     settings = applied.settings
     settingsDirty = false
-    $('settingsDirty').hidden = true
+    updateSettingsFooter()
     if (playMode === 'ai' && running) {
       const result = await api.restart()
       if (!result.ok) {
@@ -635,11 +676,25 @@ function bindActions() {
         return
       }
     }
-    closeSettings()
+    void closeSettings()
   })
 
   $('openSettingsFromGame').addEventListener('click', openSettings)
-  $('settingsClose').addEventListener('click', closeSettings)
+  $('settingsClose').addEventListener('click', () => void closeSettings())
+
+  // Escape and a click on the dimmed backdrop, the two things every other
+  // dialog on this machine does. Both route through closeSettings, so staged
+  // changes still get their confirm. Guarded on the confirm dialog being
+  // closed: it stacks above Settings, and its own Escape must not reach past
+  // it to the window it is asking about.
+  $('settingsModal').addEventListener('mousedown', (event) => {
+    if (event.target === $('settingsModal')) void closeSettings()
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    if ($('settingsModal').hidden || !$('confirmModal').hidden) return
+    void closeSettings()
+  })
 
   $('supportProject').addEventListener('click', () => api.open(SUPPORT_URL))
 
@@ -719,8 +774,7 @@ async function init() {
     getSettings: () => settings,
     onCadenceChange: (patch) => {
       settings = { ...settings, ...patch }
-      settingsDirty = true
-      $('settingsDirty').hidden = false
+      markSettingsDirty()
     },
     onImmediateChange: (patch) => {
       settings = { ...settings, ...patch }
