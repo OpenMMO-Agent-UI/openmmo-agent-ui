@@ -78,6 +78,29 @@ const INVENTORY = new Set(['InventoryState', 'InventoryUpdated'])
 /// `PlayerInventory` is `[bag, equipped]`, and `equipped` is a map keyed by
 /// `EquipSlot`'s serde names ("head", "main_hand", …) whose values are
 /// `ItemInstance` = `[instance_id, item_def_id, quantity, enchant]`.
+/// `SkillsUpdate` is `[Skills]` and `Skills` is `[map]`, so the map sits at
+/// `body[0][0]`. Keys are `SkillId`'s serde names ("fishing"), values are
+/// `SkillProgress` = `[level, xp]`.
+function skillsFromUpdate(body) {
+  const map = Array.isArray(body && body[0]) ? body[0][0] : null
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return null
+  const skills = {}
+  for (const [id, progress] of Object.entries(map)) {
+    if (!Array.isArray(progress)) continue
+    skills[id] = { level: progress[0] ?? 0, xp: progress[1] ?? 0 }
+  }
+  return skills
+}
+
+/// `SkillXpGained` is `[skill, xp_amount, total_xp, new_level, leveled_up]` —
+/// it carries the running totals, so one skill can be restated from it without
+/// re-deriving anything from the XP curve.
+function skillFromXpGained(body) {
+  const [skill, , totalXp, newLevel] = body || []
+  if (typeof skill !== 'string') return null
+  return { id: skill, progress: { level: newLevel ?? 0, xp: totalXp ?? 0 } }
+}
+
 function wornFromInventory(body) {
   const inventory = body && body[0]
   const equipped = Array.isArray(inventory) ? inventory[1] : null
@@ -352,12 +375,19 @@ function apiBaseUrl(wsUrl) {
 }
 
 class AgentProxy {
-  constructor(onError = () => {}, onWorn = () => {}) {
+  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}) {
     this.onError = onError
     /// Called with `{ slot: { itemDefId, quantity, enchant } }` whenever the
     /// server restates the agent's inventory. Decoded here rather than in the
     /// renderer because this is the only process that sees the frame.
     this.onWorn = onWorn
+    /// Called with `{ skillId: { level, xp } }`. Same reason as `onWorn`: the
+    /// trained-skill frames are owner-private, so agent-client's panel API
+    /// never republishes them and the relay is the only place they are seen.
+    this.onSkills = onSkills
+    /// Accumulated so a single-skill `SkillXpGained` can be pushed as a whole
+    /// map, the way the join-time `SkillsUpdate` arrives.
+    this.skills = {}
     this.server = null
     this.apiServer = null
     this.wss = null
@@ -430,9 +460,12 @@ class AgentProxy {
     if (this.agentSocket) this.agentSocket.close()
     this.agentSocket = downstream
     this.snapshot.reset()
-    // A fresh session wears nothing until the server says otherwise; leaving
-    // the last session's gear on screen would outlive the character.
+    // A fresh session wears nothing and has trained nothing until the server
+    // says otherwise; leaving the last session's gear or skills on screen
+    // would outlive the character.
     this.onWorn({})
+    this.skills = {}
+    this.onSkills({})
 
     const upstream = new WebSocket(this.upstreamUrl)
     const pending = []
@@ -515,6 +548,20 @@ class AgentProxy {
     if (INVENTORY.has(name)) {
       const worn = wornFromInventory(body)
       if (worn) this.onWorn(worn)
+    }
+    if (name === 'SkillsUpdate') {
+      const skills = skillsFromUpdate(body)
+      if (skills) {
+        this.skills = skills
+        this.onSkills(skills)
+      }
+    }
+    if (name === 'SkillXpGained') {
+      const gain = skillFromXpGained(body)
+      if (gain) {
+        this.skills = { ...this.skills, [gain.id]: gain.progress }
+        this.onSkills(this.skills)
+      }
     }
     if (!OWNER_ONLY.has(name)) this.broadcast(frame)
   }
@@ -641,4 +688,12 @@ function safeVariant(frame) {
   }
 }
 
-module.exports = { AgentProxy, WorldSnapshot, OWNER_ONLY, apiBaseUrl, wornFromInventory }
+module.exports = {
+  AgentProxy,
+  WorldSnapshot,
+  OWNER_ONLY,
+  apiBaseUrl,
+  wornFromInventory,
+  skillsFromUpdate,
+  skillFromXpGained,
+}

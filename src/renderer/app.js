@@ -1,6 +1,7 @@
 'use strict'
 
 import { $, showErrors, setScreen, confirmAction, readField, writeField } from './dom.js'
+import { dutyState } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
@@ -21,7 +22,16 @@ let dirtyWhileRunning = false
 let playMode = 'ai'
 let settingsDirty = false
 let retryCountdownTimer = null
+/// The play session's own phase and retry deadline, kept here because the
+/// header's state word is written from them *and* from whether the agent
+/// process is up — see duty.js for why that had to become one writer.
+let sessionPhase = 'stopped'
+let retryAt = 0
 let settingsSnapshot = null
+/// Whatever had focus when Settings opened (the rail button, the Character
+/// screen's link), so closing hands focus back instead of dropping it on
+/// <body> and stranding keyboard users at the top of the document.
+let settingsOpener = null
 /// The spectator scene's URL, once the relay is listening and the agent has a
 /// session to mirror. One view, so one URL: there is nothing to switch between.
 let sceneUrl = null
@@ -69,6 +79,19 @@ const FEED_KINDS = [
   'trade',
   'system',
 ]
+
+/// What each kind is called in the panel. The filter chips said "prompt" while
+/// the turn they filtered said "llm-prompt", so the same thing had two names —
+/// one of them the wire format's.
+const FEED_LABELS = {
+  'llm-prompt': 'Prompt',
+  'llm-response': 'Reply',
+  'llm-error': 'Error',
+  chat: 'Chat',
+  combat: 'Combat',
+  trade: 'Trade',
+  system: 'System',
+}
 
 /// Plain settings fields; `characterName` (Login screen), `model` and
 /// `apiKey` (per-backend) are handled apart from this generic map.
@@ -145,15 +168,27 @@ function renderBackend() {
         : 'No LLM: the character connects and idles.'
 }
 
+/// The lamp and the state word, from the one pair of facts that decide them:
+/// whether the agent process is up, and what the play session is doing while
+/// it is. Called by both `setStatus` (process) and `applyPlayState` (session)
+/// so the two can no longer disagree about what to call the same state.
+function renderDutyState() {
+  const state = dutyState(running, sessionPhase, retryAt - Date.now())
+  $('dot').className = `dot${running ? ' on' : ''}`
+  $('status').textContent = state.label
+  $('status').dataset.tone = state.tone
+}
+
 /// Once running is false, whatever screen is showing bounces back to
 /// wherever restarting makes sense — Character, for a session that was
 /// already playing.
 function setStatus(state) {
   running = state.running
-  $('dot').className = `dot${running ? ' on' : ''}`
-  $('status').textContent = running ? `running (pid ${state.pid})` : 'stopped'
+  renderDutyState()
+  $('agentPid').textContent = running ? `Agent · pid ${state.pid}` : ''
   $('restart').hidden = !(running && dirtyWhileRunning)
-  $('pauseAgent').textContent = running ? '⏸' : '▶'
+  $('pauseAgent').querySelector('.i-pause').hidden = !running
+  $('pauseAgent').querySelector('.i-play').hidden = running
   $('pauseAgent').title = running ? 'Pause the agent' : 'Resume the agent'
   $('pauseAgent').setAttribute('aria-label', $('pauseAgent').title)
   $('directiveInput').disabled = !running
@@ -171,6 +206,9 @@ function setStatus(state) {
     setVitals(null)
     settingsPanel.updateAudioAvailability()
   }
+  // The staged-changes note says whether Apply will also restart the agent,
+  // so it has to follow the agent starting or stopping under an open modal.
+  updateSettingsFooter()
 }
 
 function appendLog(item) {
@@ -231,6 +269,25 @@ function bindPersonalityTabs() {
   }
 }
 
+/// Its own attribute names rather than the `data-subtab` the Personality
+/// drawer uses: that handler hides every `[data-subtab-panel]` in the
+/// document, so sharing the names would make one drawer's tabs blank the
+/// other's panels.
+function setCharacterTab(name) {
+  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
+    btn.classList.toggle('on', btn.dataset.characterTab === name)
+  }
+  for (const panel of document.querySelectorAll('[data-character-panel]')) {
+    panel.hidden = panel.dataset.characterPanel !== name
+  }
+}
+
+function bindCharacterTabs() {
+  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
+    btn.addEventListener('click', () => setCharacterTab(btn.dataset.characterTab))
+  }
+}
+
 function setActivityTab(name) {
   for (const btn of document.querySelectorAll('#activityTabs .tab')) {
     btn.classList.toggle('on', btn.dataset.activityTab === name)
@@ -276,28 +333,38 @@ function showViewProblem(message) {
 /// `self.position`, it just wasn't kept around anywhere before now.
 let lastSelf = null
 
+/// The header's duty card. World coordinates used to ride along in this line
+/// too — they belong to the Coordinates panel, which is where you actually do
+/// something with them, and they are still cached on `lastSelf` for it.
 function setVitals(v) {
   if (!v || !v.self) {
     lastSelf = null
     $('coordUseCurrent').disabled = true
-    $('vitals').textContent = ''
+    $('dutyVitals').hidden = true
+    $('dutyLevel').hidden = true
+    $('dutyName').textContent = settings?.characterName || '—'
     actionToasts.clear()
     bagWorn.renderBag([])
     bagWorn.renderWorn({})
+    bagWorn.renderSkills({})
     return
   }
   const s = v.self
   lastSelf = s
   $('coordUseCurrent').disabled = !s.position
-  const clock =
+  $('dutyName').textContent = s.name
+  $('dutyLevel').textContent = `LV ${s.level}`
+  $('dutyLevel').hidden = false
+  $('dutyVitals').hidden = false
+  const pct = s.max_health ? Math.max(0, Math.min(100, (s.health / s.max_health) * 100)) : 0
+  $('hpFill').style.width = `${pct}%`
+  $('hpText').textContent = `${s.health}/${s.max_health}`
+  $('hp').classList.toggle('low', pct <= 33)
+  $('dutyGold').textContent = v.gold == null ? '' : formatGold(v.gold)
+  $('dutyClock').textContent =
     v.time && v.time.hour != null
-      ? ` · ${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
+      ? `${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
-  const gold = v.gold == null ? '' : ` · ${formatGold(v.gold)}`
-  const coords = s.position
-    ? ` · (${s.position.x.toFixed(1)}, ${s.position.y.toFixed(1)}, ${s.position.z.toFixed(1)})`
-    : ''
-  $('vitals').textContent = `${s.name} Lv.${s.level} · ${s.health}/${s.max_health} HP${gold}${clock}${coords}`
   actionToasts.push(settings, v.actions, monsterNames)
   bagWorn.renderBag(v.bag)
 }
@@ -308,8 +375,11 @@ function setVitals(v) {
 /// collapses them.
 function appendFeed(items) {
   const box = $('feed')
+  const drawer = $('drawer')
+  const watching = !drawer.hidden && drawer.dataset.kind === 'activity'
   for (const item of items) {
     if (item.k === 'llm-prompt') learnMonsterNames(item.m)
+    if (item.k === 'llm-error' && !watching) markActivityUnread(true)
 
     const el = document.createElement('div')
     el.className = `feed-item k-${item.k}`
@@ -320,7 +390,7 @@ function appendFeed(items) {
     const head = document.createElement('div')
     head.className = 'feed-head'
     const timing = item.d == null ? '' : ` · ${(item.d / 1000).toFixed(1)}s`
-    head.textContent = `${new Date(item.t).toLocaleTimeString()} ${item.k}${timing}`
+    head.textContent = `${new Date(item.t).toLocaleTimeString()} ${FEED_LABELS[item.k] || item.k}${timing}`
 
     const body = document.createElement('div')
     body.className = 'feed-body'
@@ -345,7 +415,7 @@ function renderFeedFilters() {
   box.innerHTML = ''
   for (const kind of FEED_KINDS) {
     const b = document.createElement('button')
-    b.textContent = kind.replace('llm-', '')
+    b.textContent = FEED_LABELS[kind] || kind
     b.className = 'chip on'
     b.addEventListener('click', () => {
       const off = feedHidden.has(kind)
@@ -360,17 +430,44 @@ function renderFeedFilters() {
   }
 }
 
+/// Display/Audio/About save on every change; LLM/Agent stage behind Apply.
+/// The footer says which of the two you are looking at, so Apply is never
+/// offered for a tab where there is nothing staged to apply — but it comes
+/// back the moment something *is* staged, so switching tabs can never hide
+/// the button for work waiting on it.
+const IMMEDIATE_TABS = new Set(['display', 'audio', 'about'])
+let settingsTab = 'llm'
+
+function updateSettingsFooter() {
+  const immediate = IMMEDIATE_TABS.has(settingsTab) && !settingsDirty
+  $('settingsApply').hidden = immediate
+  $('settingsAuto').hidden = !immediate
+  $('settingsDirty').hidden = !settingsDirty
+  // Applying restarts a live agent (see the settingsApply handler) — that is
+  // a session interruption, and it should be on the button, not a surprise.
+  $('settingsDirty').textContent = running
+    ? 'Applying saves these changes and restarts the agent.'
+    : 'Changes are staged until you apply them.'
+}
+
+function markSettingsDirty() {
+  settingsDirty = true
+  updateSettingsFooter()
+}
+
 function openSettings() {
+  settingsOpener = document.activeElement
   settingsSnapshot = structuredClone(settings)
   $('settingsModal').hidden = false
   settingsDirty = false
-  $('settingsDirty').hidden = true
   settingsPanel.syncAll(settings)
   $('telemetryEnabled').checked = settings.telemetry !== false
+  updateSettingsFooter()
+  $('settingsTabs').querySelector('.tab.on').focus()
 }
 
-function closeSettings() {
-  if (settingsDirty && !window.confirm('Discard unapplied settings changes?')) return
+async function closeSettings() {
+  if (settingsDirty && !(await confirmAction('Discard unapplied settings changes?', 'Discard'))) return
   if (settingsDirty && settingsSnapshot) {
     settings = settingsSnapshot
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
@@ -381,38 +478,44 @@ function closeSettings() {
   settingsSnapshot = null
   settingsDirty = false
   $('settingsModal').hidden = true
+  if (settingsOpener) settingsOpener.focus()
+  settingsOpener = null
 }
 
 function setSettingsTab(name) {
+  settingsTab = name
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
-    button.classList.toggle('on', button.dataset.settingsTab === name)
+    const on = button.dataset.settingsTab === name
+    button.classList.toggle('on', on)
+    button.setAttribute('aria-selected', String(on))
   }
   for (const panel of document.querySelectorAll('[data-settings-panel]')) {
     panel.hidden = panel.dataset.settingsPanel !== name
   }
+  updateSettingsFooter()
 }
 
 function applyPlayState(state) {
   if (!state) return
   playMode = state.mode || playMode
   document.body.dataset.mode = playMode
-  $('modeManual').classList.toggle('on', playMode === 'manual')
-  $('modeAi').classList.toggle('on', playMode === 'ai')
-  $('modeManual').disabled = state.phase === 'switching'
-  $('modeAi').disabled = state.phase === 'switching'
+  for (const [button, mode] of [
+    [$('modeAi'), 'ai'],
+    [$('modeManual'), 'manual'],
+  ]) {
+    button.classList.toggle('on', playMode === mode)
+    button.setAttribute('aria-pressed', String(playMode === mode))
+    button.disabled = state.phase === 'switching'
+  }
   $('pauseAgent').disabled = state.phase === 'switching'
+  sessionPhase = state.phase || sessionPhase
+  retryAt = state.retryInMs ? Date.now() + state.retryInMs : 0
   clearInterval(retryCountdownTimer)
   retryCountdownTimer = null
-  const startedAt = Date.now()
-  const renderStatus = () => {
-    const remaining = state.retryInMs
-      ? Math.max(0, state.retryInMs - (Date.now() - startedAt))
-      : 0
-    const retry = remaining ? ` · retry in ${Math.ceil(remaining / 1000)}s` : ''
-    $('status').textContent = `${state.phase}${retry}`
-  }
-  renderStatus()
-  if (state.retryInMs) retryCountdownTimer = setInterval(renderStatus, 250)
+  renderDutyState()
+  // The countdown is the only thing on the header that moves on its own, so it
+  // owns the only interval: everything else redraws on an event.
+  if (retryAt) retryCountdownTimer = setInterval(renderDutyState, 250)
   if (state.notice) showErrors([state.notice])
   if (state.viewUrl) {
     sceneUrl = state.viewUrl
@@ -420,41 +523,85 @@ function applyPlayState(state) {
   }
 }
 
+const DRAWER_TITLES = {
+  worn: 'Character',
+  bag: 'Bag',
+  prompt: 'Personality & memory',
+  activity: 'Activity',
+  presets: 'Dispatch presets',
+  coords: 'Coordinates',
+}
+
+function railButtons() {
+  return document.querySelectorAll('.rail [data-drawer]')
+}
+
+/// Both ways out of a drawer — the rail button that opened it, the × in its
+/// head, Escape — end here, so the rail's lit state and the memory poll can
+/// only ever be cleaned up one way.
+function closeDrawer() {
+  const drawer = $('drawer')
+  drawer.hidden = true
+  drawer.dataset.kind = ''
+  stopMemoryPolling()
+  for (const btn of railButtons()) {
+    btn.classList.remove('on')
+    btn.setAttribute('aria-expanded', 'false')
+  }
+}
+
+function openDrawer(kind) {
+  const drawer = $('drawer')
+  drawer.hidden = false
+  drawer.dataset.kind = kind
+  for (const btn of railButtons()) {
+    const on = btn.dataset.drawer === kind
+    btn.classList.toggle('on', on)
+    btn.setAttribute('aria-expanded', String(on))
+  }
+  $('drawerTitle').textContent = DRAWER_TITLES[kind]
+  for (const panel of document.querySelectorAll('[data-drawer-panel]')) {
+    panel.hidden = panel.dataset.drawerPanel !== kind
+  }
+  // Always land on Personality, not wherever Memory's polling was left
+  // off — simpler than tracking whether it's safe to resume polling.
+  if (kind === 'prompt') setPersonalitySubtab('personality')
+  else stopMemoryPolling()
+  // Same reasoning as Personality/Memory: always land on Thoughts.
+  if (kind === 'activity') setActivityTab('thoughts')
+  if (kind === 'worn') setCharacterTab('worn')
+  // Reading the panel is what clears the mark that said to read it.
+  if (kind === 'activity') markActivityUnread(false)
+}
+
 /// Rail icons open a slide-over drawer; clicking the open one again closes it.
 function bindRail() {
-  const titles = { worn: 'Equipment', bag: 'Bag', prompt: 'Personality & Memory', activity: 'Activity', presets: 'Dispatch Presets', coords: 'Coordinates' }
-  for (const btn of document.querySelectorAll('.rail [data-drawer]')) {
+  for (const btn of railButtons()) {
     btn.addEventListener('click', () => {
-      const kind = btn.dataset.drawer
       const drawer = $('drawer')
-      const isOpenSame = !drawer.hidden && drawer.dataset.kind === kind
-      for (const other of document.querySelectorAll('.rail [data-drawer]')) other.classList.remove('on')
-      if (isOpenSame) {
-        drawer.hidden = true
-        drawer.dataset.kind = ''
-        stopMemoryPolling()
-        return
-      }
-      drawer.hidden = false
-      drawer.dataset.kind = kind
-      btn.classList.add('on')
-      $('drawerTitle').textContent = titles[kind]
-      for (const panel of document.querySelectorAll('[data-drawer-panel]')) {
-        panel.hidden = panel.dataset.drawerPanel !== kind
-      }
-      // Always land on Personality, not wherever Memory's polling was left
-      // off — simpler than tracking whether it's safe to resume polling.
-      if (kind === 'prompt') setPersonalitySubtab('personality')
-      else stopMemoryPolling()
-      // Same reasoning as Personality/Memory: always land on Thoughts.
-      if (kind === 'activity') setActivityTab('thoughts')
+      if (!drawer.hidden && drawer.dataset.kind === btn.dataset.drawer) closeDrawer()
+      else openDrawer(btn.dataset.drawer)
     })
   }
-  $('drawerClose').addEventListener('click', () => {
-    $('drawer').hidden = true
-    stopMemoryPolling()
-    for (const other of document.querySelectorAll('.rail [data-drawer]')) other.classList.remove('on')
+  $('drawerClose').addEventListener('click', closeDrawer)
+  // Escape closes the drawer, the way it closes Settings — unless one of the
+  // two dialogs is up, in which case Escape is theirs to answer first.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    if (!$('settingsModal').hidden || !$('confirmModal').hidden) return
+    // The session menu answers Escape itself (that is the popover's own light
+    // dismiss); one press must not also shut the drawer behind it.
+    if ($('sessionMenu').matches(':popover-open')) return
+    if (!$('drawer').hidden) closeDrawer()
   })
+}
+
+/// An ember dot on the Activity pull when the agent hits an LLM error you
+/// weren't looking at. Errors only: a mark for every turn would be lit
+/// permanently, which is the same as not having one.
+function markActivityUnread(on) {
+  const btn = document.querySelector('.rail [data-drawer="activity"]')
+  if (btn) btn.classList.toggle('alert', on)
 }
 
 function bindFields() {
@@ -464,25 +611,26 @@ function bindFields() {
     el.addEventListener('change', () => {
       const value = readField(id, type)
       settings[id] = value
-      settingsDirty = true
-      $('settingsDirty').hidden = false
+      markSettingsDirty()
       if (id === 'characterClass') {
         renderGenderOptions()
       }
       if (id === 'llm') renderBackend()
+      // The Advanced seconds fields and the Pace sliders are two views of one
+      // value; typing an exact interval has to move the slider that claims to
+      // show it.
+      if (id === 'minIntervalSecs' || id === 'idleIntervalSecs') settingsPanel.syncCadence(settings)
     })
   }
 
   $('model').addEventListener('change', () => {
     settings.models[settings.llm] = $('model').value
-    settingsDirty = true
-    $('settingsDirty').hidden = false
+    markSettingsDirty()
   })
   $('apiKey').addEventListener('change', () => {
     const key = settings.llm === 'openrouter' ? 'openrouterKey' : 'openaiKey'
     settings[key] = $('apiKey').value
-    settingsDirty = true
-    $('settingsDirty').hidden = false
+    markSettingsDirty()
   })
 
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
@@ -551,7 +699,13 @@ function bindActions() {
   $('banner-open').addEventListener('click', () =>
     api.open($('loginCode').dataset.url || 'https://www.google.com/device'),
   )
-  $('banner-copy').addEventListener('click', () => navigator.clipboard.writeText($('banner-code').textContent))
+  // A copy button with no reply leaves you re-clicking it to be sure — and this
+  // code is being carried to another window, so "did that work" matters.
+  $('banner-copy').addEventListener('click', async () => {
+    await navigator.clipboard.writeText($('banner-code').textContent)
+    $('banner-copy').textContent = 'Copied'
+    setTimeout(() => ($('banner-copy').textContent = 'Copy'), 1500)
+  })
 
   $('clearLog').addEventListener('click', () => ($('log').textContent = ''))
   $('clearFeed').addEventListener('click', () => ($('feed').textContent = ''))
@@ -600,7 +754,7 @@ function bindActions() {
     }
     settings = applied.settings
     settingsDirty = false
-    $('settingsDirty').hidden = true
+    updateSettingsFooter()
     if (playMode === 'ai' && running) {
       const result = await api.restart()
       if (!result.ok) {
@@ -608,11 +762,25 @@ function bindActions() {
         return
       }
     }
-    closeSettings()
+    void closeSettings()
   })
 
   $('openSettingsFromGame').addEventListener('click', openSettings)
-  $('settingsClose').addEventListener('click', closeSettings)
+  $('settingsClose').addEventListener('click', () => void closeSettings())
+
+  // Escape and a click on the dimmed backdrop, the two things every other
+  // dialog on this machine does. Both route through closeSettings, so staged
+  // changes still get their confirm. Guarded on the confirm dialog being
+  // closed: it stacks above Settings, and its own Escape must not reach past
+  // it to the window it is asking about.
+  $('settingsModal').addEventListener('mousedown', (event) => {
+    if (event.target === $('settingsModal')) void closeSettings()
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    if ($('settingsModal').hidden || !$('confirmModal').hidden) return
+    void closeSettings()
+  })
 
   $('supportProject').addEventListener('click', () => api.open(SUPPORT_URL))
 
@@ -680,6 +848,7 @@ async function init() {
   bindRail()
   bindPersonalityTabs()
   bindActivityTabs()
+  bindCharacterTabs()
   dispatchBook.bind({ getLastSelf: () => lastSelf })
   signInFlow.init({
     getSettings: () => settings,
@@ -691,8 +860,7 @@ async function init() {
     getSettings: () => settings,
     onCadenceChange: (patch) => {
       settings = { ...settings, ...patch }
-      settingsDirty = true
-      $('settingsDirty').hidden = false
+      markSettingsDirty()
     },
     onImmediateChange: (patch) => {
       settings = { ...settings, ...patch }
@@ -702,12 +870,14 @@ async function init() {
 
   renderFeedFilters()
   bagWorn.renderWorn({})
+  bagWorn.renderSkills({})
   dispatchBook.renderCoords()
   dispatchBook.renderPresets()
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
+  api.onSkills(bagWorn.renderSkills)
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
     if (urls && urls.mode) {
@@ -726,7 +896,7 @@ async function init() {
     settingsPanel.updateAudioAvailability()
   })
   api.onViewMemory((mb) => {
-    $('mem').textContent = mb ? `${mb} MB` : ''
+    $('mem').textContent = mb ? `Using ${mb} MB` : ''
     $('mem').classList.toggle('high', mb > 1500)
   })
   api.onViewError(showViewProblem)

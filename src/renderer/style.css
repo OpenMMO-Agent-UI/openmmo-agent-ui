@@ -15,6 +15,9 @@
   --verdigris: #5e9078;
   --err: #d1495b;
   --display-font: 'Big Caslon', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  /* The third type role: things that really are machine text — server URLs,
+     levels, slot numerals, the device code — rather than prose about them. */
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, monospace;
   --toast-font-size: 13px;
   --toast-bg-opacity: 0.75;
   --toast-fade-ms: 400ms;
@@ -60,6 +63,17 @@ button {
 
 button:hover {
   border-color: #3d4454;
+}
+
+/* There was no disabled styling at all, so Continue with nothing selected, and
+   Continue mid-connect, both looked exactly like Continue ready to go. */
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+button:disabled:hover {
+  border-color: var(--line);
 }
 
 button.primary {
@@ -153,15 +167,51 @@ textarea {
   font: inherit;
 }
 
+/* Tinting `accent-color` fixed the checked box, but left the unchecked one a
+   stock white square — which the Bag panel then draws two of per row, so a
+   dozen white plates became the loudest thing on the screen. Drawn properly:
+   a dark plate on the ruled line, brass only once it is ticked. */
 input[type='checkbox'] {
-  width: auto;
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 15px;
+  height: 15px;
+  flex: none;
   margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0d0f14;
+}
+
+input[type='checkbox']:hover:not(:disabled) {
+  border-color: rgba(201, 162, 74, 0.5);
+}
+
+input[type='checkbox']::before {
+  content: '';
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: translateY(-1px) rotate(-45deg);
+  opacity: 0;
+}
+
+input[type='checkbox']:checked {
+  border-color: rgba(201, 162, 74, 0.55);
+  background: rgba(201, 162, 74, 0.1);
+}
+
+input[type='checkbox']:checked::before {
+  opacity: 1;
 }
 
 textarea {
   height: 220px;
   resize: vertical;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 12px;
 }
 
@@ -190,7 +240,7 @@ pre {
   border-radius: 6px;
   background: #0d0f14;
   color: #c6cddc;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -279,23 +329,34 @@ body[data-screen='game'] #screen-game {
   max-width: 680px;
 }
 
+/* ---------- server chooser ----------
+   A row is a ledger entry: a lamp for whether the world answered, the name it
+   goes by, and the address it really is (mono, because that is machine text
+   and not prose). Verification copy lives in exactly one place — the status
+   line under the list — so a long error is never truncated into a URL. */
+
 .profile-list {
   display: grid;
-  gap: 8px;
-  max-height: 260px;
-  margin-bottom: 12px;
+  gap: 6px;
+  max-height: 264px;
+  margin-bottom: 14px;
   overflow-y: auto;
 }
 
 .profile-row {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
   width: 100%;
-  padding: 12px 14px;
+  padding: 11px 14px;
   text-align: left;
   background: var(--panel-2);
 }
 
 .profile-row.on {
-  border-color: var(--accent);
+  border-color: rgba(201, 162, 74, 0.45);
+  background: #262d38;
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -309,16 +370,66 @@ body[data-screen='game'] #screen-game {
 }
 
 .profile-meta {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--muted);
+  font-family: var(--mono-font);
   font-size: 11px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.profile-flags {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* Whether the world answered, at a glance: lit verdigris for verified, ember
+   for refused, an unlit ring for never tried. */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.status-dot[data-tone='ok'] {
+  background: var(--verdigris);
+  box-shadow: 0 0 7px rgba(94, 144, 120, 0.55);
+}
+
+.status-dot[data-tone='bad'] {
+  background: var(--ember);
+}
+
+.status-dot[data-tone='unknown'] {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.tag {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tag.brass {
+  border-color: rgba(201, 162, 74, 0.35);
+  color: var(--accent);
+}
+
+/* Managing profiles is housekeeping, not the reason anyone opened the app:
+   one quiet strip, with Continue below it carrying all the weight. */
 .profile-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 14px;
 }
 
@@ -330,6 +441,15 @@ body[data-screen='game'] #screen-game {
   background: rgba(0, 0, 0, 0.12);
 }
 
+.editor-title {
+  margin: 0 0 12px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 .profile-editor-actions {
   justify-content: flex-end;
   margin-bottom: 0;
@@ -337,10 +457,6 @@ body[data-screen='game'] #screen-game {
 
 .danger-outline {
   color: var(--ember);
-}
-
-.grow {
-  flex: 1;
 }
 
 .optional,
@@ -383,26 +499,28 @@ body[data-screen='game'] #screen-game {
   color: var(--muted);
 }
 
-.steps {
-  margin: 4px 0 16px;
-  padding-left: 22px;
-  color: var(--text);
+/* The code is the only thing on this screen the player has to carry to another
+   window, so it is set to be read across a desk and typed without a second
+   look — not tucked inline in a sentence the way it used to be. */
+.code-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 14px 0 16px;
 }
 
-.steps li {
-  margin-bottom: 10px;
-}
-
-.inline-code {
-  padding: 3px 9px;
-  border-radius: 5px;
+.device-code {
+  padding: 10px 18px;
+  border-radius: 6px;
   background: #0d0f14;
   border: 1px solid #4a3f24;
   color: var(--accent);
-  font-size: 14px;
+  font-family: var(--mono-font);
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  text-shadow: 0 0 14px rgba(201, 162, 74, 0.35);
+  letter-spacing: 0.18em;
+  text-shadow: 0 0 18px rgba(201, 162, 74, 0.35);
 }
 
 .pulsing {
@@ -410,7 +528,10 @@ body[data-screen='game'] #screen-game {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .pulsing {
+  .pulsing,
+  /* A button waiting on a server it may not reach — the same breathing as the
+     copy that waits, so "still going" never depends on a spinner. */
+  button.working {
     animation: pulse 2.2s ease-in-out infinite;
   }
 }
@@ -425,64 +546,215 @@ body[data-screen='game'] #screen-game {
   }
 }
 
-.character-list {
-  margin-bottom: 14px;
+/* ---------- the muster roll ----------
+   Always three slots, because the server caps an account at three. Numbering
+   them is how that cap is stated: a slot you have not filled is drawn as one
+   you still hold, and it is the only way into the create form — so nothing has
+   to say "up to 3 per account" in words. A name is a proper noun and gets the
+   display serif; the level is a stamped number and gets the mono. */
+
+.roster {
+  display: grid;
+  gap: 8px;
 }
 
-.character-row {
+.slot {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  align-items: stretch;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-2);
-  cursor: pointer;
 }
 
-.character-row:hover {
-  border-color: #3d4454;
-}
-
-.character-row.on {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent) inset;
-}
-
-.character-row input[type='radio'] {
-  width: auto;
-  margin: 0;
-}
-
-.character-row .character-info {
+.slot-pick {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 14px;
   flex: 1;
+  min-width: 0;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.slot-pick:hover:not(:disabled) {
+  background: rgba(201, 162, 74, 0.06);
+}
+
+/* Both buttons run to the slot's edges, and the slot clips (for the entering
+   sweep), so the focus ring has to sit inside them or it gets cut off. */
+.slot-pick:focus-visible,
+.slot-delete:focus-visible {
+  outline-offset: -3px;
+}
+
+/* Right-aligned so I / II / III stack into a column the way a ruled ledger
+   numbers its lines, instead of fraying leftward. */
+.slot-no {
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+
+.slot-id {
   min-width: 0;
 }
 
-.character-row .character-name {
+.slot-name {
   display: block;
-  color: var(--text);
-  font-weight: 600;
+  font-family: var(--display-font);
+  font-size: 19px;
+  line-height: 1.25;
 }
 
-.character-row .character-meta {
+.slot-class {
   display: block;
+  margin-top: 1px;
   color: var(--muted);
   font-size: 12px;
 }
 
-/* Same ember-for-destructive language as the confirm dialog's Delete
-   button, just quieter until you actually reach for it. */
-.character-row button:hover {
-  border-color: var(--ember);
+.slot-flags {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+/* Fixed width and tabular figures so "Lv 7" and "Lv 24" put the level — and the
+   cue after it — at the same place down every row. */
+.slot-level {
+  min-width: 4.5ch;
+  color: var(--accent);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.slot-cue {
+  min-width: 12px;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: right;
+}
+
+/* Deleting a character is rare, but it has to be findable without hunting for
+   it — so it stays visible rather than waiting on hover, takes the slot's full
+   height as its hit target, and is fenced off from the play area by a rule so
+   the two can never read as one control. Ember only once you reach for it. */
+.slot-delete {
+  display: flex;
+  flex: none;
+  align-self: stretch;
+  align-items: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: none;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.slot-delete svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.slot-delete:hover:not(:disabled),
+.slot-delete:focus-visible {
+  border-left-color: rgba(193, 85, 59, 0.5);
+  background: rgba(193, 85, 59, 0.12);
   color: var(--ember);
 }
 
-.character-empty {
-  margin: 0 0 14px;
+.slot-empty {
+  border-style: dashed;
+  background: transparent;
+}
+
+.slot-empty .slot-pick {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+
+.slot-empty-label {
   color: var(--muted);
-  font-size: 13px;
+}
+
+.slot-empty:hover {
+  border-color: rgba(201, 162, 74, 0.4);
+}
+
+.slot-empty:hover .slot-empty-label {
+  color: var(--text);
+}
+
+/* Entering the world takes several round-trips. The slot says which character
+   is going and the rest of the roll goes quiet, so a second click cannot start
+   a second join. */
+.roster[aria-busy='true'] .slot:not(.entering) {
+  opacity: 0.4;
+}
+
+.slot.entering {
+  border-color: rgba(201, 162, 74, 0.5);
+}
+
+.slot.entering .slot-pick:disabled {
+  opacity: 1;
+}
+
+.slot.entering .slot-cue {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The one animated moment in the whole entry flow: a lamp travelling along
+     the slot of the character actually being taken into the world. */
+  .slot.entering::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 30%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: sweep 1.5s ease-in-out infinite;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(330%);
+  }
+}
+
+button.back {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+button.back:hover {
+  color: var(--accent);
 }
 
 .tabs {
@@ -512,24 +784,6 @@ body[data-screen='game'] #screen-game {
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-.expander {
-  margin: 4px 0 4px;
-  padding-top: 4px;
-  border-top: 1px solid var(--line);
-}
-
-.expander > div {
-  margin-top: 14px;
-}
-
-/* Nested expanders (Customize prompt, inside LLM & behavior settings) sit
-   flush with their parent's already-indented content instead of doubling
-   the top border. */
-.expander .expander {
-  border-top: none;
-  padding-top: 0;
-}
-
 /* ---------- game screen ---------- */
 
 .screen-game {
@@ -538,30 +792,50 @@ body[data-screen='game'] #screen-game {
   flex-direction: column;
 }
 
-.mode-overlay {
+/* ---------- who plays ----------
+   One switch, two named positions, drawn as a single object rather than two
+   loose icon buttons — this is the largest state in the app (is the LLM
+   driving, or am I?) and it used to be stated by which of two unlabelled
+   glyphs happened to be lit. */
+
+.mode-switch {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d0f14;
   -webkit-app-region: no-drag;
 }
 
 .mode-button {
-  width: 32px;
-  height: 30px;
-  padding: 5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px;
   border-color: transparent;
+  border-radius: 5px;
   background: transparent;
   color: var(--muted);
+  font-size: 12px;
 }
 
 .mode-button svg {
-  width: 100%;
-  height: 100%;
+  width: 15px;
+  height: 15px;
+  flex: none;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.mode-button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: transparent;
 }
 
 .mode-button.on {
@@ -591,15 +865,13 @@ body[data-mode='manual'] .gamebar {
   -webkit-app-region: no-drag;
 }
 
-body[data-mode='manual'] .gamebar > *:not(.mode-overlay) {
+body[data-mode='manual'] .gamebar > *:not(.mode-switch) {
   display: none;
 }
 
-body[data-mode='manual'] .mode-overlay {
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(20, 23, 28, 0.9);
+body[data-mode='manual'] .mode-switch {
+  background: rgba(13, 15, 20, 0.92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
 body[data-mode='manual'] .gameshell,
@@ -612,8 +884,8 @@ body[data-mode='manual'] .gamesurface {
 .gamebar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 7px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
@@ -627,25 +899,299 @@ body[data-mode='manual'] .gamesurface {
   flex: 1;
 }
 
+/* ---------- the duty card ----------
+   The header used to open with a lamp, the word "stopped", and one muted
+   run-on line that ran name, level, HP, purse, clock and world coordinates
+   together. Who is on the desk is the first thing the eye should land on, so
+   it is set as a card: the name in the display serif, the level stamped in
+   brass mono beside it, the session's state underneath, and health as a
+   ruled meter that goes ember when it is worth reacting to. This is the one
+   place in the app where brass and ember meet — everything else in the game
+   chrome stays quiet so this reads first. */
+
+/* Two rows, two columns, one grid — so the name and the health line share a
+   row, and the state word and the purse share the next one. `display: contents`
+   flattens the two wrappers into it (they still exist because the vitals half
+   is hidden as a unit when nothing is being played). */
+.duty {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 2px;
+  flex: none;
+  min-width: 0;
+  padding-right: 15px;
+  border-right: 1px solid var(--line);
+}
+
+.duty-id,
+.duty-vitals {
+  display: contents;
+}
+
+.duty-name {
+  grid-area: 1 / 2;
+}
+
+.duty-state {
+  grid-area: 2 / 2;
+}
+
+.hp {
+  grid-area: 1 / 3;
+}
+
+.duty-meta {
+  grid-area: 2 / 3;
+}
+
+/* A lit lamp on a ranger's desk: the ring stays whether or not it is burning,
+   so the lamp is a fixture that is on or off rather than a dot that appears. */
 .dot {
+  grid-area: 1 / 1 / 3 / 2;
   width: 9px;
   height: 9px;
+  flex: none;
+  border: 1px solid var(--line);
   border-radius: 50%;
-  background: #545a68;
+  background: #0d0f14;
 }
 
 .dot.on {
+  border-color: rgba(94, 144, 120, 0.7);
   background: var(--verdigris);
-  box-shadow: 0 0 8px rgba(94, 144, 120, 0.6);
+  box-shadow: 0 0 9px rgba(94, 144, 120, 0.6);
 }
 
-.status {
-  color: var(--muted);
+.duty-id {
+  min-width: 0;
 }
 
-.vitals {
-  color: var(--muted);
+.duty-name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.duty-name > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.duty-level {
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid rgba(201, 162, 74, 0.3);
+  border-radius: 3px;
+  color: var(--accent);
+  font-family: var(--mono-font);
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+/* Same eyebrow idiom as .wordmark and .settings-section: small, letterspaced,
+   and quiet until the state is one worth noticing. */
+.duty-state {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.duty-state[data-tone='live'] {
+  color: var(--verdigris);
+}
+
+.duty-state[data-tone='bad'] {
+  color: var(--ember);
+}
+
+.hp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* The one number here that does not say what it is on its own: a purse reads as
+   a purse and 21:40 reads as a clock, but a bare 26/30 could be anything. */
+.hp-label {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.hp-track {
+  width: 70px;
+  height: 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0d0f14;
+  overflow: hidden;
+}
+
+/* Brass, not the lamp's verdigris: the lamp and the state word already carry
+   green for "the session is up", and a third green next to them made health
+   look like part of that same signal instead of its own reading. */
+.hp-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.hp-text {
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Below a third, health is the thing to react to, so it takes the one urgent
+   color in the palette — the same ember the Dispatch panel spends. */
+.hp.low .hp-fill {
+  background: var(--ember);
+}
+
+.hp.low .hp-text,
+.hp.low .hp-label {
+  color: var(--ember);
+}
+
+.duty-meta {
+  display: flex;
+  gap: 11px;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A hairline between the purse and the world clock — with only a space between
+   them, "12c 21:40" read as one number. */
+.duty-meta > span:not(:empty) + span:not(:empty) {
+  padding-left: 11px;
+  border-left: 1px solid var(--line);
+}
+
+/* ---------- header icon buttons ---------- */
+
+.gamebar button.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  padding: 0;
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.gamebar button.icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gamebar button.icon:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+/* Play is a solid glyph, pause a pair of strokes — the fill has to follow the
+   glyph or resuming shows a hollow outline of a triangle. */
+.i-play {
+  fill: currentColor;
+  stroke: none;
+}
+
+.gamebar button.icon:has(.i-play:not([hidden])) {
+  color: var(--accent);
+}
+
+/* ---------- session menu ----------
+   Reloading the view, leaving for another character, leaving for another
+   server: three things you do once a session, which used to sit in the bar as
+   wide text buttons beside Pause. Behind one ⋯ instead, with the two
+   diagnostics that were floating in the bar (the view's memory, the agent's
+   pid) as notes under the action each belongs to. */
+
+/* A popover's UA style is `inset: 0; margin: auto`, so setting top/right alone
+   left it centred in the leftover band — bottom and the margin have to be
+   given back explicitly. */
+.menu {
+  position: fixed;
+  top: 46px;
+  right: 10px;
+  bottom: auto;
+  left: auto;
+  margin: 0;
+  width: 224px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  color: var(--text);
+}
+
+.menu-label {
+  margin: 6px 0 6px 8px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.menu-label:first-child {
+  margin-top: 2px;
+}
+
+.menu button {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border-color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+}
+
+.menu button:hover {
+  border-color: transparent;
+  background: rgba(201, 162, 74, 0.1);
+  color: var(--accent);
+}
+
+.menu-note {
+  margin: 3px 0 8px 8px;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-note:empty {
+  display: none;
 }
 
 .gameshell {
@@ -654,26 +1200,37 @@ body[data-mode='manual'] .gamesurface {
   min-height: 0;
 }
 
+/* ---------- the rail ----------
+   A cabinet face: six pulls in three ruled groups, and the group rule is what
+   states the grouping the panels already have — what the character holds,
+   what it has been told, what it has done. Settings sits below the spacer,
+   apart from the drawers because it is not one. */
+
 .rail {
-  width: 52px;
+  width: 48px;
   flex: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 0;
+  gap: 4px;
+  padding: 10px 0;
   background: var(--panel);
   border-right: 1px solid var(--line);
 }
 
+/* Full rail width, so a lit or hovered plate runs to the rail's own edges the
+   way a pull does — and so the hit target is the whole strip, not a 34px
+   square someone has to aim at. */
 .rail button {
-  width: 34px;
+  position: relative;
+  width: 100%;
   height: 34px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border-color: transparent;
+  border-radius: 0 6px 6px 0;
   background: transparent;
   color: var(--muted);
 }
@@ -683,10 +1240,59 @@ body[data-mode='manual'] .gamesurface {
   background: var(--panel-2);
 }
 
+/* The lit plate opens toward the drawer it opened: square on the rail edge so
+   the brass spine is a straight line, rounded on the side the panel is on. A
+   rounded plate turned that spine into a stray bracket. */
 .rail button.on {
   color: var(--accent);
   background: var(--panel-2);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* The label the OS tooltip used to hold, in the app's own type and without the
+   half-second wait — and it appears on keyboard focus too, which a title
+   attribute never did. */
+.rail button::after {
+  content: attr(aria-label);
+  position: absolute;
+  left: 46px;
+  z-index: 20;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rail button:hover::after,
+.rail button:focus-visible::after {
+  opacity: 1;
+}
+
+/* An error the agent hit while you were not looking at Activity. Cleared when
+   the panel is opened — a mark that never goes out stops being a signal. */
+.rail button.alert::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ember);
+  box-shadow: 0 0 6px rgba(193, 85, 59, 0.8);
+}
+
+.rail-rule {
+  width: 18px;
+  height: 1px;
+  margin: 5px 0;
+  background: var(--line);
 }
 
 .rail-spacer {
@@ -735,14 +1341,6 @@ body[data-mode='manual'] .gamesurface {
 
 .action-toast.out {
   opacity: 0;
-}
-
-.toast-preview-box {
-  display: flex;
-  padding: 16px;
-  border-radius: 6px;
-  background: #0d0f14;
-  margin-bottom: 8px;
 }
 
 iframe {
@@ -886,8 +1484,14 @@ iframe {
   color: var(--text);
 }
 
+/* ---------- the drawers ----------
+   Fixed at 340px before, which is narrow for a prompt being written and
+   needlessly narrow on a large display; it takes a share of the window now,
+   between a floor that keeps the forms usable and a ceiling that keeps the
+   spectator view the largest thing on screen. */
+
 .drawer {
-  width: 340px;
+  width: clamp(320px, 27vw, 420px);
   flex: none;
   display: flex;
   flex-direction: column;
@@ -896,13 +1500,71 @@ iframe {
   border-left: 1px solid var(--line);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  /* Pulled out of the cabinet rather than appearing: it only runs when the
+     drawer goes from hidden to shown, which is exactly when it should. */
+  .drawer:not([hidden]) {
+    animation: drawer-out 160ms ease-out;
+  }
+}
+
+@keyframes drawer-out {
+  from {
+    transform: translateX(14px);
+    opacity: 0;
+  }
+}
+
 .drawer-head {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  gap: 10px;
+  padding: 9px 10px 9px 14px;
   border-bottom: 1px solid var(--line);
+}
+
+/* The same brass letterhead the entry cards and the settings sections use, so
+   an open drawer reads as a titled page rather than a floating label. */
+.drawer-title {
+  margin: 0;
+  color: var(--accent);
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* A close control should not look like a button you are meant to press — it is
+   the way out, not an action. Plate on hover only. */
+button.icon-quiet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+
+button.icon-quiet svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+button.icon-quiet:hover {
+  border-color: transparent;
+  background: var(--panel-2);
+  color: var(--text);
 }
 
 .drawer-body {
@@ -929,6 +1591,70 @@ iframe {
   min-height: 0;
 }
 
+/* An empty panel is not a caption under a control, so it does not get the
+   caption's type: it is centred in the space the list will take, and says
+   what will fill it. */
+.empty {
+  margin: 0;
+  padding: 18px 14px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Follow + Clear: pane plumbing, not part of the reading, so it sits tight
+   above the pane instead of taking a form row's worth of space. */
+.row.pane-controls {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+}
+
+/* ---------- add a spot, write a preset ----------
+   Both panels are a list you pick from, with a form for adding to it. The form
+   used to be open always, taking half the drawer to sit unused. Native
+   disclosure, same idiom as Settings' Advanced. */
+
+.add {
+  flex: none;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.add > summary {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+}
+
+.add > summary::-webkit-details-marker {
+  display: none;
+}
+
+.add > summary::before {
+  content: '+ ';
+  color: var(--accent);
+}
+
+.add[open] > summary {
+  margin-bottom: 10px;
+}
+
+.add[open] > summary::before {
+  content: '− ';
+}
+
+.add > summary:hover {
+  color: var(--accent);
+}
+
 /* Thoughts/Log tabs inside the Activity drawer panel, same treatment as the
    Personality/Memory sub-tabs. */
 [data-drawer-panel='activity'] > [data-activity-panel] {
@@ -948,12 +1674,22 @@ iframe {
   min-height: 320px;
 }
 
-/* Sub-tabs inside the Personality & Memory drawer panel — smaller and
-   tighter than the top-level .tabs they reuse, since they live in a 340px
-   drawer rather than a full screen. */
+/* The prompt takes all the height it can, which left Save touching the bottom
+   edge of the field it saves. */
+#saveInstance {
+  flex: none;
+  margin-top: 10px;
+}
+
+/* Sub-tabs inside a drawer panel — smaller and tighter than the top-level
+   .tabs they reuse, since they live in a ~340px drawer rather than a full
+   screen. No rule of their own: the drawer head already draws one 14px above,
+   and two hairlines that close to each other read as a mistake. The lit tab's
+   own brass underline is enough to say which one is on. */
 .subtabs {
   flex: none;
-  margin: 0 0 12px;
+  margin: -2px 0 12px;
+  border-bottom: none;
 }
 
 [data-drawer-panel='prompt'] > [data-subtab-panel] {
@@ -1012,7 +1748,7 @@ iframe {
 }
 
 .feed-body {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--mono-font);
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -1046,13 +1782,10 @@ iframe {
   color: #f0b48a;
 }
 
-.mem {
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-}
-
-.mem.high {
+/* A 3D client left running all night grows; when it has grown enough to be
+   worth reloading, the note says so in the same warm tone the combat lines
+   use rather than staying quiet. */
+.menu-note.high {
   color: #f0b48a;
 }
 
@@ -1062,41 +1795,61 @@ iframe {
   overflow-y: auto;
 }
 
+/* Head and rows share the column track, so the two named columns stay over the
+   boxes they name — the marks used to be an S and a D you had to hover to
+   decode, one row at a time. */
+.bag-head,
 .bag-row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 38px 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Wide enough that SELL and DROP each sit inside their own column: at 30px the
+   labels overflowed their cells and ran together as "DROP ITEM". */
+.bag-head {
+  padding: 0 2px 5px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.bag-head-item {
+  text-align: left;
+}
+
+.bag-row {
   padding: 6px 2px;
   border-bottom: 1px solid var(--line);
 }
 
 .bag-name {
-  flex: 1;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bag-qty {
-  flex: none;
   color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 
-.bag-marks {
-  display: flex;
-  flex: none;
-  gap: 8px;
-}
-
+/* Each box fills its own column cell, so the whole cell is the hit target
+   rather than a 13px square. */
 .bag-mark {
   display: flex;
   align-items: center;
-  gap: 3px;
+  justify-content: center;
   margin-bottom: 0;
-  color: var(--muted);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 4px 0;
   cursor: pointer;
 }
 
@@ -1115,13 +1868,68 @@ iframe {
   overflow-y: auto;
 }
 
+/* A character sheet reads down the slot column, so the gear starts at one left
+   edge instead of being pushed to the right rail by space-between — with
+   fourteen rows, ragged gear was hard to scan for what is missing. */
 .worn-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: baseline;
-  justify-content: space-between;
   gap: 10px;
   padding: 6px 2px;
   border-bottom: 1px solid var(--line);
+}
+
+/* ---------- trained skills ---------- */
+
+.skills-list {
+  overflow-y: auto;
+}
+
+/* Same column track as the equipment sheet, so switching tabs does not move
+   where the left column starts — and the levels line up down the list instead
+   of each one sitting wherever its skill's name ended. */
+.skill-row {
+  display: grid;
+  grid-template-columns: 88px 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* Clipped rather than allowed to run into the level column: an upstream skill
+   with a long name must not push the numbers out of line. */
+.skill-name {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-level {
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The bar takes the leftover width so the level reads at a fixed spot down
+   the column, the way the worn rows line up. */
+.skill-track {
+  flex: 1;
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.skill-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
 }
 
 /* ---------- coordinates ---------- */
@@ -1139,15 +1947,18 @@ iframe {
   border-bottom: 1px solid var(--line);
 }
 
+/* Left padding matched to the 2px the bag and equipment rows use, so a spot's
+   name starts on the same left edge as the panel's own copy instead of eight
+   pixels in from it. */
 .coord-go {
   flex: 1;
   text-align: left;
-  padding: 6px 8px;
+  padding: 7px 2px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -1193,12 +2004,12 @@ iframe {
 .preset-go {
   flex: 1;
   text-align: left;
-  padding: 6px 8px;
+  padding: 7px 2px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -1210,6 +2021,21 @@ iframe {
 .preset-edit,
 .preset-delete {
   flex: none;
+}
+
+/* Removing one row of a list is not a boxed action button — it recedes until
+   it is reached for, and then it is ember, the way the roster's delete is. */
+.coord-delete,
+.preset-delete {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+.coord-delete:hover,
+.preset-delete:hover {
+  border-color: rgba(193, 85, 59, 0.5);
+  background: rgba(193, 85, 59, 0.12);
+  color: var(--ember);
 }
 
 .presets-form {
@@ -1235,13 +2061,12 @@ iframe {
 }
 
 .worn-slot {
-  flex: none;
   color: var(--muted);
+  font-size: 12px;
 }
 
 .worn-item {
   color: var(--text);
-  text-align: right;
 }
 
 /* An empty slot stays listed — it says what the character could be wearing —
@@ -1251,7 +2076,11 @@ iframe {
   opacity: 0.6;
 }
 
-/* ---------- settings modal ---------- */
+/* ---------- settings modal ----------
+   The one window that never got the app's own language: it was stock form
+   rows and stock browser sliders. It reads as the same night-desk now —
+   ruled section headings like the profile editor's, machine values in brass
+   mono, and the action pinned to a footer instead of scrolling away. */
 
 .modal {
   position: fixed;
@@ -1275,6 +2104,11 @@ iframe {
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
 }
 
+.settings-card {
+  max-width: 520px;
+  max-height: 86vh;
+}
+
 .modal-head {
   display: flex;
   align-items: center;
@@ -1293,22 +2127,218 @@ iframe {
 .modal-body {
   padding: 18px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
+/* Tighter than the entry screens' forms: a settings panel is a list of
+   settled decisions being adjusted, not a form being filled in for the first
+   time, so the label/control/hint groups sit closer together. */
+.modal-body label {
+  margin-bottom: 14px;
+}
+
+/* Same specificity as the rule above, so the paired-field rows have to
+   restate their own zero here or the later declaration wins and breaks the
+   row's baseline. */
+.modal-body .row > label {
+  margin-bottom: 0;
+}
+
+.modal-body .hint {
+  margin: -8px 0 14px;
+}
+
+/* Same letterhead idiom as .wordmark and .editor-title, with the rule running
+   out to the panel edge so a heading divides the tab rather than floating in
+   it. */
 .settings-section {
-  margin: 0 0 10px;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
 }
 
-.support-row {
-  margin: 12px 0 0;
-  text-align: center;
-  font-size: 12px;
+.settings-section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(201, 162, 74, 0.22);
+}
+
+.settings-section:not(:first-child) {
+  margin-top: 24px;
+}
+
+/* Port, log level, timeouts: real controls, but nothing anyone opens Settings
+   to change. Native disclosure, so the Pace decisions are what the tab is. */
+.advanced {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.advanced > summary {
+  margin-bottom: 14px;
   color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+}
+
+.advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced > summary::before {
+  content: '▸ ';
+}
+
+.advanced[open] > summary::before {
+  content: '▾ ';
+}
+
+.advanced > summary:hover {
+  color: var(--accent);
+}
+
+/* ---------- the brass lever ----------
+   Nine of the controls in this window are sliders, and they were the last
+   stock browser chrome left in the app. A slug of brass on a dark ruled
+   track: the setting's name on the left, what it currently means on the
+   right, in the same mono the rest of the app reserves for machine values. */
+
+.modal-body label.slider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+}
+
+.modal-body label.slider > strong {
+  color: var(--accent);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.modal-body input[type='range'] {
+  grid-column: 1 / -1;
+  height: 20px;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.modal-body input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0d0f14;
+}
+
+.modal-body input[type='range']::-webkit-slider-thumb {
+  width: 13px;
+  height: 19px;
+  margin-top: -7px;
+  border: 1px solid #8a6f2e;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #e2c078, var(--accent) 55%, #a8842f);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.modal-body input[type='range']:hover::-webkit-slider-thumb {
+  border-color: var(--accent);
+}
+
+.modal-body input[type='range']:disabled::-webkit-slider-thumb {
+  background: var(--line);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+/* A control that cannot be used should look it — inputs got no disabled
+   styling at all, only buttons did. */
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* An aside the app is telling you, rather than a caption under a control:
+   the brass edge marks it as the app's own voice, same as .editor-title. */
+.notice {
+  margin: 0 0 16px;
+  padding: 9px 12px;
+  border: 1px solid rgba(201, 162, 74, 0.25);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  background: rgba(201, 162, 74, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Right-aligned inside its own dark plate, because that is where action
+   captions actually sit over the world. */
+.toast-preview-box {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  padding: 26px 14px 14px;
+  margin-bottom: 18px;
+  border-radius: 6px;
+  background: #0d0f14;
+}
+
+.toast-preview-box::before {
+  content: 'Preview';
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Apply used to scroll away with the body — on the LLM tab you had to go
+   looking for the button that does the thing you came to do. */
+.modal-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.foot-note {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.modal-foot button {
+  flex: none;
+  margin-left: auto;
+  padding: 7px 18px;
 }
 
 .confirm-actions {

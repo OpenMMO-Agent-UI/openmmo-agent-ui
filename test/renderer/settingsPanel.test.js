@@ -22,3 +22,14 @@ test('nearestCadenceIndex defaults to the first option for a single-entry list',
   const { nearestCadenceIndex } = await settingsPanelPromise
   assert.equal(nearestCadenceIndex([['Only', 42]], 1), 0)
 })
+
+test('humanInterval states an interval in the largest unit that divides it', async () => {
+  const { humanInterval } = await settingsPanelPromise
+  assert.equal(humanInterval(1), '1 second')
+  assert.equal(humanInterval(10), '10 seconds')
+  assert.equal(humanInterval(60), '1 minute')
+  assert.equal(humanInterval(90), '1.5 minutes')
+  assert.equal(humanInterval(900), '15 minutes')
+  assert.equal(humanInterval(3600), '1 hour')
+  assert.equal(humanInterval(7200), '2 hours')
+})

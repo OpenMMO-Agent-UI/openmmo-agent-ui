@@ -12,147 +12,217 @@ let profiles = []
 let selectedProfileId = null
 let editingProfileId = null
 
+/// True from Continue until the server has either answered or failed. The
+/// workflow has always published this; nothing used to render it, so an
+/// unreachable server looked identical to an idle screen for the whole timeout.
+let connecting = false
+
+/// The profile editor is a form over the same card as Continue. While it is
+/// open, Continue would connect with the old profile and drop whatever was
+/// typed without saying so, so the list and its actions go inert instead.
+let editorOpen = false
+
 // Pre-flight session state: the character list fetched at sign-in,
-// and which one is chosen for this Play. Bumped on every sign-in attempt so
-// a stale device-flow poll (abandoned via "Start over") can't resolve later
-// and yank the screen back.
+// and which one is chosen for this Play.
 let characters = []
 let selectedCharacterId = null
-let signInGeneration = 0
+
+/// The character currently being taken into the world, if any. Entering runs
+/// several round-trips (personality, coords, presets, bag labels, then the
+/// join itself), so the slot says so and the rest of the roll goes inert
+/// rather than letting a second slot be clicked mid-flight.
+let enteringId = null
+
+/// Set the moment a character enters the world, because the profile list this
+/// renderer holds is not refetched on the way back from a session — without it
+/// the "last played" mark would still point at the previous character.
+let lastPlayedId = null
 
 /// `deps` are the app.js-owned pieces this flow reads/reports through rather
 /// than importing app.js directly (which would be a cycle): `getSettings`
 /// for the live settings object, `persist` for the Apply-gated save path,
 /// `applyPlayState` for the handoff once a character enters the game, and
-/// `openSettings` for the Character screen's "connection" tab.
+/// `openSettings` for the settings modal.
 let deps = null
+
+const MAX_CHARACTERS = 3
+const SLOT_NUMERALS = ['I', 'II', 'III']
 
 export function getSelectedCharacterId() {
   return selectedCharacterId
 }
 
-/// The Login screen's three mutually exclusive states: checking
-/// the cache, a cached credential to continue with, or a fresh device code.
+/// The Login screen's three mutually exclusive states: checking the cache, a
+/// fresh device code, or a sign-in that came back refused. 'failed' exists
+/// because a refused sign-in used to leave the screen pulsing "checking…"
+/// forever with nothing but Back to servers to click.
 function showLoginState(state) {
   $('loginChecking').hidden = state !== 'checking'
   $('loginCode').hidden = state !== 'code'
+  $('loginFailed').hidden = state !== 'failed'
 }
 
 export function showDeviceCode(code) {
   if (!code || !code.code) return
+  const url = code.url || 'https://www.google.com/device'
   $('banner-code').textContent = code.code
-  $('loginCode').dataset.url = code.url || 'https://www.google.com/device'
+  $('loginCode').dataset.url = url
+  // Label the button with the page it actually opens, rather than the one
+  // hardcoded in the markup — a custom profile can point somewhere else.
+  $('banner-open').textContent = `Open ${url.replace(/^https?:\/\//, '')}`
   showLoginState('code')
-}
-
-/// Runs the device flow (main process does the actual OAuth).
-/// Guarded by `signInGeneration` so a poll abandoned via "Start over" can't
-/// resolve later and yank the screen back to Character.
-async function beginSignIn() {
-  showLoginState('checking')
-  const generation = ++signInGeneration
-  const res = await api.authSignIn()
-  if (generation !== signInGeneration) return
-  await afterSignIn(res)
-}
-
-async function enterLoginScreen() {
-  if (workflow) return workflow.continueWithProfile(selectedProfileId)
-  setScreen('login')
-  showLoginState('checking')
-}
-
-/// Shared tail of Continue and the device flow: land on Character with
-/// whatever the pre-flight session found, or stay put on failure — a protocol
-/// mismatch or a refused sign-in alike. Login is the first screen
-/// now, so there is nowhere behind it to bounce to: leave the error in the
-/// toast and offer whichever sign-in action can still be retried, rather than
-/// the "checking…" pulse it was mid-way through.
-async function afterSignIn(res) {
-  if (!res.ok) {
-    showErrors([res.error])
-    setScreen('login')
-    // A cached credential still has Continue to retry the pre-flight with.
-    // Without one, every sub-state is a lie — the code just failed and
-    // "checking…" would pulse forever — so hide all three and leave the card
-    // on "Start over", which is outside them and always works.
-    showLoginState((await api.authStatus()).signedIn ? 'continue' : null)
-    return
-  }
-  characters = res.characters
-  updateCreateVisibility()
-  if (characters.length) {
-    // Already has a character worth playing — pick it and wait for Play,
-    // rather than making a returning player re-choose every time.
-    selectCharacter(characters[0].id)
-    setCharacterTab('pick')
-  } else {
-    selectedCharacterId = null
-    renderCharacterList()
-    await deps.persist({ characterName: '' })
-    updatePlayEnabled()
-    setCharacterTab('create')
-  }
-  setScreen('character')
 }
 
 function profileById(id) {
   return profiles.find((profile) => profile.id === id)
 }
 
-function renderProfiles() {
+/// How long ago, in the coarsest unit that still says something. A full locale
+/// timestamp answered a question nobody asks about a connection check ("at
+/// 12:01:41 AM") instead of the one they do ("is this still current?").
+export function agoLabel(checkedAt, now = Date.now()) {
+  const seconds = Math.round((checkedAt - now) / 1000)
+  const units = [
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+  ]
+  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+  for (const [unit, span] of units) {
+    if (Math.abs(seconds) >= span) return relative.format(Math.round(seconds / span), unit)
+  }
+  return 'just now'
+}
+
+/// One reading of a profile's verification state, used by both the row's dot
+/// and the status line under the list — they used to format it separately and
+/// disagree, and the row's copy truncated a real error mid-sentence.
+export function profileStatus(profile) {
+  const validation = profile?.validation
+  if (validation?.ok) {
+    return {
+      tone: 'ok',
+      label: 'Verified',
+      detail: `Verified ${agoLabel(validation.checkedAt)}`,
+    }
+  }
+  if (validation?.error) {
+    return { tone: 'bad', label: 'Unreachable', detail: validation.error }
+  }
+  return {
+    tone: 'unknown',
+    label: 'Not verified',
+    detail: 'Not verified yet — Continue checks the server before signing in.',
+  }
+}
+
+/// `focusSelected` is only true when the keyboard moved the selection, so a
+/// routine re-render never yanks focus out from under a click.
+function renderProfiles(focusSelected = false) {
   const box = $('profileList')
+  const inert = connecting || editorOpen
   box.innerHTML = ''
   for (const profile of profiles) {
-    const button = document.createElement('button')
-    button.className = `profile-row${profile.id === selectedProfileId ? ' on' : ''}`
-    const status = profile.validation?.ok
-      ? 'Verified'
-      : profile.validation?.error
-        ? profile.validation.error
-        : 'Not verified'
-    button.innerHTML = '<span class="profile-name"></span><span class="profile-meta"></span>'
-    button.querySelector('.profile-name').textContent =
-      `${profile.name}${profile.kind === 'builtin' ? ' · Built-in' : ''}`
-    button.querySelector('.profile-meta').textContent = `${profile.serverUrl} · ${status}`
-    button.addEventListener('click', () => {
-      selectedProfileId = profile.id
-      renderProfiles()
-      renderProfileStatus()
-    })
-    box.appendChild(button)
+    const on = profile.id === selectedProfileId
+    const status = profileStatus(profile)
+    const row = document.createElement('button')
+    row.type = 'button'
+    row.className = `profile-row${on ? ' on' : ''}`
+    row.setAttribute('role', 'option')
+    row.setAttribute('aria-selected', String(on))
+    // Roving tabindex: the list is one tab stop and the arrow keys move
+    // within it, the way a listbox is expected to behave.
+    row.tabIndex = on ? 0 : -1
+    row.disabled = inert
+    row.innerHTML =
+      '<span class="status-dot"></span>' +
+      '<span class="profile-text"><span class="profile-name"></span><span class="profile-meta"></span></span>' +
+      '<span class="profile-flags"></span>'
+    const dot = row.querySelector('.status-dot')
+    dot.dataset.tone = status.tone
+    dot.title = status.label
+    row.querySelector('.profile-name').textContent = profile.name
+    row.querySelector('.profile-meta').textContent = profile.serverUrl
+    const flags = row.querySelector('.profile-flags')
+    if (profile.kind === 'builtin') flags.appendChild(tag('Built-in'))
+    if (profile.lastSession?.characterId != null) flags.appendChild(tag('Last played', true))
+    row.addEventListener('click', () => selectProfile(profile.id))
+    // Double-click continues, matching how a character slot is entered: one
+    // click to consider it, a second to commit.
+    row.addEventListener('dblclick', () => workflow.continueWithProfile(profile.id))
+    row.addEventListener('keydown', onProfileKey)
+    box.appendChild(row)
   }
   const selected = profileById(selectedProfileId)
-  $('profileEdit').disabled = !selected || selected.kind === 'builtin'
-  $('profileDelete').disabled = !selected || selected.kind === 'builtin'
-  $('profileContinue').disabled = !selected
-  $('profileTest').disabled = !selected
+  $('profileEdit').disabled = inert || !selected || selected.kind === 'builtin'
+  $('profileDelete').disabled = inert || !selected || selected.kind === 'builtin'
+  $('profileDuplicate').disabled = inert || !selected
+  $('profileNew').disabled = inert
+  $('profileTest').disabled = inert || !selected
+  $('profileContinue').disabled = inert || !selected
+  $('profileContinue').textContent = connecting ? 'Connecting…' : 'Continue'
+  $('profileContinue').classList.toggle('working', connecting)
+  if (focusSelected) box.querySelector('.profile-row.on')?.focus()
+}
+
+function tag(text, brass = false) {
+  const span = document.createElement('span')
+  span.className = `tag${brass ? ' brass' : ''}`
+  span.textContent = text
+  return span
+}
+
+function selectProfile(id) {
+  selectedProfileId = id
+  renderProfiles()
+  renderProfileStatus()
+}
+
+function onProfileKey(event) {
+  if (event.key === 'Enter') {
+    // A focused row is by definition the selected one, so Enter is unambiguous:
+    // commit. preventDefault stops the button's own click from firing after.
+    event.preventDefault()
+    workflow.continueWithProfile(selectedProfileId)
+    return
+  }
+  const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+  if (!step) return
+  event.preventDefault()
+  const index = profiles.findIndex((profile) => profile.id === selectedProfileId)
+  const next = profiles[Math.min(Math.max(index + step, 0), profiles.length - 1)]
+  if (!next || next.id === selectedProfileId) return
+  selectedProfileId = next.id
+  renderProfiles(true)
+  renderProfileStatus()
 }
 
 function renderProfileStatus() {
   const profile = profileById(selectedProfileId)
-  if (!profile) {
-    $('profileStatus').textContent = ''
-    return
-  }
-  $('profileStatus').textContent = profile.validation?.ok
-    ? `Last verified ${new Date(profile.validation.checkedAt).toLocaleString()}`
-    : profile.validation?.error || 'This profile has not been verified yet.'
+  $('profileStatus').textContent = profile ? profileStatus(profile).detail : ''
 }
 
 function openProfileEditor(profile = null) {
   editingProfileId = profile?.id || null
+  $('profileEditorTitle').textContent = profile ? `Edit ${profile.name}` : 'New server'
   $('profileName').value = profile?.name || ''
   $('profileServer').value = profile?.serverUrl || ''
   $('profileTerrain').value = profile?.terrainOrigin || ''
   $('profileClientId').value = profile?.googleClientId || ''
   $('profileClientSecret').value = ''
   $('profileEditor').hidden = false
+  editorOpen = true
+  renderProfiles()
+  // Also scrolls the editor into view on a short window, where it opens below
+  // the fold and clicking New would otherwise look like it did nothing.
+  $('profileName').focus()
 }
 
 function closeProfileEditor() {
   editingProfileId = null
   $('profileEditor').hidden = true
+  editorOpen = false
+  renderProfiles()
 }
 
 /// The screen renderWorkflow last acted on — lets it tell a real transition
@@ -170,19 +240,28 @@ function renderWorkflow(state) {
   const enteringScreen = state.screen !== lastRenderedScreen
   lastRenderedScreen = state.screen
   if (state.screen === 'server') {
+    connecting = Boolean(state.busy)
     setScreen('server')
     renderProfiles()
     renderProfileStatus()
   } else if (state.screen === 'oauth') {
+    connecting = false
     setScreen('login')
-    showLoginState('checking')
+    // Errors on this screen mean the sign-in itself came back refused; the
+    // device code, if any, is spent.
+    showLoginState(state.errors?.length ? 'failed' : 'checking')
   } else if (state.screen === 'character') {
+    connecting = false
     characters = state.characters
     $('accountName').textContent = state.accountName || ''
-    if (enteringScreen) selectedCharacterId = null
+    if (enteringScreen) {
+      selectedCharacterId = null
+      enteringId = null
+    }
     renderCharacterList()
-    updateCreateVisibility()
-    setCharacterTab(characters.length ? 'pick' : 'create')
+    // A brand-new account has nothing to choose between, so open the form
+    // it would have to reach for anyway.
+    if (enteringScreen) showCreate(characters.length === 0)
     setScreen('character')
   } else if (state.screen === 'game') {
     setScreen('game')
@@ -190,82 +269,109 @@ function renderWorkflow(state) {
   }
 }
 
-/// The four Character-screen tabs. "connection" isn't a panel of its own —
-/// it opens the settings modal shared with Login/Game — so it never becomes
-/// the active tab.
-function setCharacterTab(name) {
-  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
-    btn.classList.toggle('on', btn.dataset.tab === name)
-  }
-  for (const panel of document.querySelectorAll('[data-tab-panel]')) {
-    panel.hidden = panel.dataset.tabPanel !== name
-  }
+function showCreate(on) {
+  $('rosterPanel').hidden = on
+  $('createPanel').hidden = !on
+  $('backToRoster').hidden = characters.length === 0
+  if (on) $('newCharacterName').focus()
 }
 
-function bindCharacterTabs() {
-  for (const btn of document.querySelectorAll('#characterTabs .tab')) {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.tab === 'connection') {
-        deps.openSettings()
-        return
-      }
-      setCharacterTab(btn.dataset.tab)
-    })
-  }
-}
-
-/// One row per existing character (max 3, server-enforced): pick it, or
-/// delete it. Pre-flight session fully owns this CRUD — nothing
-/// here talks to agent-client.
+/// One slot per character the account may hold — filled ones enter the world,
+/// empty ones are the way into the create form. Pre-flight session fully owns
+/// this CRUD; nothing here talks to agent-client.
 function renderCharacterList() {
   const box = $('characterList')
   box.innerHTML = ''
-  if (!characters.length) {
-    const p = document.createElement('p')
-    p.className = 'character-empty'
-    p.textContent = 'No characters yet — create one from the Create a new character tab.'
-    box.appendChild(p)
-    return
+  box.setAttribute('aria-busy', String(enteringId != null))
+  for (let index = 0; index < MAX_CHARACTERS; index++) {
+    const character = characters[index]
+    box.appendChild(character ? filledSlot(character, index) : emptySlot(index))
   }
-  for (const c of characters) {
-    const row = document.createElement('div')
-    row.className = `character-row${c.id === selectedCharacterId ? ' on' : ''}`
-    row.innerHTML =
-      '<span class="character-info"><span class="character-name"></span><span class="character-meta"></span></span>' +
-      '<button type="button" class="ghost small">Delete</button>'
-    row.querySelector('.character-name').textContent = c.name
-    const last = profileById(selectedProfileId)?.lastSession?.characterId === c.id ? ' · Last played' : ''
-    row.querySelector('.character-meta').textContent = `${c.class} · ${c.gender} · Lv.${c.level}${last}`
-    row.querySelector('.character-info').addEventListener('click', () => enterCharacter(c))
-    row.querySelector('button').addEventListener('click', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      deleteCharacterRow(c.id, c.name)
-    })
-    box.appendChild(row)
-  }
+}
+
+function filledSlot(character, index) {
+  const entering = character.id === enteringId
+  const slot = document.createElement('div')
+  slot.className = `slot${entering ? ' entering' : ''}`
+  slot.innerHTML =
+    '<button type="button" class="slot-pick">' +
+    '<span class="slot-no"></span>' +
+    '<span class="slot-id"><span class="slot-name"></span><span class="slot-class"></span></span>' +
+    '<span class="slot-flags"></span>' +
+    '<span class="slot-level"></span>' +
+    '<span class="slot-cue"></span>' +
+    '</button>' +
+    '<button type="button" class="slot-delete">' +
+    '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v5M14 11v5" /></svg>' +
+    '<span>Delete</span>' +
+    '</button>'
+  slot.querySelector('.slot-no').textContent = SLOT_NUMERALS[index]
+  slot.querySelector('.slot-name').textContent = character.name
+  slot.querySelector('.slot-class').textContent = `${character.class} · ${character.gender}`
+  slot.querySelector('.slot-level').textContent = `Lv ${character.level}`
+  slot.querySelector('.slot-cue').textContent = entering ? 'Entering' : '›'
+  // Its own column rather than stacked under the class: in the name block it
+  // made whichever slot carried it taller than the others.
+  if (isLastPlayed(character.id)) slot.querySelector('.slot-flags').appendChild(tag('Last played', true))
+
+  const pick = slot.querySelector('.slot-pick')
+  const remove = slot.querySelector('.slot-delete')
+  pick.disabled = enteringId != null
+  remove.disabled = enteringId != null
+  pick.setAttribute('aria-label', `Play ${character.name}, level ${character.level} ${character.class}`)
+  remove.setAttribute('aria-label', `Delete ${character.name}`)
+  pick.addEventListener('click', () => void enterCharacter(character))
+  remove.addEventListener('click', () => void deleteCharacterSlot(character.id, character.name))
+  return slot
+}
+
+function emptySlot(index) {
+  const slot = document.createElement('div')
+  slot.className = 'slot slot-empty'
+  slot.innerHTML =
+    '<button type="button" class="slot-pick">' +
+    '<span class="slot-no"></span>' +
+    '<span class="slot-empty-label">Create a character</span>' +
+    '<span class="slot-cue">+</span>' +
+    '</button>'
+  slot.querySelector('.slot-no').textContent = SLOT_NUMERALS[index]
+  const pick = slot.querySelector('.slot-pick')
+  pick.disabled = enteringId != null
+  pick.addEventListener('click', () => showCreate(true))
+  return slot
+}
+
+function isLastPlayed(id) {
+  return (lastPlayedId ?? profileById(selectedProfileId)?.lastSession?.characterId) === id
 }
 
 async function enterCharacter(character) {
+  if (enteringId != null) return
+  showErrors([])
+  enteringId = character.id
   selectedCharacterId = character.id
-  await deps.persist({ characterName: character.name })
-  await loadInstancePrompt()
-  await dispatchBook.loadCoords(selectedCharacterId)
-  await dispatchBook.loadPresets(selectedCharacterId)
-  await bagWorn.loadBagLabels(selectedCharacterId)
-  await workflow.chooseCharacter(character.id)
-}
-
-function selectCharacter(id) {
-  selectedCharacterId = id
   renderCharacterList()
-  const chosen = characters.find((c) => c.id === id)
-  deps.persist({ characterName: chosen ? chosen.name : '' })
-  updatePlayEnabled()
-  void loadInstancePrompt()
-  void dispatchBook.loadCoords(selectedCharacterId)
-  void dispatchBook.loadPresets(selectedCharacterId)
-  void bagWorn.loadBagLabels(selectedCharacterId)
+  try {
+    await deps.persist({ characterName: character.name })
+    await loadInstancePrompt()
+    await dispatchBook.loadCoords(selectedCharacterId)
+    await dispatchBook.loadPresets(selectedCharacterId)
+    await bagWorn.loadBagLabels(selectedCharacterId)
+    lastPlayedId = character.id
+    await workflow.chooseCharacter(character.id)
+  } catch (err) {
+    // The pre-flight loads (personality, coords, presets, bag labels) are all
+    // disk reads that can fail. Without this the slot just quietly came back to
+    // life, as if the click had never happened.
+    showErrors([`Could not enter as ${character.name}: ${err.message}`])
+  } finally {
+    // Cleared whether the join succeeded (the screen has moved on and this
+    // render is harmless) or failed (the roll has to come back to life).
+    enteringId = null
+    renderCharacterList()
+  }
 }
 
 /// Individual personality for whichever character is selected — reloaded on
@@ -283,7 +389,7 @@ async function loadInstancePrompt() {
   $('instanceFile').textContent = `Personality for this server and character`
 }
 
-async function deleteCharacterRow(id, name) {
+async function deleteCharacterSlot(id, name) {
   if (!(await confirmAction(`Delete ${name}? This cannot be undone.`))) return
   const res = await api.deleteCharacter(id)
   if (!res.ok) {
@@ -291,27 +397,13 @@ async function deleteCharacterRow(id, name) {
     return
   }
   characters = characters.filter((c) => c.id !== id)
+  if (lastPlayedId === id) lastPlayedId = null
   if (selectedCharacterId === id) {
     selectedCharacterId = null
     await deps.persist({ characterName: '' })
   }
   renderCharacterList()
-  updateCreateVisibility()
-  updatePlayEnabled()
-  if (!characters.length) setCharacterTab('create')
-}
-
-/// Server enforces the cap (server/src/auth.rs) — this just keeps the tab
-/// from being offered once it would only produce that refusal.
-function updateCreateVisibility() {
-  const atMax = characters.length >= 3
-  const tab = document.querySelector('#characterTabs [data-tab="create"]')
-  tab.hidden = atMax
-  if (atMax && tab.classList.contains('on')) setCharacterTab('pick')
-}
-
-function updatePlayEnabled() {
-  // Character activation itself enters the game; there is no separate Play.
+  if (!characters.length) showCreate(true)
 }
 
 function bind() {
@@ -347,6 +439,11 @@ function bind() {
     renderProfileStatus()
   })
   $('profileCancel').addEventListener('click', closeProfileEditor)
+  // Escape is the expected way out of a panel you opened by mistake, and focus
+  // is always inside the editor while it is open.
+  $('profileEditor').addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeProfileEditor()
+  })
   $('profileSave').addEventListener('click', async () => {
     const input = {
       name: $('profileName').value.trim(),
@@ -370,10 +467,20 @@ function bind() {
   })
 
   $('loginCancel').addEventListener('click', () => workflow.cancelOAuth())
+  $('loginRetry').addEventListener('click', () => workflow.continueWithProfile(selectedProfileId))
 
   $('switchAccount').addEventListener('click', async () => {
     await api.signOut()
     await workflow.continueWithProfile(selectedProfileId)
+  })
+
+  // The only way to the LLM settings used to be the in-game rail, so a first
+  // run had to join the world with an unconfigured agent to fix it.
+  $('openSettingsFromCharacter').addEventListener('click', () => deps.openSettings())
+
+  $('backToRoster').addEventListener('click', () => {
+    showErrors([])
+    showCreate(false)
   })
 
   $('createCharacter').addEventListener('click', async () => {
@@ -381,20 +488,23 @@ function bind() {
     const name = $('newCharacterName').value.trim()
     if (!name) {
       showErrors(['Character name is required'])
+      $('newCharacterName').focus()
       return
     }
     $('createCharacter').disabled = true
+    $('createCharacter').textContent = 'Creating…'
     const settings = deps.getSettings()
     const res = await api.createCharacter(name, settings.characterClass, settings.gender)
     $('createCharacter').disabled = false
+    $('createCharacter').textContent = 'Create and enter the world'
     if (!res.ok) {
       showErrors([res.error])
       return
     }
     characters.push(res.character)
     $('newCharacterName').value = ''
+    showCreate(false)
     renderCharacterList()
-    updateCreateVisibility()
     await enterCharacter(res.character)
   })
 }
@@ -418,7 +528,6 @@ export function init(dependencies) {
     },
     renderWorkflow,
   )
-  bindCharacterTabs()
   bind()
 }
 

@@ -26,24 +26,38 @@ export function nearestCadenceIndex(options, seconds) {
   return best
 }
 
-function renderCadenceLabels() {
-  const active = ACTIVE_CADENCES[Number($('activeCadence').value)]
-  const idle = IDLE_CADENCES[Number($('idleCadence').value)]
-  $('activeCadenceLabel').textContent = `${active[0]} · ${active[1]} seconds`
-  $('activeCadenceHint').textContent = `At most about ${(60 / active[1]).toFixed(1)} calls/minute while active.`
-  $('idleCadenceLabel').textContent =
-    `${idle[0]} · ${idle[1] >= 60 ? `${idle[1] / 60} minute${idle[1] === 60 ? '' : 's'}` : `${idle[1]} seconds`}`
-  $('idleCadenceHint').textContent = `At most about ${(60 / idle[1]).toFixed(2)} calls/minute while quiet.`
+export function humanInterval(secs) {
+  if (secs >= 3600 && secs % 3600 === 0) return `${secs / 3600} hour${secs === 3600 ? '' : 's'}`
+  if (secs >= 60) return `${+(secs / 60).toFixed(1)} minute${secs === 60 ? '' : 's'}`
+  return `${secs} second${secs === 1 ? '' : 's'}`
+}
+
+/// Reads the stored seconds, not the slider's preset: the Advanced fields can
+/// set an exact interval between two steps, and the label used to report the
+/// nearest step as though that were the value in force.
+function renderCadenceLabels(settings) {
+  const activeName = ACTIVE_CADENCES[Number($('activeCadence').value)][0]
+  const idleName = IDLE_CADENCES[Number($('idleCadence').value)][0]
+  // The Advanced fields take a raw number, and an empty or 0 one reaches here
+  // before Apply ever gets to reject it — a floor keeps the label from
+  // reporting "Infinity calls a minute" in the meantime.
+  const active = Math.max(1, settings.minIntervalSecs || 1)
+  const idle = Math.max(1, settings.idleIntervalSecs || 1)
+  $('activeCadenceLabel').textContent = `${activeName} · ${humanInterval(active)}`
+  $('activeCadenceHint').textContent = `Up to about ${(60 / active).toFixed(1)} calls a minute while something is happening.`
+  $('idleCadenceLabel').textContent = `${idleName} · ${humanInterval(idle)}`
+  $('idleCadenceHint').textContent = `One call every ${humanInterval(idle)} when the world is quiet.`
 }
 
 /// Cadence sliders persist through the Apply-gated flow (like the rest of
 /// the Agent tab's FIELDS), unlike toast/audio below — so this is exported
 /// separately for closeSettings' snapshot revert, which must not touch the
-/// immediate-persist controls.
+/// immediate-persist controls. Also re-run when the Advanced seconds fields
+/// change, so the slider and its label follow a hand-typed interval.
 export function syncCadence(settings) {
   $('activeCadence').value = nearestCadenceIndex(ACTIVE_CADENCES, settings.minIntervalSecs)
   $('idleCadence').value = nearestCadenceIndex(IDLE_CADENCES, settings.idleIntervalSecs)
-  renderCadenceLabels()
+  renderCadenceLabels(settings)
 }
 
 function renderToastLabels(settings) {
@@ -125,13 +139,13 @@ export function bind({ getSettings, onCadenceChange, onImmediateChange }) {
     const value = ACTIVE_CADENCES[Number($('activeCadence').value)][1]
     $('minIntervalSecs').value = value
     onCadenceChange({ minIntervalSecs: value })
-    renderCadenceLabels()
+    renderCadenceLabels(getSettings())
   })
   $('idleCadence').addEventListener('input', () => {
     const value = IDLE_CADENCES[Number($('idleCadence').value)][1]
     $('idleIntervalSecs').value = value
     onCadenceChange({ idleIntervalSecs: value })
-    renderCadenceLabels()
+    renderCadenceLabels(getSettings())
   })
 
   const toastFields = {

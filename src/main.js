@@ -39,7 +39,10 @@ const proxy = new AgentProxy(
   // What the character is wearing, which the agent's own panel API does not
   // publish — pushed as it changes rather than polled, since the relay learns
   // it the moment the server says so.
-  (worn) => send('agent:worn', worn)
+  (worn) => send('agent:worn', worn),
+  // Trained skills, which the panel API does not publish either — same
+  // push-as-it-changes path as the gear above.
+  (skills) => send('agent:skills', skills)
 )
 let feedTimer = null
 let feedSeq = null
