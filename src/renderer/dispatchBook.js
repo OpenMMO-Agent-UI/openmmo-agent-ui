@@ -174,6 +174,10 @@ function renderDirectivePresets() {
 
 function startEditPreset(preset) {
   editingPresetId = preset.id
+  // The form is collapsed until it's wanted, and Edit is one of the ways it is
+  // wanted — otherwise the click fills in a form nobody can see.
+  $('presetsAdd').open = true
+  $('presetsAddLabel').textContent = `Editing ${preset.name}`
   $('presetName').value = preset.name
   $('presetPrompt').value = preset.prompt
   $('presetsSubmit').textContent = 'Save'
@@ -183,6 +187,7 @@ function startEditPreset(preset) {
 function cancelEditPreset() {
   editingPresetId = null
   $('presetsForm').reset()
+  $('presetsAddLabel').textContent = 'Write a new preset'
   $('presetsSubmit').textContent = 'Add'
   $('presetsCancelEdit').hidden = true
 }

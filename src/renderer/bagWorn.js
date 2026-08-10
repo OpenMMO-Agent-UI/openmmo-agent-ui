@@ -60,8 +60,9 @@ export function renderWorn(worn) {
 }
 
 /// Player-facing skill names (shared/src/skills.rs SkillId::display_name).
-/// Anything the server trains that isn't listed falls back to its raw id, so a
-/// new upstream skill shows up as a row rather than vanishing.
+/// Anything the server trains that isn't listed falls back to `itemLabel`'s
+/// snake_case-to-words reading of its id, so a new upstream skill shows up as a
+/// row that reads like a name ("Herb Gathering") rather than as a raw id.
 const SKILL_NAMES = { fishing: 'Fishing' }
 
 /// The game's XP curve, ported from shared/src/skills.rs: cumulative XP for a
@@ -91,7 +92,7 @@ export function renderSkills(skills) {
   const box = $('skillsList')
   box.innerHTML = ''
   const rows = Object.entries(skills && typeof skills === 'object' ? skills : {})
-    .map(([id, progress]) => ({ id, name: SKILL_NAMES[id] || id, progress }))
+    .map(([id, progress]) => ({ id, name: SKILL_NAMES[id] || itemLabel(id), progress }))
     .sort((a, b) => a.name.localeCompare(b.name))
   $('skillsEmpty').hidden = rows.length > 0
   for (const row of rows) {
@@ -141,18 +142,19 @@ export async function loadBagLabels(characterId) {
   }
 }
 
-function bagMarkCheckbox(letter, title, checked, onChange) {
-  const label = document.createElement('label')
-  label.className = 'bag-mark'
-  label.title = title
+/// The columns are named once in the panel's head row, so a row carries only
+/// the boxes — the S and D letters they used to carry made every row restate a
+/// key you could only decode by hovering one of them.
+function bagMarkCheckbox(label, itemName, checked, onChange) {
+  const cell = document.createElement('label')
+  cell.className = 'bag-mark'
   const input = document.createElement('input')
   input.type = 'checkbox'
   input.checked = checked
+  input.setAttribute('aria-label', `${label} ${itemName}`)
   input.addEventListener('change', () => onChange(input.checked))
-  const span = document.createElement('span')
-  span.textContent = letter
-  label.append(input, span)
-  return label
+  cell.append(input)
+  return cell
 }
 
 /// agent-client keeps each pickup as its own bag instance rather than
@@ -177,23 +179,21 @@ export function renderBag(bag) {
   currentBagRows = rows
 
   $('bagEmpty').hidden = rows.length > 0
+  // The column names have nothing to name over an empty bag.
+  $('bagHead').hidden = rows.length === 0
   $('bagLabelsSubmit').hidden = rows.length === 0
   for (const row of rows) {
     const el = document.createElement('div')
     el.className = 'bag-row'
 
-    const marks = document.createElement('span')
-    marks.className = 'bag-marks'
-    marks.append(
-      bagMarkCheckbox('S', 'Sellable', stagedLabels.sellable.has(row.key), (checked) => {
-        if (checked) stagedLabels.sellable.add(row.key)
-        else stagedLabels.sellable.delete(row.key)
-      }),
-      bagMarkCheckbox('D', 'Dropable', stagedLabels.dropable.has(row.key), (checked) => {
-        if (checked) stagedLabels.dropable.add(row.key)
-        else stagedLabels.dropable.delete(row.key)
-      }),
-    )
+    const sell = bagMarkCheckbox('Sell', row.label, stagedLabels.sellable.has(row.key), (checked) => {
+      if (checked) stagedLabels.sellable.add(row.key)
+      else stagedLabels.sellable.delete(row.key)
+    })
+    const drop = bagMarkCheckbox('Drop', row.label, stagedLabels.dropable.has(row.key), (checked) => {
+      if (checked) stagedLabels.dropable.add(row.key)
+      else stagedLabels.dropable.delete(row.key)
+    })
 
     const name = document.createElement('span')
     name.className = 'bag-name'
@@ -201,7 +201,7 @@ export function renderBag(bag) {
     const qty = document.createElement('span')
     qty.className = 'bag-qty'
     qty.textContent = `×${row.quantity}`
-    el.append(marks, name, qty)
+    el.append(sell, drop, name, qty)
     box.appendChild(el)
   }
 }
