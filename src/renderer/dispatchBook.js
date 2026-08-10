@@ -47,10 +47,8 @@ let currentCharacterId = null
 
 const BUILTIN_COORDS = [
   { name: 'Aldermark', x: -1471.4, y: 0.9, z: 4741.2 },
-  { name: 'Merchant Rica', x: -1473.8, y: 1.1, z: 4735.5 },
-  { name: 'Fishing spot', x: -1501.6, y: 0.3, z: 4732.3 },
   { name: 'Old Crypt', x: -1450, y: 0.7, z: 4720 },
-  { name: 'Orc Warren', x: -1616, y: 1.05, z: 4918 },
+  { name: 'Orc Warrens', x: -1616, y: 1.05, z: 4918 },
 ]
 let customCoords = []
 
@@ -99,9 +97,8 @@ export function renderCoords() {
 }
 
 const BUILTIN_PRESETS = [
-  { name: 'Idle', prompt: 'Stay at where you are and do nothing until ~Director~ give you instructions.' },
-  { name: 'Go Fishing', prompt: 'Go to Fishing spot and cast {"type": "fish"}' },
-  { name: 'Sell Items', prompt: 'Go find Merchant Rica and sell any sellable items.' },
+  { name: 'Idle', prompt: 'Stay at where you are and do nothing.' },
+  { name: 'Fight Monsters', prompt: 'Walk around and fight monsters.' },
 ]
 let customPresets = []
 let editingPresetId = null
