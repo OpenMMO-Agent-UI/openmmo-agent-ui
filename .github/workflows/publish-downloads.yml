@@ -50,20 +50,19 @@ jobs:
           TAG: ${{ steps.tag.outputs.tag }}
         run: gh release download "$TAG" --dir artifacts --clobber
 
-      - name: Rename to stable filenames
+      - name: Extract protocol from artifact names
         id: stage
         working-directory: artifacts
         env:
           VERSION: ${{ steps.tag.outputs.version }}
         run: |
-          # The wiki's download buttons point at /releases/latest/download/<name>,
-          # so the names must not carry the version or they'd need editing every
-          # release. Version and protocol live in the release notes instead.
+          # Filenames keep their full version+protocol so a downloaded file
+          # says which build it is. Nothing depends on stable names anymore:
+          # the wiki's links are rewritten to match in the step below.
           protocol=""
           for f in openmmo-agent-v"$VERSION"-p*-*; do
             [[ -e "$f" ]] || continue
             [[ "$f" =~ -p([0-9]+)- ]] && protocol="${BASH_REMATCH[1]}"
-            mv -- "$f" "${f/-v$VERSION-p$protocol/}"
           done
           [[ -n "$protocol" ]] || { echo "no protocol version found in artifact names" >&2; exit 1; }
 
@@ -128,3 +127,43 @@ jobs:
             echo "removing superseded release $old"
             gh release delete "$old" --repo "$WIKI_REPO" --cleanup-tag --yes
           done
+
+      - name: Point the wiki's links at this release
+        env:
+          GH_TOKEN: ${{ secrets.WIKI_RELEASE_TOKEN }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          PROTOCOL: ${{ steps.stage.outputs.protocol }}
+        run: |
+          # Filenames carry the version, so the wiki has to learn each new
+          # name: release.json drives the site's download pages, and the
+          # README names the files literally. A PAT push (not GITHUB_TOKEN)
+          # triggers the wiki's own deploy workflow, so the site rebuilds.
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${WIKI_REPO}.git" wiki-checkout
+          cd wiki-checkout
+          mkdir -p src/data
+          cat > src/data/release.json <<EOF
+          {
+            "version": "${VERSION}",
+            "protocol": ${PROTOCOL},
+            "files": {
+              "mac": "openmmo-agent-v${VERSION}-p${PROTOCOL}-macos-arm64.zip",
+              "win": "openmmo-agent-v${VERSION}-p${PROTOCOL}-windows-x64.exe",
+              "linux": "openmmo-agent-v${VERSION}-p${PROTOCOL}-linux-x64.AppImage"
+            }
+          }
+          EOF
+          # Rewrite whatever filename the README carries (stable-era or an
+          # older versioned one) to this release's.
+          sed -E -i \
+            -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?macos-arm64\.zip/openmmo-agent-v${VERSION}-p${PROTOCOL}-macos-arm64.zip/g" \
+            -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?windows-x64\.exe/openmmo-agent-v${VERSION}-p${PROTOCOL}-windows-x64.exe/g" \
+            -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?linux-x64\.AppImage/openmmo-agent-v${VERSION}-p${PROTOCOL}-linux-x64.AppImage/g" \
+            README.md
+          if git diff --quiet; then
+            echo "wiki already points at v${VERSION}"
+          else
+            git config user.name "openmmo-release-sync"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -am "release: point downloads at v${VERSION} (protocol v${PROTOCOL})"
+            git push
+          fi
