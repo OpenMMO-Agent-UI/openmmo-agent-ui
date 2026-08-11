@@ -423,11 +423,17 @@ function createPlaySession() {
   })
 }
 
+/// Aptabase refuses to initialize once the app is ready ("`initialize` must
+/// be invoked before the app is ready"), silently disabling tracking — so
+/// this cannot live inside whenReady() with the rest of startup. Reading
+/// `settings` through a closure keeps the toggle live: it is checked at
+/// send time, and `settings` is loaded before the first track() call below.
+telemetry.init(() => settings?.telemetry !== false)
+
 app.whenReady().then(() => {
   seedRuntimeData()
   settings = settingsStore.importExistingConfig(settingsStore.load())
   settingsStore.save(settings)
-  telemetry.init(() => settings?.telemetry !== false)
   telemetry.track('app_started')
   const legacyRefreshToken = googleAuth.cachedRefreshToken(settings.googleClientId)
   profileStore = new ConnectionProfileStore({
