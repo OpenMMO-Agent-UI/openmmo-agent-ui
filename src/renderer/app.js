@@ -190,8 +190,8 @@ function setStatus(state) {
   renderDutyState()
   $('agentPid').textContent = running ? `Agent · pid ${state.pid}` : ''
   $('restart').hidden = !(running && dirtyWhileRunning)
-  $('pauseAgent').querySelector('.i-pause').hidden = !running
-  $('pauseAgent').querySelector('.i-play').hidden = running
+  $('pauseAgent').querySelector('.i-pause').toggleAttribute('hidden', !running)
+  $('pauseAgent').querySelector('.i-play').toggleAttribute('hidden', running)
   $('pauseAgent').title = running ? 'Pause the agent' : 'Resume the agent'
   $('pauseAgent').setAttribute('aria-label', $('pauseAgent').title)
   $('directiveInput').disabled = !running
