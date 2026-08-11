@@ -111,8 +111,9 @@ openmmo-agent-v0.15.0-p11-windows-x64.exe
 openmmo-agent-v0.15.0-p11-linux-x64.AppImage
 ```
 
-It creates a draft release with SHA-256 checksums and the full
-parent and OpenMMO commit SHAs in the notes. Rerunning the same immutable tag
+It creates a draft release with SHA-256 checksums and, in the notes, the
+full parent and OpenMMO commit SHAs plus the commit messages since the
+previous release tag. Rerunning the same immutable tag
 refreshes that draft. Once published, its artifacts cannot be replaced; make
 source fixes under a new patch version.
 

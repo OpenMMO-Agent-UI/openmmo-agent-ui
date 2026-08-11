@@ -209,6 +209,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/download-artifact@v4
         with:
           pattern: ${{ needs.validate.outputs.artifact-prefix }}-*
@@ -223,10 +227,10 @@ jobs:
           PARENT_SHA: ${{ needs.validate.outputs.parent-sha }}
           OPENMMO_SHA: ${{ needs.validate.outputs.openmmo-sha }}
           PROTOCOL: ${{ needs.validate.outputs.protocol }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
         run: |
+          prev_tag="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^" 2>/dev/null || true)"
           cat > release-notes.md <<EOF
-          Preview build
-
           App version: ${APP_VERSION}
           Parent commit: ${PARENT_SHA}
           OpenMMO commit: ${OPENMMO_SHA}
@@ -238,6 +242,16 @@ jobs:
           Windows and Linux builds are unsigned; Windows SmartScreen may warn.
           Verify downloads against SHA256SUMS.txt before testing.
           EOF
+          if [[ -n "$prev_tag" ]]; then
+            {
+              echo
+              echo "## What changed since ${prev_tag}"
+              echo
+              echo "### Commits (${prev_tag}..${RELEASE_TAG})"
+              echo
+              git log --no-merges --oneline "${prev_tag}..${RELEASE_TAG}"
+            } >> release-notes.md
+          fi
       - name: Create or refresh draft release
         env:
           GH_TOKEN: ${{ github.token }}
