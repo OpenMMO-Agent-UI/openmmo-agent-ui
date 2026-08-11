@@ -10,9 +10,12 @@ import * as signInFlow from './signInFlow.js'
 
 const api = window.agentApp
 
-/// Where the in-app "buy the developer a coffee" button lands (Settings
-/// footer). Kept next to `api` so a future page move is a one-line change.
+/// Where the external links in the session menu land. Kept next to `api`
+/// so a future page move is a one-line change.
 const SUPPORT_URL = 'https://ko-fi.com/dakywang'
+const GITHUB_URL = 'https://github.com/OpenMMO-Agent-UI/openmmo-agent-ui'
+const WIKI_URL = 'https://openmmo-agent-ui.github.io/openmmo-agent-wiki/en/'
+const DISCORD_URL = 'https://discord.gg/FxeV7nNzZ'
 
 let settings = null
 let backends = []
@@ -782,7 +785,17 @@ function bindActions() {
     void closeSettings()
   })
 
-  $('supportProject').addEventListener('click', () => api.open(SUPPORT_URL))
+  // The session menu's external links: community + support. They close the
+  // menu and hand off to the system browser, same as the About tab used to.
+  const externalLinks = [
+    ['githubLink', GITHUB_URL],
+    ['wikiLink', WIKI_URL],
+    ['discordLink', DISCORD_URL],
+    ['supportLink', SUPPORT_URL],
+  ]
+  for (const [id, url] of externalLinks) {
+    $(id).addEventListener('click', () => api.open(url))
+  }
 
   // Saves immediately, like toast/audio: there is nothing for Apply &
   // validate to check, and a privacy choice should never sit staged behind
