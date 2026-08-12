@@ -36,19 +36,25 @@ jobs:
       needs-sync: ${{ steps.cmp.outputs.needs-sync }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - id: cmp
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          out="$(node scripts/release-sync-check.js)"
-          echo "$out"
-          if [[ "$(echo "$out" | node -pe 'JSON.parse(require("fs").readFileSync(0)).hasNewRelease')" == "true" ]]; then
-            echo "needs-sync=true" >> "$GITHUB_OUTPUT"
-          else
+          # scripts/release-sync-check.js needs the submodule's object graph,
+          # which this job deliberately doesn't clone. Same ancestry question
+          # via the compare API instead: is Julian's latest release commit
+          # already contained in our pin? Both SHAs live in the fork once a
+          # sync has run; a brand-new release isn't there yet, so compare
+          # fails and we correctly wake the agent.
+          tag="$(gh api repos/Julian-adv/OpenMMO/releases --jq '[.[] | select(.draft == false)] | sort_by(.published_at) | reverse | .[0].tag_name')"
+          relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}^{}" "refs/tags/${tag}" | head -1 | cut -f1)"
+          pin="$(git ls-tree HEAD deps/OpenMMO | awk '{print $3}')"
+          status="$(gh api "repos/OpenMMO-Agent-UI/OpenMMO/compare/${relsha}...${pin}" --jq .status 2>/dev/null || echo unknown)"
+          echo "release=$tag ($relsha) pin=$pin compare=$status"
+          if [[ "$status" == "identical" || "$status" == "ahead" ]]; then
             echo "needs-sync=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs-sync=true" >> "$GITHUB_OUTPUT"
           fi
 
   sync:
