@@ -7,7 +7,7 @@ name: Release sync from upstream
 # tag, wait for release CI, and publish.
 #
 # Requires two repo secrets:
-#   RELEASE_SYNC_TOKEN      PAT that can push to BOTH
+#   WIKI_RELEASE_TOKEN      PAT that can push to BOTH
 #                           OpenMMO-Agent-UI/OpenMMO (fork) and this repo,
 #                           and publish releases here. A v* tag pushed with
 #                           this PAT (not GITHUB_TOKEN) still triggers
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.RELEASE_SYNC_TOKEN }} # pushes to this repo use the PAT
+          token: ${{ secrets.WIKI_RELEASE_TOKEN }} # pushes to this repo use the PAT
           submodules: recursive
           fetch-depth: 0
       - uses: actions/setup-node@v4
@@ -76,7 +76,7 @@ jobs:
         run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
       - name: Wire the PAT into every github.com remote (incl. the fork submodule)
         env:
-          PAT: ${{ secrets.RELEASE_SYNC_TOKEN }}
+          PAT: ${{ secrets.WIKI_RELEASE_TOKEN }}
         run: |
           git config --global url."https://x-access-token:${PAT}@github.com/".insteadOf "https://github.com/"
           git config --global user.name "openmmo-release-sync"
@@ -84,9 +84,9 @@ jobs:
       - name: Run the release-sync skill
         uses: anthropics/claude-code-action@v1
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_SYNC_TOKEN }} # gh release publish etc.
+          GH_TOKEN: ${{ secrets.WIKI_RELEASE_TOKEN }} # gh release publish etc.
         with:
-          github_token: ${{ secrets.RELEASE_SYNC_TOKEN }}
+          github_token: ${{ secrets.WIKI_RELEASE_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             /openmmo-release-sync
