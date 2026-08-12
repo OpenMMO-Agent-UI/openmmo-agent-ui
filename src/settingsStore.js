@@ -96,12 +96,17 @@ const DEFAULTS = {
   bgmMuted: false,
   sfxVolume: 100,
   sfxMuted: false,
+  /// OpenAI-compatible endpoint for spectator chat translation. Which language
+  /// (and whether it runs at all) is the game client's own chat dropdown; only
+  /// the provider lives here.
+  translateBaseUrl: '',
+  translateModel: '',
   /// Anonymous usage analytics (src/telemetry.js). Checked at send time, so
   /// the Settings toggle takes effect immediately, no restart needed.
   telemetry: true,
 }
 
-const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret']
+const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret', 'translateKey']
 
 function isLoopbackUrl(value) {
   try {

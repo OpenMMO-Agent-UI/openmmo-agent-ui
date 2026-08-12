@@ -438,7 +438,11 @@ function renderFeedFilters() {
 /// offered for a tab where there is nothing staged to apply — but it comes
 /// back the moment something *is* staged, so switching tabs can never hide
 /// the button for work waiting on it.
-const IMMEDIATE_TABS = new Set(['display', 'audio', 'about'])
+const IMMEDIATE_TABS = new Set(['translation', 'display', 'audio', 'about'])
+
+/// Provider only. Which language, and whether translation runs at all, belongs
+/// to the spectator client's own chat dropdown.
+const TRANSLATION_FIELDS = ['translateBaseUrl', 'translateModel', 'translateKey']
 let settingsTab = 'llm'
 
 function updateSettingsFooter() {
@@ -807,6 +811,28 @@ function bindActions() {
     if (settingsSnapshot) settingsSnapshot.telemetry = patch.telemetry
     void persistImmediateSetting(patch)
   })
+
+  for (const id of TRANSLATION_FIELDS) {
+    $(id).addEventListener('change', () => {
+      const patch = { [id]: $(id).value.trim() }
+      settings = { ...settings, ...patch }
+      if (settingsSnapshot) settingsSnapshot[id] = patch[id]
+      void persistImmediateSetting(patch)
+    })
+  }
+
+  $('translateTest').addEventListener('click', async () => {
+    const result = $('translateTestResult')
+    $('translateTest').disabled = true
+    result.hidden = false
+    result.textContent = 'Translating…'
+    const patch = Object.fromEntries(TRANSLATION_FIELDS.map((id) => [id, $(id).value.trim()]))
+    const outcome = await api.testTranslate(patch)
+    $('translateTest').disabled = false
+    result.textContent = outcome.ok
+      ? `${outcome.sample} → ${outcome.text}`
+      : `✗ ${outcome.error}`
+  })
 }
 
 window.addEventListener('message', (event) => {
@@ -814,6 +840,17 @@ window.addEventListener('message', (event) => {
   if (event.data?.type === 'openmmo-manual-ready') void api.manualReady()
   if (event.data?.type === 'openmmo-manual-error') {
     void api.manualReady(event.data.error || 'Manual client could not enter the world')
+  }
+  // The spectator client is a different origin with no preload of its own, so
+  // the endpoint call (and the API key it carries) stays on this side.
+  if (event.data?.type === 'openmmo-translate') {
+    const { id, text, target } = event.data
+    void api.translateChat(text, target).then((translated) => {
+      $('frame').contentWindow?.postMessage(
+        { type: 'openmmo-translate-result', id, text: translated },
+        '*',
+      )
+    })
   }
 })
 
@@ -844,6 +881,7 @@ async function init() {
     .map((backend) => `<option value="${backend.id}">${backend.label}</option>`)
     .join('')
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
+  for (const id of TRANSLATION_FIELDS) $(id).value = settings[id] || ''
   renderClassOptions()
   renderBackend()
   actionToasts.applyToastCssVars(settings)

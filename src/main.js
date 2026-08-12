@@ -24,6 +24,7 @@ const { ConnectionProfileStore } = require('./connectionProfiles')
 const { CharacterStore } = require('./characterStore')
 const { PlaySessionCoordinator } = require('./playSession')
 const { validateLlmSettings } = require('./llmValidation')
+const { translateText } = require('./translate')
 const telemetry = require('./telemetry')
 
 const agent = new AgentProcess()
@@ -560,6 +561,25 @@ ipcMain.handle('settings:apply', async (_e, patch) => {
 })
 
 ipcMain.handle('config:preview', () => renderConfigToml(settings))
+
+/// null rather than an error: the spectator client falls back to its on-device
+/// translator when this returns nothing, and a failed line keeps its original
+/// text rather than announcing itself in the chat panel.
+ipcMain.handle('translate:text', async (_e, { text, target }) => {
+  const result = await translateText(settings, { text, target })
+  return result.ok ? result.text : null
+})
+
+const TRANSLATE_SAMPLE = '보시겠소. 횃불, 빵, 약 있소.'
+const TRANSLATE_SAMPLE_TARGET = 'Chinese (Traditional)'
+
+ipcMain.handle('translate:test', async (_e, patch) => {
+  const result = await translateText(
+    { ...settings, ...patch },
+    { text: TRANSLATE_SAMPLE, target: TRANSLATE_SAMPLE_TARGET },
+  )
+  return { ...result, sample: TRANSLATE_SAMPLE }
+})
 
 /// agent-client talks to our loopback relay; the relay holds the only
 /// connection to the real server. `settings.server` stays the upstream URL —
