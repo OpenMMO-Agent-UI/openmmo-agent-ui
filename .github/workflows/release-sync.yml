@@ -1,0 +1,100 @@
+name: Release sync from upstream
+
+# Watches Julian-adv/OpenMMO for new agent-client releases and runs the
+# .claude/skills/openmmo-release-sync skill when one appears: fast-forward
+# the fork, rebase tweak-agent-client (conflicts resolved by the agent per
+# the skill's policy), run both repos' full build+test gates, bump the pin,
+# tag, wait for release CI, and publish.
+#
+# Requires two repo secrets:
+#   RELEASE_SYNC_TOKEN      PAT that can push to BOTH
+#                           OpenMMO-Agent-UI/OpenMMO (fork) and this repo,
+#                           and publish releases here. A v* tag pushed with
+#                           this PAT (not GITHUB_TOKEN) still triggers
+#                           release.yml — that is the point of using it.
+#   CLAUDE_CODE_OAUTH_TOKEN Claude subscription token (claude setup-token),
+#                           same as the wiki repo uses.
+
+on:
+  schedule:
+    - cron: '23 */4 * * *' # every 4h; the check job costs seconds
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-sync
+  cancel-in-progress: false
+
+jobs:
+  # Cheap gate: only wake the agent when Julian has a release our pin lacks.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needs-sync: ${{ steps.cmp.outputs.needs-sync }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - id: cmp
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="$(node scripts/release-sync-check.js)"
+          echo "$out"
+          if [[ "$(echo "$out" | node -pe 'JSON.parse(require("fs").readFileSync(0)).hasNewRelease')" == "true" ]]; then
+            echo "needs-sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs-sync=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sync:
+    needs: check
+    if: needs.check.outputs.needs-sync == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.RELEASE_SYNC_TOKEN }} # pushes to this repo use the PAT
+          submodules: recursive
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: deps/OpenMMO
+      - name: Install wasm-pack
+        run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+      - name: Wire the PAT into every github.com remote (incl. the fork submodule)
+        env:
+          PAT: ${{ secrets.RELEASE_SYNC_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${PAT}@github.com/".insteadOf "https://github.com/"
+          git config --global user.name "openmmo-release-sync"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Run the release-sync skill
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_SYNC_TOKEN }} # gh release publish etc.
+        with:
+          github_token: ${{ secrets.RELEASE_SYNC_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            /openmmo-release-sync
+            CI notes: PushNotification is unavailable here — end with a plain
+            summary instead, and on an abort describe exactly which step and
+            why. Skip the skill's "Local environment prerequisites" section:
+            this runner already has rustup (with wasm32-unknown-unknown),
+            wasm-pack, node 22, and an authenticated gh.
+          claude_args: |
+            --model claude-sonnet-5
+            --settings .claude/skills/openmmo-release-sync/cron-settings.json
