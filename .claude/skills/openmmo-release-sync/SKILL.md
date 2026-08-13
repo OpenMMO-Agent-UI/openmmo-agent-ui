@@ -45,38 +45,51 @@ If `hasNewRelease` is `false`, stop here. No notification.
 If it's `true`, keep the JSON output around — `releaseTag`, `releaseSha`,
 and `protocolVersion` are used throughout the rest of this flow.
 
-## Step 1: fast-forward the fork's master to the release commit
+## Step 1: align the fork's master with the release lineage
 
-The fork's `master` (`OpenMMO-Agent-UI/OpenMMO`) is a pure mirror with no commits of its
-own — it should only ever fast-forward. Sync it to the **release commit**,
-not to whatever Julian's `master` HEAD has moved on to since (his master can
-be — and per his release history, currently is — a handful of commits
-ahead of his last actual release; that gap is unreleased/unverified work we
-don't want to inherit early).
+The fork's `master` (`OpenMMO-Agent-UI/OpenMMO`) tracks Julian's release
+lineage. It may be exactly at the release commit, or it may already be ahead
+of that release with later Julian commits that Tony has chosen to keep. Do
+not reset it backwards just because it is ahead of the release tag.
 
 ```
 cd deps/OpenMMO
+git fetch origin master
 git fetch https://github.com/Julian-adv/OpenMMO.git tag <releaseTag> --no-tags
 git tag -d <releaseTag>   # the fetch above still writes a local tag ref; drop it, we don't keep it
 git checkout master
-git merge-base --is-ancestor origin/master FETCH_HEAD && echo ok
+git merge-base --is-ancestor FETCH_HEAD origin/master && echo already-at-or-ahead
 ```
 
-If that ancestry check fails, `master` has diverged from a pure mirror
-(something was committed to it directly, out of band). That's outside this
-skill's authority to fix — abort the whole run and notify with what you
-found, don't force anything onto it.
+If that check passes, the release commit is already contained in fork
+`master`; leave `master` where it is, reset local `master` to `origin/master`,
+and continue with Step 2.
 
-If it's ok:
+```
+git reset --hard origin/master
+```
+
+If the release commit is not contained in `origin/master`, verify the old
+fast-forward direction:
+
+```
+git merge-base --is-ancestor origin/master FETCH_HEAD && echo can-fast-forward
+```
+
+If this second check passes, advance fork `master` to the release commit:
 
 ```
 git reset --hard <releaseSha>   # the SHA from FETCH_HEAD / the check script's releaseSha
 git push origin master
 ```
 
-Plain `push`, not force — this must always be a fast-forward. If the push
-is rejected, someone/something moved the fork's master out from under this
-run; abort and notify rather than retrying with force.
+Plain `push`, not force — this must always be a fast-forward. If the push is
+rejected, someone/something moved the fork's master out from under this run;
+abort and notify rather than retrying with force.
+
+If neither ancestry check passes, `master` has diverged from the release
+lineage. That's outside this skill's authority to fix — abort the whole run
+and notify with what you found, don't force anything onto it.
 
 ## Step 2: rebase tweak-agent-client onto the new master
 
