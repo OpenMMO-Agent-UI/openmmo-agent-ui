@@ -47,6 +47,9 @@ const DEFAULTS = {
   reasoningEffort: 'none',
   maxTokens: 4096,
   temperature: 0.7,
+  /// Conversation history the OpenAI-compatible backend carries, system prompt
+  /// included. agent-client trimmed to a hardcoded 41 before this existed.
+  maxMessages: 41,
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
   alwaysActive: true,
@@ -218,6 +221,7 @@ function importExistingConfig(settings) {
   take('openaiBaseUrl', openai.base_url)
   take('reasoningEffort', openai.reasoning_effort)
   take('openaiKey', openai.api_key)
+  take('maxMessages', openai.max_messages)
   const openrouter = npc.openrouter || parsed.openrouter || {}
   take('openrouterKey', openrouter.api_key)
   take('maxTokens', openai.max_tokens || openrouter.max_tokens)

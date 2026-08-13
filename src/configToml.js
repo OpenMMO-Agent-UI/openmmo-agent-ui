@@ -51,6 +51,7 @@ function renderConfigToml(s) {
     `max_tokens = ${Number(s.maxTokens) || 1024}`,
     `temperature = ${Number(s.temperature)}`,
     `reasoning_effort = ${tomlString(s.reasoningEffort)}`,
+    `max_messages = ${Number(s.maxMessages) || 41}`,
   )
 
   lines.push('', '[[npcs]]', `llm = ${tomlString(s.llm)}`)

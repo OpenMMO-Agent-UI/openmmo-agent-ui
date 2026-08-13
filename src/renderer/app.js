@@ -107,6 +107,7 @@ const FIELDS = {
   llm: 'text',
   openaiBaseUrl: 'text',
   maxTokens: 'int',
+  maxMessages: 'int',
   temperature: 'float',
   reasoningEffort: 'text',
   watchPort: 'int',
