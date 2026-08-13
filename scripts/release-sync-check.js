@@ -68,6 +68,21 @@ function protocolVersionAt(sha) {
   return Number(match[1])
 }
 
+function versionFromAgentClientTag(tagName) {
+  const match = tagName.match(/^agent-client-v(.+)$/)
+  if (!match) throw new Error(`release tag is not an agent-client version: ${tagName}`)
+  return match[1]
+}
+
+function packageVersion(repoRoot) {
+  return JSON.parse(require('node:fs').readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version
+}
+
+function hasNewRelease({ alreadyPinned, releaseTag, repoRoot = REPO_ROOT }) {
+  if (!alreadyPinned) return true
+  return packageVersion(repoRoot) !== versionFromAgentClientTag(releaseTag)
+}
+
 function main() {
   git(SUBMODULE, 'fetch', 'origin', '--quiet')
 
@@ -88,12 +103,12 @@ function main() {
   if (!pinMatch) throw new Error('deps/OpenMMO is not an exact submodule gitlink in HEAD')
   const pinnedSha = pinMatch[1]
 
-  const alreadySynced = gitIsAncestor(SUBMODULE, releaseSha, pinnedSha)
+  const alreadyPinned = gitIsAncestor(SUBMODULE, releaseSha, pinnedSha)
 
   const protocolVersion = protocolVersionAt(releaseSha)
 
   const result = {
-    hasNewRelease: !alreadySynced,
+    hasNewRelease: hasNewRelease({ alreadyPinned, releaseTag: tagName }),
     releaseTag: tagName,
     releaseSha,
     releasePublishedAt: release.published_at,
@@ -104,4 +119,9 @@ function main() {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
 
-main()
+if (require.main === module) main()
+
+module.exports = {
+  hasNewRelease,
+  versionFromAgentClientTag,
+}
