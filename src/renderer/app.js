@@ -145,11 +145,26 @@ function renderGenderOptions() {
       : 'Changing gender on an existing character recreates it — level and items reset.'
 }
 
+/// Where the agent's own LLM is, for the parts of the panel that need to show
+/// it. backends.js is CommonJS in the main process and cannot be imported into
+/// this sandbox, so the join is restated here — but only the join: the record
+/// it reads, openrouter's fixed baseUrl included, is the same table main
+/// resolves against, handed over at startup.
+function agentEndpoint() {
+  const b = backend()
+  if (b.kind !== 'http') return null
+  return {
+    base: String(b.baseUrl || settings.openaiBaseUrl || '').replace(/\/+$/, ''),
+    model: settings.models[settings.llm] || '',
+    key: settings[`${b.id}Key`] || '',
+  }
+}
+
 function renderBackend() {
   const b = backend()
   $('model').value = settings.models[settings.llm] || ''
   $('modelList').innerHTML = (b.models || []).map((m) => `<option value="${m}"></option>`).join('')
-  $('apiKey').value = (settings.llm === 'openrouter' ? settings.openrouterKey : settings.openaiKey) || ''
+  $('apiKey').value = agentEndpoint()?.key || ''
 
   for (const el of document.querySelectorAll('[data-for]')) {
     const want = el.dataset.for
@@ -169,6 +184,33 @@ function renderBackend() {
       : b.kind === 'http'
         ? 'The key is stored encrypted by the OS and handed to the agent as an environment variable, never written to config.toml.'
         : 'No LLM: the character connects and idles.'
+  renderTranslation()
+}
+
+/// Translation can borrow the Agent section above it, so what the checkbox can
+/// offer depends on the backend chosen there — the CLI backends run under your
+/// own login and have no endpoint to share. Only a click writes the setting: a
+/// backend switch re-renders and nothing else, so comparing backends, or
+/// discarding the change, never costs you the borrowed endpoint. When it is on
+/// the fields show what translation will actually call, written to the page
+/// only, so unticking brings the typed-in ones straight back.
+function renderTranslation() {
+  const shared = agentEndpoint()
+  const on = Boolean(shared) && settings.translateUseLlmProvider === true
+  const box = $('translateUseLlm')
+  box.disabled = !shared
+  box.checked = on
+
+  const hint = $('translateShareHint')
+  hint.hidden = Boolean(shared)
+  if (!shared) {
+    hint.textContent = `${backend().label || 'This backend'} runs on this machine, so there is no endpoint to share.`
+  }
+
+  for (const id of TRANSLATION_FIELDS) $(id).disabled = on
+  $('translateBaseUrl').value = on ? shared.base : settings.translateBaseUrl || ''
+  $('translateModel').value = on ? shared.model : settings.translateModel || ''
+  $('translateKey').value = on ? shared.key : settings.translateKey || ''
 }
 
 /// The lamp and the state word, from the one pair of facts that decide them:
@@ -438,7 +480,7 @@ function renderFeedFilters() {
 /// offered for a tab where there is nothing staged to apply — but it comes
 /// back the moment something *is* staged, so switching tabs can never hide
 /// the button for work waiting on it.
-const IMMEDIATE_TABS = new Set(['translation', 'display', 'audio', 'about'])
+const IMMEDIATE_TABS = new Set(['display', 'audio', 'about'])
 
 /// Provider only. Which language, and whether translation runs at all, belongs
 /// to the spectator client's own chat dropdown.
@@ -821,6 +863,14 @@ function bindActions() {
     })
   }
 
+  $('translateUseLlm').addEventListener('change', () => {
+    const patch = { translateUseLlmProvider: $('translateUseLlm').checked }
+    settings = { ...settings, ...patch }
+    if (settingsSnapshot) settingsSnapshot.translateUseLlmProvider = patch.translateUseLlmProvider
+    renderTranslation()
+    void persistImmediateSetting(patch)
+  })
+
   $('translateTest').addEventListener('click', async () => {
     const result = $('translateTestResult')
     $('translateTest').disabled = true
@@ -881,7 +931,6 @@ async function init() {
     .map((backend) => `<option value="${backend.id}">${backend.label}</option>`)
     .join('')
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
-  for (const id of TRANSLATION_FIELDS) $(id).value = settings[id] || ''
   renderClassOptions()
   renderBackend()
   actionToasts.applyToastCssVars(settings)

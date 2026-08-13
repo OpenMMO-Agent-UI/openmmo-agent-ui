@@ -377,15 +377,14 @@
         </div>
         <div class="tabs" id="settingsTabs" role="tablist" aria-label="Settings sections">
           <button class="tab on" id="tab-llm" data-settings-tab="llm" role="tab" aria-selected="true" aria-controls="panel-llm">LLM</button>
-          <button class="tab" id="tab-agent" data-settings-tab="agent" role="tab" aria-selected="false" aria-controls="panel-agent">Agent</button>
-          <button class="tab" id="tab-translation" data-settings-tab="translation" role="tab" aria-selected="false" aria-controls="panel-translation">Translation</button>
+          <button class="tab" id="tab-agent" data-settings-tab="agent" role="tab" aria-selected="false" aria-controls="panel-agent">Behaviour</button>
           <button class="tab" id="tab-display" data-settings-tab="display" role="tab" aria-selected="false" aria-controls="panel-display">Display</button>
           <button class="tab" id="tab-audio" data-settings-tab="audio" role="tab" aria-selected="false" aria-controls="panel-audio">Audio</button>
           <button class="tab" id="tab-about" data-settings-tab="about" role="tab" aria-selected="false" aria-controls="panel-about">About</button>
         </div>
         <div class="modal-body">
           <div id="panel-llm" data-settings-panel="llm" role="tabpanel" aria-labelledby="tab-llm">
-            <h3 class="settings-section">Provider</h3>
+            <h3 class="settings-section">Agent</h3>
             <label>Backend<select id="llm"></select></label>
             <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
             <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
@@ -396,12 +395,23 @@
                 <option value="">Provider default</option>
               </select></label>
             <p class="hint" id="backendHint"></p>
-            <h3 class="settings-section">Limits</h3>
             <div class="row">
               <label>Maximum tokens<input id="maxTokens" type="number" min="1" /></label>
               <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" /></label>
             </div>
             <p class="hint">Apply checks your CLI sign-in, or sends one disclosed one-token request to the provider.</p>
+
+            <h3 class="settings-section">Chat translation</h3>
+            <p class="hint">Translates other players' chat in the spectator view. Pick the language, or turn it off, in the chat panel's own dropdown. Saved as you go — the agent keeps running.</p>
+            <label class="check"><input type="checkbox" id="translateUseLlm" /> Same endpoint as the agent</label>
+            <p class="hint" id="translateShareHint" hidden></p>
+            <label>Base URL<input id="translateBaseUrl" placeholder="http://192.168.1.120:1234/v1" /></label>
+            <label>Model<input id="translateModel" placeholder="gemma-4-e2b-it-mlx" /></label>
+            <label>API key<input type="password" id="translateKey" placeholder="optional — local endpoints need none" /></label>
+            <div class="row test-row">
+              <button id="translateTest" class="ghost small">Test</button>
+              <p class="hint" id="translateTestResult" hidden></p>
+            </div>
           </div>
           <div id="panel-agent" data-settings-panel="agent" role="tabpanel" aria-labelledby="tab-agent" hidden>
             <h3 class="settings-section">Pace</h3>
@@ -434,15 +444,6 @@
                   </select></label>
               </div>
             </details>
-          </div>
-          <div id="panel-translation" data-settings-panel="translation" role="tabpanel" aria-labelledby="tab-translation" hidden>
-            <h3 class="settings-section">Chat translation provider</h3>
-            <p class="hint">Translates other players' chat in the spectator view through an OpenAI-compatible endpoint. Pick the language, or turn it off, in the chat panel's own dropdown.</p>
-            <label>Base URL<input id="translateBaseUrl" placeholder="http://192.168.1.120:1234/v1" /></label>
-            <label>Model<input id="translateModel" placeholder="gemma-4-e2b-it-mlx" /></label>
-            <label>API key<input type="password" id="translateKey" placeholder="optional — local endpoints need none" /></label>
-            <button id="translateTest" class="ghost small">Test</button>
-            <p class="hint" id="translateTestResult" hidden></p>
           </div>
           <div id="panel-display" data-settings-panel="display" role="tabpanel" aria-labelledby="tab-display" hidden>
             <h3 class="settings-section">Action captions</h3>

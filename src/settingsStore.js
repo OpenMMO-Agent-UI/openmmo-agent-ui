@@ -5,6 +5,7 @@ const path = require('node:path')
 const { app, safeStorage } = require('electron')
 
 const { agentDir } = require('./runtimeEnv')
+const { BACKENDS } = require('./backends')
 const { parseToml } = require('./toml')
 
 /// Player-selectable classes and the models that exist for them; the server
@@ -17,32 +18,6 @@ const CLASSES = [
   { id: 'ranger', genders: ['male'] },
   { id: 'rogue', genders: ['male', 'female'] },
   { id: 'priest', genders: ['male', 'female'] },
-]
-
-const BACKENDS = [
-  { id: 'codex', label: 'Codex CLI', kind: 'cli', models: ['gpt-5.4-mini', 'gpt-5.4', 'o4-mini'] },
-  { id: 'claude', label: 'Claude CLI', kind: 'cli', models: ['sonnet', 'opus', 'haiku'] },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    kind: 'http',
-    envKey: 'OPENROUTER_API_KEY',
-    // Suggestions only; the field takes any id from openrouter.ai/models.
-    // Measured on the agent's real turn: these keep the distance rule and read
-    // the bag correctly. Cheaper models exist and invent inventory.
-    models: [
-      'qwen/qwen3.7-flash',
-      'openai/gpt-oss-20b',
-      'anthropic/claude-haiku-4.5',
-    ],
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI-compatible',
-    kind: 'http',
-    envKey: 'OPENAI_COMPAT_API_KEY',
-    models: [],
-  },
 ]
 
 /// Same default as agent-client's own `DEFAULT_CLIENT_ID` in google_auth.rs —
@@ -101,6 +76,10 @@ const DEFAULTS = {
   /// the provider lives here.
   translateBaseUrl: '',
   translateModel: '',
+  /// Borrow the agent's own endpoint instead of the three fields above.
+  /// Resolved at translation time, so changing the agent's provider carries
+  /// over without re-ticking anything.
+  translateUseLlmProvider: false,
   /// Anonymous usage analytics (src/telemetry.js). Checked at send time, so
   /// the Settings toggle takes effect immediately, no restart needed.
   telemetry: true,

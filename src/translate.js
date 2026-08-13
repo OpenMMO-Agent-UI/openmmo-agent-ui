@@ -1,5 +1,7 @@
 'use strict'
 
+const { httpEndpoint } = require('./backends')
+
 const TIMEOUT_MS = 10000
 
 function systemPrompt(target) {
@@ -11,25 +13,40 @@ function systemPrompt(target) {
   )
 }
 
+/// Where a translation call goes. The agent's own endpoint when it is asked to
+/// share one and that backend has one to share — a CLI backend does not, so
+/// this falls back to the fields typed under the checkbox rather than failing.
+/// Resolved per call, never copied into the settings file.
+function provider(settings) {
+  if (!settings) return null
+  const shared = settings.translateUseLlmProvider ? httpEndpoint(settings) : null
+  const endpoint = shared || {
+    base: String(settings.translateBaseUrl || '').replace(/\/+$/, ''),
+    model: settings.translateModel,
+    key: settings.translateKey,
+  }
+  return endpoint.base && endpoint.model ? endpoint : null
+}
+
 function isConfigured(settings) {
-  return Boolean(settings && settings.translateBaseUrl && settings.translateModel)
+  return provider(settings) !== null
 }
 
 async function translateText(settings, { text, target }, adapters = {}) {
-  if (!isConfigured(settings)) return { ok: false, error: 'No translation endpoint configured' }
+  const endpoint = provider(settings)
+  if (!endpoint) return { ok: false, error: 'No translation endpoint configured' }
   if (!text || !target) return { ok: false, error: 'Nothing to translate' }
 
   const request = adapters.fetch || fetch
-  const base = settings.translateBaseUrl.replace(/\/+$/, '')
   const headers = { 'content-type': 'application/json' }
-  if (settings.translateKey) headers.authorization = `Bearer ${settings.translateKey}`
+  if (endpoint.key) headers.authorization = `Bearer ${endpoint.key}`
 
   try {
-    const response = await request(`${base}/chat/completions`, {
+    const response = await request(`${endpoint.base}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: settings.translateModel,
+        model: endpoint.model,
         temperature: 0,
         messages: [
           { role: 'system', content: systemPrompt(target) },
