@@ -51,7 +51,10 @@ function renderConfigToml(s) {
     `max_tokens = ${Number(s.maxTokens) || 1024}`,
     `temperature = ${Number(s.temperature)}`,
     `reasoning_effort = ${tomlString(s.reasoningEffort)}`,
-    `max_messages = ${Number(s.maxMessages) || 41}`,
+    // Whole numbers only, floored at openai.rs's MIN_MAX_MESSAGES: the field
+    // is a `usize`, so a fraction imported from a hand-edited config fails to
+    // deserialize and the agent never starts, and below 3 its trim underflows.
+    `max_messages = ${Math.max(Math.round(Number(s.maxMessages)) || 41, 3)}`,
   )
 
   lines.push('', '[[npcs]]', `llm = ${tomlString(s.llm)}`)
