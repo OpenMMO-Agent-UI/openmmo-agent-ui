@@ -62,11 +62,14 @@ git merge-base --is-ancestor FETCH_HEAD origin/master && echo already-at-or-ahea
 ```
 
 If that check passes, the release commit is already contained in fork
-`master`; leave `master` where it is, reset local `master` to `origin/master`,
-and continue with Step 2.
+`master`. Leave fork `master` where it is, but **do not build this release
+from the ahead tip**. The desktop release must track the official Julian
+release tag, so create/reset a local base branch at the release commit and
+use that as Step 2's rebase base.
 
 ```
-git reset --hard origin/master
+git branch -f release-sync-base <releaseSha>
+git checkout release-sync-base
 ```
 
 If the release commit is not contained in `origin/master`, verify the old
@@ -95,7 +98,7 @@ and notify with what you found, don't force anything onto it.
 
 ```
 git checkout tweak-agent-client   # or: git checkout -B tweak-agent-client origin/tweak-agent-client
-git rebase master
+git rebase release-sync-base      # use master only when Step 1 actually fast-forwarded master to releaseSha
 ```
 
 If it completes cleanly, move on to Step 3.
