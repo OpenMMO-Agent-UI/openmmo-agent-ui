@@ -5,6 +5,7 @@ const path = require('node:path')
 const { app, safeStorage } = require('electron')
 
 const { agentDir } = require('./runtimeEnv')
+const { BACKENDS } = require('./backends')
 const { parseToml } = require('./toml')
 
 /// Player-selectable classes and the models that exist for them; the server
@@ -17,32 +18,6 @@ const CLASSES = [
   { id: 'ranger', genders: ['male'] },
   { id: 'rogue', genders: ['male', 'female'] },
   { id: 'priest', genders: ['male', 'female'] },
-]
-
-const BACKENDS = [
-  { id: 'codex', label: 'Codex CLI', kind: 'cli', models: ['gpt-5.4-mini', 'gpt-5.4', 'o4-mini'] },
-  { id: 'claude', label: 'Claude CLI', kind: 'cli', models: ['sonnet', 'opus', 'haiku'] },
-  {
-    id: 'openrouter',
-    label: 'OpenRouter',
-    kind: 'http',
-    envKey: 'OPENROUTER_API_KEY',
-    // Suggestions only; the field takes any id from openrouter.ai/models.
-    // Measured on the agent's real turn: these keep the distance rule and read
-    // the bag correctly. Cheaper models exist and invent inventory.
-    models: [
-      'qwen/qwen3.7-flash',
-      'openai/gpt-oss-20b',
-      'anthropic/claude-haiku-4.5',
-    ],
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI-compatible',
-    kind: 'http',
-    envKey: 'OPENAI_COMPAT_API_KEY',
-    models: [],
-  },
 ]
 
 /// Same default as agent-client's own `DEFAULT_CLIENT_ID` in google_auth.rs —
@@ -72,6 +47,9 @@ const DEFAULTS = {
   reasoningEffort: 'none',
   maxTokens: 4096,
   temperature: 0.7,
+  /// Conversation history the OpenAI-compatible backend carries, system prompt
+  /// included. agent-client trimmed to a hardcoded 41 before this existed.
+  maxMessages: 41,
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
   alwaysActive: true,
@@ -96,12 +74,21 @@ const DEFAULTS = {
   bgmMuted: false,
   sfxVolume: 100,
   sfxMuted: false,
+  /// OpenAI-compatible endpoint for spectator chat translation. Which language
+  /// (and whether it runs at all) is the game client's own chat dropdown; only
+  /// the provider lives here.
+  translateBaseUrl: '',
+  translateModel: '',
+  /// Borrow the agent's own endpoint instead of the three fields above.
+  /// Resolved at translation time, so changing the agent's provider carries
+  /// over without re-ticking anything.
+  translateUseLlmProvider: false,
   /// Anonymous usage analytics (src/telemetry.js). Checked at send time, so
   /// the Settings toggle takes effect immediately, no restart needed.
   telemetry: true,
 }
 
-const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret']
+const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret', 'translateKey']
 
 function isLoopbackUrl(value) {
   try {
@@ -234,6 +221,7 @@ function importExistingConfig(settings) {
   take('openaiBaseUrl', openai.base_url)
   take('reasoningEffort', openai.reasoning_effort)
   take('openaiKey', openai.api_key)
+  take('maxMessages', openai.max_messages)
   const openrouter = npc.openrouter || parsed.openrouter || {}
   take('openrouterKey', openrouter.api_key)
   take('maxTokens', openai.max_tokens || openrouter.max_tokens)

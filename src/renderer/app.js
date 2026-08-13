@@ -1,6 +1,6 @@
 'use strict'
 
-import { $, showErrors, setScreen, confirmAction, readField, writeField } from './dom.js'
+import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswered } from './dom.js'
 import { dutyState } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
@@ -107,6 +107,7 @@ const FIELDS = {
   llm: 'text',
   openaiBaseUrl: 'text',
   maxTokens: 'int',
+  maxMessages: 'int',
   temperature: 'float',
   reasoningEffort: 'text',
   watchPort: 'int',
@@ -145,11 +146,26 @@ function renderGenderOptions() {
       : 'Changing gender on an existing character recreates it — level and items reset.'
 }
 
+/// Where the agent's own LLM is, for the parts of the panel that need to show
+/// it. backends.js is CommonJS in the main process and cannot be imported into
+/// this sandbox, so the join is restated here — but only the join: the record
+/// it reads, openrouter's fixed baseUrl included, is the same table main
+/// resolves against, handed over at startup.
+function agentEndpoint() {
+  const b = backend()
+  if (b.kind !== 'http') return null
+  return {
+    base: String(b.baseUrl || settings.openaiBaseUrl || '').replace(/\/+$/, ''),
+    model: settings.models[settings.llm] || '',
+    key: settings[`${b.id}Key`] || '',
+  }
+}
+
 function renderBackend() {
   const b = backend()
   $('model').value = settings.models[settings.llm] || ''
   $('modelList').innerHTML = (b.models || []).map((m) => `<option value="${m}"></option>`).join('')
-  $('apiKey').value = (settings.llm === 'openrouter' ? settings.openrouterKey : settings.openaiKey) || ''
+  $('apiKey').value = agentEndpoint()?.key || ''
 
   for (const el of document.querySelectorAll('[data-for]')) {
     const want = el.dataset.for
@@ -169,6 +185,33 @@ function renderBackend() {
       : b.kind === 'http'
         ? 'The key is stored encrypted by the OS and handed to the agent as an environment variable, never written to config.toml.'
         : 'No LLM: the character connects and idles.'
+  renderTranslation()
+}
+
+/// Translation can borrow the Agent section above it, so what the checkbox can
+/// offer depends on the backend chosen there — the CLI backends run under your
+/// own login and have no endpoint to share. Only a click writes the setting: a
+/// backend switch re-renders and nothing else, so comparing backends, or
+/// discarding the change, never costs you the borrowed endpoint. When it is on
+/// the fields show what translation will actually call, written to the page
+/// only, so unticking brings the typed-in ones straight back.
+function renderTranslation() {
+  const shared = agentEndpoint()
+  const on = Boolean(shared) && settings.translateUseLlmProvider === true
+  const box = $('translateUseLlm')
+  box.disabled = !shared
+  box.checked = on
+
+  const hint = $('translateShareHint')
+  hint.hidden = Boolean(shared)
+  if (!shared) {
+    hint.textContent = `${backend().label || 'This backend'} runs on this machine, so there is no endpoint to share.`
+  }
+
+  for (const id of TRANSLATION_FIELDS) $(id).disabled = on
+  $('translateBaseUrl').value = on ? shared.base : settings.translateBaseUrl || ''
+  $('translateModel').value = on ? shared.model : settings.translateModel || ''
+  $('translateKey').value = on ? shared.key : settings.translateKey || ''
 }
 
 /// The lamp and the state word, from the one pair of facts that decide them:
@@ -439,6 +482,10 @@ function renderFeedFilters() {
 /// back the moment something *is* staged, so switching tabs can never hide
 /// the button for work waiting on it.
 const IMMEDIATE_TABS = new Set(['display', 'audio', 'about'])
+
+/// Provider only. Which language, and whether translation runs at all, belongs
+/// to the spectator client's own chat dropdown.
+const TRANSLATION_FIELDS = ['translateBaseUrl', 'translateModel', 'translateKey']
 let settingsTab = 'llm'
 
 function updateSettingsFooter() {
@@ -612,8 +659,15 @@ function bindFields() {
     const el = $(id)
     if (!el) continue
     el.addEventListener('change', () => {
+      // Unfinished edit: keep the live value rather than let the floor win.
+      if (el.type === 'number' && !isAnswered(el.value, el.min)) {
+        writeField(id, type, settings[id])
+        return
+      }
       const value = readField(id, type)
       settings[id] = value
+      // Show the clamped value, not what was typed.
+      if (el.type === 'number') writeField(id, type, value)
       markSettingsDirty()
       if (id === 'characterClass') {
         renderGenderOptions()
@@ -807,6 +861,36 @@ function bindActions() {
     if (settingsSnapshot) settingsSnapshot.telemetry = patch.telemetry
     void persistImmediateSetting(patch)
   })
+
+  for (const id of TRANSLATION_FIELDS) {
+    $(id).addEventListener('change', () => {
+      const patch = { [id]: $(id).value.trim() }
+      settings = { ...settings, ...patch }
+      if (settingsSnapshot) settingsSnapshot[id] = patch[id]
+      void persistImmediateSetting(patch)
+    })
+  }
+
+  $('translateUseLlm').addEventListener('change', () => {
+    const patch = { translateUseLlmProvider: $('translateUseLlm').checked }
+    settings = { ...settings, ...patch }
+    if (settingsSnapshot) settingsSnapshot.translateUseLlmProvider = patch.translateUseLlmProvider
+    renderTranslation()
+    void persistImmediateSetting(patch)
+  })
+
+  $('translateTest').addEventListener('click', async () => {
+    const result = $('translateTestResult')
+    $('translateTest').disabled = true
+    result.hidden = false
+    result.textContent = 'Translating…'
+    const patch = Object.fromEntries(TRANSLATION_FIELDS.map((id) => [id, $(id).value.trim()]))
+    const outcome = await api.testTranslate(patch)
+    $('translateTest').disabled = false
+    result.textContent = outcome.ok
+      ? `${outcome.sample} → ${outcome.text}`
+      : `✗ ${outcome.error}`
+  })
 }
 
 window.addEventListener('message', (event) => {
@@ -814,6 +898,17 @@ window.addEventListener('message', (event) => {
   if (event.data?.type === 'openmmo-manual-ready') void api.manualReady()
   if (event.data?.type === 'openmmo-manual-error') {
     void api.manualReady(event.data.error || 'Manual client could not enter the world')
+  }
+  // The spectator client is a different origin with no preload of its own, so
+  // the endpoint call (and the API key it carries) stays on this side.
+  if (event.data?.type === 'openmmo-translate') {
+    const { id, text, target } = event.data
+    void api.translateChat(text, target).then((translated) => {
+      $('frame').contentWindow?.postMessage(
+        { type: 'openmmo-translate-result', id, text: translated },
+        '*',
+      )
+    })
   }
 })
 

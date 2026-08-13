@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('agentApp', {
   applySettings: (patch) => ipcRenderer.invoke('settings:apply', patch),
   validate: (patch) => ipcRenderer.invoke('settings:validate', patch),
   previewConfig: () => ipcRenderer.invoke('config:preview'),
+  translateChat: (text, target) => ipcRenderer.invoke('translate:text', { text, target }),
+  testTranslate: (patch) => ipcRenderer.invoke('translate:test', patch),
   start: () => ipcRenderer.invoke('agent:start'),
   stop: () => ipcRenderer.invoke('agent:stop'),
   restart: () => ipcRenderer.invoke('agent:restart'),

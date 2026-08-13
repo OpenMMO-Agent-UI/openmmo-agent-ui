@@ -2,6 +2,8 @@
 
 const { execFile } = require('node:child_process')
 
+const { httpEndpoint } = require('./backends')
+
 function defaultExec(command, args) {
   return new Promise((resolve, reject) => {
     execFile(command, args, { timeout: 15000 }, (error, stdout, stderr) => {
@@ -41,11 +43,7 @@ async function validateCli(settings, exec) {
 }
 
 async function validateHttp(settings, request) {
-  const base =
-    settings.llm === 'openrouter'
-      ? 'https://openrouter.ai/api/v1'
-      : settings.openaiBaseUrl.replace(/\/+$/, '')
-  const key = settings.llm === 'openrouter' ? settings.openrouterKey : settings.openaiKey
+  const { base, key, model } = httpEndpoint(settings)
   try {
     const response = await request(`${base}/chat/completions`, {
       method: 'POST',
@@ -54,7 +52,7 @@ async function validateHttp(settings, request) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: settings.models[settings.llm],
+        model,
         messages: [{ role: 'user', content: 'Reply with OK.' }],
         max_tokens: 1,
       }),

@@ -227,6 +227,17 @@ textarea {
   margin-bottom: 0;
 }
 
+/* A result reads beside the button that produced it, not as a new row under it. */
+.row.test-row {
+  align-items: center;
+}
+
+.row.test-row > .hint {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
 .hint {
   margin: -4px 0 12px;
   color: var(--muted);
