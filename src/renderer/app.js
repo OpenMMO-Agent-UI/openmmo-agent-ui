@@ -1,6 +1,6 @@
 'use strict'
 
-import { $, showErrors, setScreen, confirmAction, readField, writeField } from './dom.js'
+import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswered } from './dom.js'
 import { dutyState } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
@@ -659,8 +659,15 @@ function bindFields() {
     const el = $(id)
     if (!el) continue
     el.addEventListener('change', () => {
+      // Unfinished edit: keep the live value rather than let the floor win.
+      if (el.type === 'number' && !isAnswered(el.value, el.min)) {
+        writeField(id, type, settings[id])
+        return
+      }
       const value = readField(id, type)
       settings[id] = value
+      // Show the clamped value, not what was typed.
+      if (el.type === 'number') writeField(id, type, value)
       markSettingsDirty()
       if (id === 'characterClass') {
         renderGenderOptions()
