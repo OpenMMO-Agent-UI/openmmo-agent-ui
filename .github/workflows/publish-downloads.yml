@@ -4,9 +4,10 @@ name: Publish downloads to wiki
 # where players actually download from — this repository is private, so its
 # own release assets are not anonymously reachable.
 #
-# Triggered by `release: published`, not by the tag push that builds them:
-# release.yml leaves a draft for a human to check, and that gate is the whole
-# point. Publishing the draft is what makes a build public.
+# Triggered by `release: published` rather than the tag push, so the mirror
+# only ever runs on artifacts that finished building, signing and notarizing.
+# release.yml publishes straight away — a draft waiting on a human is how the
+# download link once sat a protocol version behind for a day.
 
 on:
   release:

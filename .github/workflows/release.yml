@@ -262,12 +262,14 @@ jobs:
         run: |
           if [[ "$RELEASE_ACTION" == "create" ]]; then
             gh release create "$RELEASE_TAG" artifacts/* \
-              --draft \
+              --latest \
               --title "OpenMMO Agent UI v${APP_VERSION}" \
               --notes-file release-notes.md
           elif [[ "$RELEASE_ACTION" == "refresh" ]]; then
+            # Only reachable for a draft left behind by an interrupted run —
+            # release-plan.js refuses to touch an already-published tag.
             gh release edit "$RELEASE_TAG" \
-              --draft \
+              --draft=false --latest \
               --title "OpenMMO Agent UI v${APP_VERSION}" \
               --notes-file release-notes.md
             gh release upload "$RELEASE_TAG" artifacts/* --clobber
