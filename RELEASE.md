@@ -127,6 +127,33 @@ Rerunning an already-published tag is refused by `release-plan.js`
 ("refusing to overwrite an already published release"); make source fixes
 under a new patch version.
 
+### Smoke-testing what shipped
+
+`smoke-release.yml` runs after publishing. It downloads the release's Linux
+AppImage, extracts it, runs the packaged `agent-client` against a local
+listener, and reads the protocol version out of the `ClientInfo` frame the
+binary **actually sends** — then compares that against the filename, against
+`build-info.json`, and against what the live server demands.
+
+The handshake precedes authentication, so this needs no game account.
+
+Reading a number out of a file cannot catch the failure documented in
+`package-resources.sh`: a binary compiled before a protocol bump, staged beside
+metadata stamped from current source, so both the filename and `build-info.json`
+claimed the right version while the binary spoke the old one. Only the wire
+tells the truth.
+
+It runs *after* publishing rather than gating it, because publishing is what
+updates the download link — a build that is already live and wrong needs to be
+shouted about, not quietly held. Failures open one issue, reused while the
+release is broken and closed when a good one ships. An exit of 2 means the test
+itself could not run and is reported as such.
+
+```bash
+node scripts/smoke-release.mjs           # latest release
+node scripts/smoke-release.mjs v0.25.0   # a specific tag
+```
+
 ### Publishing downloads to the wiki
 
 Players download from the public
