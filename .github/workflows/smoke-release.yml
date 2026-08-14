@@ -1,0 +1,98 @@
+name: Smoke-test the release
+
+# Runs the shipped binary against a listener of ours and reads the protocol
+# version out of the handshake it actually sends. Every other check in the
+# pipeline reads a number out of a file, and a file cannot catch a stale binary
+# staged beside fresh metadata — package-resources.sh has that incident written
+# up, and it took intercepting the handshake bytes to find it.
+#
+# Runs after publishing rather than gating it. Publishing is what makes the
+# download link update, and a build that is already live and wrong needs to be
+# shouted about, not silently held back.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to test (defaults to the latest release)
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: smoke-release
+  cancel-in-progress: false
+
+env:
+  ISSUE_TITLE: 'Shipped build cannot reach the live server'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+
+      # AppImages need FUSE to run, but --appimage-extract does not.
+      - name: Smoke-test
+        id: smoke
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          set +e
+          report=$(node scripts/smoke-release.mjs $TAG 2>&1)
+          status=$?
+          set -e
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          {
+            echo 'report<<REPORT_EOF'
+            echo "$report"
+            echo 'REPORT_EOF'
+          } >> "$GITHUB_OUTPUT"
+          echo "$report"
+
+      # One issue, reused while a release is broken and closed when a good one
+      # ships. A new issue per release would be noise nobody reads.
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STATUS: ${{ steps.smoke.outputs.status }}
+          REPORT: ${{ steps.smoke.outputs.report }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list --state open --search "$ISSUE_TITLE in:title" \
+            --json number,title --jq "[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty")
+
+          body=$(printf '%s\n\n---\n\n[This run](%s).\n' "$REPORT" "$RUN_URL")
+
+          if [[ "$STATUS" == "0" ]]; then
+            if [[ -n "$existing" ]]; then
+              gh issue comment "$existing" --body "A good build shipped — closing."
+              gh issue close "$existing"
+            fi
+            exit 0
+          fi
+
+          # Exit 2 is the harness failing, not the release. Say so, because
+          # "we could not check" and "the build is broken" need different work.
+          if [[ "$STATUS" == "2" ]]; then
+            body=$(printf '⚠️ **The smoke test could not run** — this says nothing about the build itself.\n\n%s' "$body")
+          fi
+
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$body"
+          fi
+          exit 1
