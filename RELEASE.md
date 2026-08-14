@@ -111,11 +111,21 @@ openmmo-agent-v0.15.0-p11-windows-x64.exe
 openmmo-agent-v0.15.0-p11-linux-x64.AppImage
 ```
 
-It creates a draft release with SHA-256 checksums and, in the notes, the
+It **publishes immediately** with SHA-256 checksums and, in the notes, the
 full parent and OpenMMO commit SHAs plus the commit messages since the
-previous release tag. Rerunning the same immutable tag
-refreshes that draft. Once published, its artifacts cannot be replaced; make
-source fixes under a new patch version.
+previous release tag. Publishing is what triggers the mirror below, so the
+wiki's download link updates in the same run.
+
+There is deliberately no human gate. One used to sit here as a draft, and the
+one time it mattered it did the opposite of its job: a protocol-matching build
+sat unpublished for a day while the live link served a client the server
+refused. The checks that actually protect a release — the pinned-protocol
+validation, both repositories' test suites, and the notarization verify — all
+run before this step and fail the job.
+
+Rerunning an already-published tag is refused by `release-plan.js`
+("refusing to overwrite an already published release"); make source fixes
+under a new patch version.
 
 ### Publishing downloads to the wiki
 
@@ -125,9 +135,9 @@ not from here — its download links stay fixed across versions (see below),
 which this repository's own versioned release pages can't offer.
 `publish-downloads.yml` mirrors them across.
 
-It fires on `release: published`, not on the tag push: the draft is a human
-gate, and publishing it is the act that makes a build public. Manual reruns go
-through `workflow_dispatch` with a tag.
+It fires on `release: published` rather than the tag push, so it only ever
+mirrors artifacts that finished building, signing and notarizing. Manual reruns
+go through `workflow_dispatch` with a tag.
 
 The mirror strips the version and protocol out of the filenames, so the wiki's
 buttons can point at a URL that never changes:
