@@ -28,6 +28,17 @@ test('a retry counts down in whole seconds and reads as needing attention', asyn
   assert.deepEqual(dutyState(true, 'retrying', -500), { label: 'Retrying', tone: 'bad' })
 })
 
+// The curve doubles each level (shared/src/xp.rs): Lv3 starts at 40, Lv4 at 80.
+test('the level bar reads how far into the current level the character is', async () => {
+  const { xpProgressPct } = await dutyPromise
+  assert.equal(xpProgressPct({ level: 3, xp: 40 }), 0)
+  assert.equal(xpProgressPct({ level: 3, xp: 60 }), 50)
+  assert.equal(xpProgressPct({ level: 1, xp: 10 }), 50)
+  // A total that has outrun its level (the gain frame arrives before the
+  // level-up) must not print a bar wider than its track.
+  assert.equal(xpProgressPct({ level: 3, xp: 200 }), 100)
+})
+
 test('a dropped connection is named, not left as a phase id', async () => {
   const { dutyState } = await dutyPromise
   assert.deepEqual(dutyState(true, 'disconnected', 0), { label: 'Disconnected', tone: 'bad' })

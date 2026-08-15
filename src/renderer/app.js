@@ -1,7 +1,7 @@
 'use strict'
 
 import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswered } from './dom.js'
-import { dutyState } from './duty.js'
+import { dutyState, xpProgressPct } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
@@ -393,6 +393,7 @@ function setVitals(v) {
     bagWorn.renderBag([])
     bagWorn.renderWorn({})
     bagWorn.renderSkills({})
+    setXp(null)
     return
   }
   const s = v.self
@@ -413,6 +414,16 @@ function setVitals(v) {
       : ''
   actionToasts.push(settings, v.actions, monsterNames)
   bagWorn.renderBag(v.bag)
+}
+
+/// Progress towards the next level. Its own channel because the totals are
+/// owner-private and reach us from the relay, not the agent's vitals.
+function setXp(p) {
+  $('xp').hidden = !p
+  if (!p) return
+  const pct = xpProgressPct(p)
+  $('xpFill').style.width = `${pct}%`
+  $('xpText').textContent = `${Math.round(pct)}%`
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -986,6 +997,7 @@ async function init() {
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
   api.onSkills(bagWorn.renderSkills)
+  api.onXp(setXp)
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
     if (urls && urls.mode) {
