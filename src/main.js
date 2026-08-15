@@ -82,6 +82,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // The agent keeps running while the window is hidden; throttling stalls its timers.
+      backgroundThrottling: false,
     },
   })
   // Renderer faults are invisible in a packaged app; surface them on stderr.
