@@ -23,6 +23,19 @@ const PHASE_TONES = {
   retrying: 'bad',
 }
 
+/// The character XP curve, ported from shared/src/xp.rs: cumulative XP for a
+/// level is `20 · 2^(n-2)`, and level 1 starts at 0.
+function xpForLevel(level) {
+  return level <= 1 ? 0 : 20 * 2 ** (level - 2)
+}
+
+/// How far into the current level the character is, 0–100.
+export function xpProgressPct({ level, xp }) {
+  const start = xpForLevel(level)
+  const next = xpForLevel(level + 1)
+  return Math.max(0, Math.min(100, ((xp - start) / (next - start)) * 100))
+}
+
 export function dutyState(running, phase, retryMs) {
   if (!running) return { label: 'Off duty', tone: 'off' }
   if (phase === 'retrying') {

@@ -419,6 +419,51 @@ test('an XP gain restates its own skill and leaves the others alone', () => {
   })
 })
 
+/// [id, name, created_at, level, xp, max_hp, attributes, class, gender]
+const authSuccessFrame = (name, level, xp) =>
+  encode({ AuthSuccess: ['account', [[1, name, 0, level, xp, 100, null, 'knight', 'male']]] })
+/// [player_id, xp_amount, xp_lost, total_xp, new_level, leveled_up, max_hp, current_hp]
+const xpGainedFrame = (playerId, totalXp, newLevel) =>
+  encode({ XpGained: [playerId, 10, 0, totalXp, newLevel, false, 100, 100] })
+
+test('character XP starts from the sign-in list and every gain restates it', () => {
+  const xp = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    (p) => xp.push(p),
+  )
+  proxy.onServerFrame(authSuccessFrame('TestChar', 3, 55))
+  // Nothing else carries the running total, so the join has to find it by name.
+  proxy.onServerFrame(joinSuccessFrame(7, [0, 0, 0]))
+  assert.deepStrictEqual(xp.at(-1), { level: 3, xp: 55 })
+
+  // A party member's gain is addressed to us too — it is not our progress.
+  proxy.onServerFrame(xpGainedFrame(8, 900, 6))
+  assert.deepStrictEqual(xp.at(-1), { level: 3, xp: 55 })
+
+  proxy.onServerFrame(xpGainedFrame(7, 90, 4))
+  assert.deepStrictEqual(xp.at(-1), { level: 4, xp: 90 })
+})
+
+test('a new agent session drops the previous character XP', () => {
+  const xp = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    (p) => xp.push(p),
+  )
+  proxy.onServerFrame(authSuccessFrame('TestChar', 3, 55))
+  proxy.onServerFrame(joinSuccessFrame(7, [0, 0, 0]))
+
+  proxy.upstreamUrl = 'ws://127.0.0.1:1/ws'
+  proxy.attachAgent(fakeAgentSocket())
+  assert.strictEqual(xp.at(-1), null)
+  proxy.stop()
+})
+
 test('a new agent session clears the skills the previous one had trained', () => {
   const skills = []
   const proxy = new AgentProxy(
