@@ -114,6 +114,17 @@ let lastActions = null
 
 function checkTurnShape(items) {
   for (const item of items) {
+    // A rule worker emits the same action JSON under its own kind, so the
+    // captions keep working with no model in the loop.
+    if (item.k === 'worker') {
+      try {
+        const parsed = JSON.parse(item.m)
+        if (Array.isArray(parsed.actions)) lastActions = parsed.actions
+      } catch {
+        // A turn we can't read is one caption missed, not a broken poll.
+      }
+      continue
+    }
     if (item.k !== 'llm-response') continue
     const start = item.m.indexOf('{')
     const end = item.m.lastIndexOf('}')
@@ -160,7 +171,10 @@ async function pollFeed(port) {
   if (items.length) {
     feedSeq = items[items.length - 1].s
     checkTurnShape(items)
-    send('agent:feed', items)
+    // A worker's turns feed the action captions but not the Thoughts panel:
+    // there is no model thinking, and LLM-shaped entries there would lie.
+    const visible = items.filter((item) => item.k !== 'worker')
+    if (visible.length) send('agent:feed', visible)
   }
   send('agent:vitals', {
     connected: body.connected === true,
@@ -301,6 +315,9 @@ function applySelectedProfile() {
 }
 
 function validateGlobalLlm() {
+  // A rule-based worker drives the character without an LLM, so there is
+  // no backend, model or key to check.
+  if (settingsStore.usesWorker(settings)) return { ok: true }
   const backend = settingsStore.BACKENDS.find((candidate) => candidate.id === settings.llm)
   if (!backend || backend.kind === 'none') {
     return { ok: false, error: 'Set up an LLM to use Automatic play' }
@@ -558,8 +575,13 @@ ipcMain.handle('settings:apply', async (_e, patch) => {
   }
   const errors = settingsStore.validate(candidate)
   if (errors.length) return { ok: false, errors }
-  const live = await validateLlmSettings(candidate)
-  if (!live.ok) return { ok: false, errors: [live.error] }
+  // Nothing to reach for a worker: no CLI to be signed into, no endpoint to
+  // answer. Checking anyway would refuse to save the very choice that says
+  // "no LLM".
+  if (!settingsStore.usesWorker(candidate)) {
+    const live = await validateLlmSettings(candidate)
+    if (!live.ok) return { ok: false, errors: [live.error] }
+  }
   settings = settingsStore.save(candidate)
   return { ok: true, settings }
 })
@@ -608,9 +630,10 @@ async function startAgent() {
     const status = await agent.start({ ...settings, server: proxy.agentUrl })
     // Which backends/models people actually run Automatic play with — model
     // ids only, never keys or prompts.
+    const worker = settingsStore.usesWorker(settings)
     telemetry.track('agent_started', {
-      backend: settings.llm,
-      model: settings.models[settings.llm] || '',
+      backend: worker ? `worker:${settings.workerKind}` : settings.llm,
+      model: worker ? '' : settings.models[settings.llm] || '',
     })
     return { ok: true, status }
   } catch (err) {
