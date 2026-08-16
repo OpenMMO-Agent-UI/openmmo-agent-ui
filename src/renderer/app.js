@@ -172,13 +172,15 @@ const WORKER_HINTS = {
   fisher: 'Finds water, casts, and turns the catch into gold in town. No LLM, no API key.',
 }
 
-/// The engine picker's one dependant. The knobs are the fighter's — a fisher
-/// still runs on them, but it never picks a fight, so tuning what it takes on
-/// and when it drinks would be knobs with nothing to turn.
+/// The knobs are the fighter's — a fisher never picks a fight. Pace and
+/// LLM-scheduler knobs only throttle the LLM driver, hidden for rule workers.
 function renderWorker() {
   const kind = settings.workerKind || 'none'
   $('workerHint').textContent = WORKER_HINTS[kind] || ''
   $('workerKnobs').hidden = kind !== 'fighter'
+  const llmDriven = kind === 'none'
+  $('paceSettings').hidden = !llmDriven
+  $('advancedLlmOnly').hidden = !llmDriven
 }
 
 function renderBackend() {

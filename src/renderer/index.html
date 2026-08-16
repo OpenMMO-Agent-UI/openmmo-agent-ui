@@ -438,28 +438,32 @@
               </div>
             </div>
 
-            <h3 class="settings-section">Pace</h3>
-            <label class="slider">Thinking while busy <strong id="activeCadenceLabel"></strong>
-              <input id="activeCadence" type="range" min="0" max="4" step="1" />
-            </label>
-            <p class="hint" id="activeCadenceHint"></p>
-            <label class="slider">Thinking while quiet <strong id="idleCadenceLabel"></strong>
-              <input id="idleCadence" type="range" min="0" max="4" step="1" />
-            </label>
-            <p class="hint" id="idleCadenceHint"></p>
-            <label class="check"><input type="checkbox" id="alwaysActive" /> Keep adventuring while alone</label>
-            <p class="hint">Turn this off to stop calling the model when no other player is nearby.</p>
+            <div id="paceSettings">
+              <h3 class="settings-section">Pace</h3>
+              <label class="slider">Thinking while busy <strong id="activeCadenceLabel"></strong>
+                <input id="activeCadence" type="range" min="0" max="4" step="1" />
+              </label>
+              <p class="hint" id="activeCadenceHint"></p>
+              <label class="slider">Thinking while quiet <strong id="idleCadenceLabel"></strong>
+                <input id="idleCadence" type="range" min="0" max="4" step="1" />
+              </label>
+              <p class="hint" id="idleCadenceHint"></p>
+              <label class="check"><input type="checkbox" id="alwaysActive" /> Keep adventuring while alone</label>
+              <p class="hint">Turn this off to stop calling the model when no other player is nearby.</p>
+            </div>
 
             <details class="advanced">
               <summary>Advanced</summary>
-              <div class="row">
-                <label>Busy interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
-                <label>Quiet interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
-              </div>
-              <p class="hint">Exact seconds, for a pace between the named steps above.</p>
-              <div class="row">
-                <label>Concurrent calls<input type="number" id="maxConcurrent" min="1" /></label>
-                <label>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
+              <div id="advancedLlmOnly">
+                <div class="row">
+                  <label>Busy interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
+                  <label>Quiet interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
+                </div>
+                <p class="hint">Exact seconds, for a pace between the named steps above.</p>
+                <div class="row">
+                  <label>Concurrent calls<input type="number" id="maxConcurrent" min="1" /></label>
+                  <label>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
+                </div>
               </div>
               <div class="row">
                 <label>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>
