@@ -104,6 +104,11 @@ const FIELDS = {
   alwaysActive: 'bool',
   minIntervalSecs: 'int',
   idleIntervalSecs: 'int',
+  workerKind: 'text',
+  workerLevelMargin: 'int',
+  workerLowHealthPct: 'int',
+  workerPotionStock: 'int',
+  workerBagFullPct: 'int',
   llm: 'text',
   openaiBaseUrl: 'text',
   maxTokens: 'int',
@@ -159,6 +164,21 @@ function agentEndpoint() {
     model: settings.models[settings.llm] || '',
     key: settings[`${b.id}Key`] || '',
   }
+}
+
+const WORKER_HINTS = {
+  none: 'A language model decides what your character does — pick the backend on the LLM tab.',
+  fighter: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.',
+  fisher: 'Finds water, casts, and turns the catch into gold in town. No LLM, no API key.',
+}
+
+/// The engine picker's one dependant. The knobs are the fighter's — a fisher
+/// still runs on them, but it never picks a fight, so tuning what it takes on
+/// and when it drinks would be knobs with nothing to turn.
+function renderWorker() {
+  const kind = settings.workerKind || 'none'
+  $('workerHint').textContent = WORKER_HINTS[kind] || ''
+  $('workerKnobs').hidden = kind !== 'fighter'
 }
 
 function renderBackend() {
@@ -534,6 +554,7 @@ async function closeSettings() {
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
     renderClassOptions()
     renderBackend()
+    renderWorker()
     settingsPanel.syncCadence(settings)
   }
   settingsSnapshot = null
@@ -684,6 +705,7 @@ function bindFields() {
         renderGenderOptions()
       }
       if (id === 'llm') renderBackend()
+      if (id === 'workerKind') renderWorker()
       // The Advanced seconds fields and the Pace sliders are two views of one
       // value; typing an exact interval has to move the slider that claims to
       // show it.
@@ -952,6 +974,7 @@ async function init() {
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()
   renderBackend()
+  renderWorker()
   actionToasts.applyToastCssVars(settings)
 
   for (const item of info.log) appendLog(item)

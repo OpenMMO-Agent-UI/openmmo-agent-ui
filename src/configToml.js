@@ -7,6 +7,17 @@ const { agentDir } = require('./runtimeEnv')
 const { instancePromptRelativePath, memoryRelativePath } = require('./personalityText')
 const { tomlString } = require('./toml')
 
+function isNumber(value) {
+  return value !== '' && value != null && Number.isFinite(Number(value))
+}
+
+/// A percentage threshold, or the default when the field is blank — 0 here
+/// means "never drink" / "always go to town", never "unanswered".
+function clampPercent(value, fallback) {
+  if (!isNumber(value)) return fallback
+  return Math.min(100, Math.max(0, Math.round(Number(value))))
+}
+
 /// Rendered fresh on every start. Keys never land here — they go to the child
 /// process as environment variables instead, so a config file someone pastes
 /// into an issue carries no credential.
@@ -57,7 +68,10 @@ function renderConfigToml(s) {
     `max_messages = ${Math.max(Math.round(Number(s.maxMessages)) || 41, 3)}`,
   )
 
-  lines.push('', '[[npcs]]', `llm = ${tomlString(s.llm)}`)
+  // A worker drives the character by rules; telling agent-client there is no
+  // LLM keeps it from spending a call on anything (stat rolls included).
+  const worker = Boolean(s.workerKind) && s.workerKind !== 'none'
+  lines.push('', '[[npcs]]', `llm = ${tomlString(worker ? 'none' : s.llm)}`)
   if (s.authMode !== 'google') lines.push(`account = ${tomlString(s.npcAccount)}`)
   // Google auth resolves the account from the id_token alone and hands back
   // its whole character list — agent-client enters the first one if no name
@@ -81,6 +95,18 @@ function renderConfigToml(s) {
   // so this is only ever written once ensureInstancePrompt() below has
   // guaranteed the file is actually there.
   if (s.characterName) lines.push(`instance_prompt = ${tomlString(instancePromptRelativePath(s.characterName))}`)
+  // A worker kind other than "none" replaces the LLM driver with a rule
+  // engine; the knobs are written either way so switching back and forth
+  // doesn't lose them.
+  lines.push(
+    '',
+    '[npcs.worker]',
+    `kind = ${tomlString(s.workerKind || 'none')}`,
+    `level_margin = ${Math.max(0, Math.round(Number(s.workerLevelMargin)) || 0)}`,
+    `low_health_pct = ${clampPercent(s.workerLowHealthPct, 40)}`,
+    `potion_stock = ${Math.max(0, Math.round(Number(s.workerPotionStock)) || 0)}`,
+    `bag_full_pct = ${clampPercent(s.workerBagFullPct, 80)}`,
+  )
   lines.push('')
   return lines.join('\n')
 }

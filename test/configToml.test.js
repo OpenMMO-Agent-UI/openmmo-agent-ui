@@ -85,3 +85,66 @@ test('history cap never goes below the floor agent-client would clamp it to', ()
   }
   assert.match(openaiTable(renderConfigToml(settings({ maxMessages: floor + 1 }))), new RegExp(`^max_messages = ${floor + 1}$`, 'm'))
 })
+
+/// The `[npcs.worker]` table, which decides whether Automatic play runs the
+/// LLM agent or one of agent-client's rule engines.
+function workerTable(toml) {
+  const table = toml.split(/^\[/m).find((section) => section.startsWith('npcs.worker]'))
+  assert.ok(table, 'generated config has no [npcs.worker] table')
+  return table
+}
+
+test('the engine picker and its knobs reach the generated config', () => {
+  const toml = renderConfigToml(
+    settings({
+      workerKind: 'fighter',
+      workerLevelMargin: 4,
+      workerLowHealthPct: 55,
+      workerPotionStock: 6,
+      workerBagFullPct: 70,
+    }),
+  )
+
+  const table = workerTable(toml)
+  assert.match(table, /^kind = "fighter"$/m)
+  assert.match(table, /^level_margin = 4$/m)
+  assert.match(table, /^low_health_pct = 55$/m)
+  assert.match(table, /^potion_stock = 6$/m)
+  assert.match(table, /^bag_full_pct = 70$/m)
+})
+
+test('no worker selected still writes the table, so switching back keeps the knobs', () => {
+  const table = workerTable(renderConfigToml(settings({ ...DEFAULTS, workerKind: 'none' })))
+
+  assert.match(table, /^kind = "none"$/m)
+  assert.match(table, new RegExp(`^level_margin = ${DEFAULTS.workerLevelMargin}$`, 'm'))
+})
+
+test('worker knobs are written as integers agent-client can deserialize', () => {
+  // level_margin and the percentages are u32 in Rust: a fraction from a
+  // hand-edited config.toml would stop the agent from starting at all.
+  const table = workerTable(
+    renderConfigToml(settings({ workerLevelMargin: 2.6, workerLowHealthPct: '40.2', workerBagFullPct: 220 })),
+  )
+
+  assert.match(table, /^level_margin = 3$/m)
+  assert.match(table, /^low_health_pct = 40$/m)
+  assert.match(table, /^bag_full_pct = 100$/m, 'a percentage over 100 is nonsense, not a threshold')
+})
+
+test('a worker run tells agent-client there is no LLM at all', () => {
+  const toml = renderConfigToml(settings({ llm: 'openai', workerKind: 'fisher' }))
+
+  assert.match(toml, /^llm = "none"$/m)
+  assert.match(workerTable(toml), /^kind = "fisher"$/m)
+  assert.match(renderConfigToml(settings({ llm: 'openai' })), /^llm = "openai"$/m)
+})
+
+test('a blank threshold falls back to the default instead of writing 0', () => {
+  // 0 is a real answer here — never drink, always go to town — so an
+  // unanswered field must not silently become one.
+  const table = workerTable(renderConfigToml(settings({ workerLowHealthPct: '', workerBagFullPct: undefined })))
+
+  assert.match(table, /^low_health_pct = 40$/m)
+  assert.match(table, /^bag_full_pct = 80$/m)
+})

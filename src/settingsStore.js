@@ -53,6 +53,13 @@ const DEFAULTS = {
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
   alwaysActive: true,
+  /// What drives Automatic play: 'none' is the LLM agent, anything else is a
+  /// rule-based worker inside agent-client (no LLM, no API key).
+  workerKind: 'none',
+  workerLevelMargin: 2,
+  workerLowHealthPct: 40,
+  workerPotionStock: 10,
+  workerBagFullPct: 80,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
   rustLog: 'info',
@@ -156,6 +163,10 @@ function load() {
   const secrets = decryptSecrets(stored.secrets)
   const settings = { ...DEFAULTS, ...stored, models: { ...DEFAULTS.models, ...(stored.models || {}) } }
   delete settings.secrets
+  // A worker that no longer exists (one retired between versions) would fail
+  // validation on every Play with nothing to point at — fall back to the LLM
+  // agent instead of stranding the session.
+  if (!WORKERS.includes(settings.workerKind)) settings.workerKind = 'none'
   for (const key of SECRET_KEYS) {
     settings[key] = Object.hasOwn(secrets, key) ? secrets[key] : DEFAULTS[key] || ''
   }
@@ -208,6 +219,12 @@ function importExistingConfig(settings) {
   take('characterClass', npc.character_class)
   take('gender', npc.gender)
   take('llm', npc.llm)
+  const worker = npc.worker || {}
+  take('workerKind', worker.kind)
+  take('workerLevelMargin', worker.level_margin)
+  take('workerLowHealthPct', worker.low_health_pct)
+  take('workerPotionStock', worker.potion_stock)
+  take('workerBagFullPct', worker.bag_full_pct)
   take('minIntervalSecs', npc.min_interval_secs)
   take('idleIntervalSecs', npc.idle_interval_secs)
   if (typeof npc.always_active === 'boolean') merged.alwaysActive = npc.always_active
@@ -230,6 +247,14 @@ function importExistingConfig(settings) {
   return merged
 }
 
+/// Whether Automatic play runs a rule-based worker instead of the LLM agent.
+/// A worker needs no backend, model or key, so every LLM check is skipped.
+function usesWorker(s) {
+  return Boolean(s.workerKind) && s.workerKind !== 'none'
+}
+
+const WORKERS = ['none', 'fighter', 'fisher']
+
 /// Refuse to start on the mistakes agent-client would only report after the
 /// window has already switched to the spectator view.
 function validate(s) {
@@ -244,8 +269,9 @@ function validate(s) {
   else if (!cls.genders.includes(s.gender)) {
     errors.push(`${s.characterClass} has no ${s.gender} model — pick ${cls.genders.join(' or ')}`)
   }
+  if (!WORKERS.includes(s.workerKind || 'none')) errors.push(`Unknown worker ${s.workerKind}`)
   const backend = BACKENDS.find((b) => b.id === s.llm)
-  if (backend && backend.kind === 'http' && !s.models[s.llm]) {
+  if (!usesWorker(s) && backend && backend.kind === 'http' && !s.models[s.llm]) {
     errors.push(`Pick a model for ${backend.label}`)
   }
   // Under Google auth, the pre-flight session (characterSession.js) always
@@ -254,7 +280,9 @@ function validate(s) {
   if (s.authMode === 'google' && !s.characterName) {
     errors.push('Choose or create a character first')
   }
-  if (s.llm === 'openai' && !s.openaiBaseUrl) errors.push('OpenAI-compatible mode needs a base URL')
+  if (!usesWorker(s) && s.llm === 'openai' && !s.openaiBaseUrl) {
+    errors.push('OpenAI-compatible mode needs a base URL')
+  }
   if (isLoopbackUrl(s.server)) {
     errors.push(
       `Server points at this machine (${s.server}). That is the relay's own address, ` +
@@ -275,5 +303,7 @@ module.exports = {
   load,
   save,
   importExistingConfig,
+  usesWorker,
   validate,
+  WORKERS,
 }
