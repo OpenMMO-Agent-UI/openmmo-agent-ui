@@ -254,7 +254,11 @@ jobs:
           fi
       - name: Create or refresh draft release
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Publishing with the PAT, not GITHUB_TOKEN, is what lets the
+          # `release: published` event fire publish-downloads.yml — events
+          # created by GITHUB_TOKEN never trigger other workflows, which is
+          # exactly how v0.26/v0.27 shipped without ever reaching the wiki.
+          GH_TOKEN: ${{ secrets.WIKI_RELEASE_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RELEASE_ACTION: ${{ needs.validate.outputs.release-action }}
           RELEASE_TAG: ${{ needs.validate.outputs.tag }}
