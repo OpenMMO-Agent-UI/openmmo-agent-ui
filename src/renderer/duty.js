@@ -36,6 +36,45 @@ export function xpProgressPct({ level, xp }) {
   return Math.max(0, Math.min(100, ((xp - start) / (next - start)) * 100))
 }
 
+/// The hunger bands the server judges (shared/src/hunger.rs), in the words a
+/// player acts on: what the character can still do is the news, not the band's
+/// internal name. `warn` is the band that has already cost the sprint; `bad`
+/// is the one that slows every swing and stops natural healing.
+const HUNGER_BANDS = {
+  Normal: { label: 'Fed', tone: 'ok' },
+  Hungry: { label: 'Hungry · no sprint', tone: 'warn' },
+  Weak: { label: 'Weak · slowed', tone: 'bad' },
+}
+
+/// The header's food bar and the sheet's hunger line, from one reading.
+/// Satiation is owner-private and only reaches us once the character is in the
+/// world, so an absent reading means "no bar", not "empty".
+export function hungerReading(hunger) {
+  if (!hunger || !Number.isFinite(hunger.satiation)) return null
+  const max = hunger.max || 1000
+  const band = HUNGER_BANDS[hunger.band] || HUNGER_BANDS.Normal
+  return {
+    pct: Math.max(0, Math.min(100, (hunger.satiation / max) * 100)),
+    text: `${hunger.satiation}/${max}`,
+    label: band.label,
+    tone: band.tone,
+  }
+}
+
+/// The six rolled attributes in the order the game rolls them
+/// (shared/src/character.rs CharacterAttributes). Guard is not one of them —
+/// it is what armour adds up to — so it reads on its own line in the sheet.
+const ATTRIBUTE_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+
+export function attributeCells(attributes) {
+  if (!attributes) return []
+  return ATTRIBUTE_ORDER.filter((key) => Number.isFinite(attributes[key])).map((key) => ({
+    key,
+    label: key.toUpperCase(),
+    value: attributes[key],
+  }))
+}
+
 export function dutyState(running, phase, retryMs) {
   if (!running) return { label: 'Off duty', tone: 'off' }
   if (phase === 'retrying') {

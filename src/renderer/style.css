@@ -893,6 +893,7 @@ body[data-mode='manual'] .gamesurface {
 }
 
 .gamebar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -929,7 +930,7 @@ body[data-mode='manual'] .gamesurface {
   grid-template-columns: auto auto auto auto;
   grid-template-rows: auto auto;
   align-items: center;
-  column-gap: 16px;
+  column-gap: 12px;
   row-gap: 2px;
   flex: none;
   min-width: 0;
@@ -960,7 +961,9 @@ body[data-mode='manual'] .gamesurface {
   grid-area: 1 / 4;
 }
 
-.duty-meta {
+/* Under HP, so the card reads as two rows of vitals rather than leaving a hole
+   where the purse and the clock used to sit. */
+.food {
   grid-area: 2 / 3;
 }
 
@@ -997,21 +1000,38 @@ body[data-mode='manual'] .gamesurface {
   white-space: nowrap;
 }
 
+/* Capped so one long character name cannot push the card into the centred
+   clock; the ellipsis was already here for the overflow. */
 .duty-name > span:first-child {
+  max-width: 96px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* The chip is also the handle on the character sheet, so it takes a button's
+   affordances while keeping the badge's proportions. */
 .duty-level {
   flex: none;
   padding: 1px 5px;
   border: 1px solid rgba(201, 162, 74, 0.3);
   border-radius: 3px;
+  background: none;
   color: var(--accent);
   font-family: var(--mono-font);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.duty-level:hover:not(:disabled),
+.duty-level:focus-visible {
+  border-color: var(--accent);
+  background: rgba(201, 162, 74, 0.12);
+}
+
+.duty-level:disabled {
+  cursor: default;
 }
 
 /* Same eyebrow idiom as .wordmark and .settings-section: small, letterspaced,
@@ -1042,7 +1062,10 @@ body[data-mode='manual'] .gamesurface {
 
 /* The one number here that does not say what it is on its own: a purse reads as
    a purse and 21:40 reads as a clock, but a bare 26/30 could be anything. */
+/* One width for all three labels, so the tracks stack in a straight line
+   instead of stepping right as the words get longer. */
 .hp-label {
+  min-width: 34px;
   color: var(--muted);
   font-size: 10px;
   font-weight: 600;
@@ -1050,7 +1073,7 @@ body[data-mode='manual'] .gamesurface {
 }
 
 .hp-track {
-  width: 70px;
+  width: 54px;
   height: 5px;
   border: 1px solid var(--line);
   border-radius: 3px;
@@ -1081,27 +1104,38 @@ body[data-mode='manual'] .gamesurface {
   background: var(--ember);
 }
 
+/* Hunger reads by band, not by fraction: the bar drains steadily but the two
+   moments that matter are the lost sprint and the weakened swing. Brass while
+   fed, drained of colour once sprinting is gone, ember at weak. */
+.food[data-tone='warn'] .hp-fill {
+  background: var(--muted);
+}
+
+.food[data-tone='bad'] .hp-fill {
+  background: var(--ember);
+}
+
 .hp.low .hp-text,
 .hp.low .hp-label {
   color: var(--ember);
 }
 
-.duty-meta {
-  display: flex;
-  gap: 11px;
+/* The bar is a drag handle, so the clock must not swallow a click meant for
+   it. */
+.world-clock {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   margin: 0;
-  color: var(--muted);
+  white-space: nowrap;
+  color: var(--text);
   font-family: var(--mono-font);
-  font-size: 11px;
+  font-size: 21px;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  pointer-events: none;
 }
 
-/* A hairline between the purse and the world clock — with only a space between
-   them, "12c 21:40" read as one number. */
-.duty-meta > span:not(:empty) + span:not(:empty) {
-  padding-left: 11px;
-  border-left: 1px solid var(--line);
-}
 
 /* ---------- header icon buttons ---------- */
 
@@ -1209,6 +1243,64 @@ body[data-mode='manual'] .gamesurface {
 
 .menu-note:empty {
   display: none;
+}
+
+/* The character sheet hangs under the duty card at the other end of the bar
+   from the session menu, since its handle is the level chip. */
+.sheet {
+  right: auto;
+  left: 12px;
+  width: 208px;
+}
+
+/* A ledger, ruled the way the app rules everything else — but with one hairline
+   grid instead of a border per cell: the 1px gap over the rule colour is the
+   rule, so no two cells can double it up. */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin: 0 8px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.stat-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 7px;
+  background: var(--panel-2);
+}
+
+.stat-key {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.stat-value {
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.sheet-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 8px 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.sheet-line > span:last-child {
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-variant-numeric: tabular-nums;
 }
 
 .gameshell {
@@ -1857,6 +1949,29 @@ button.icon-quiet:hover {
   font-family: var(--mono-font);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+/* The purse and the load, ruled off from the rows they total. */
+.bag-totals {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 2px 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Money is the one reading here a player acts on, so it keeps the brass. */
+#bagGold {
+  color: var(--accent);
+}
+
+#bagWeight.over {
+  color: var(--ember);
 }
 
 /* Each box fills its own column cell, so the whole cell is the hit target

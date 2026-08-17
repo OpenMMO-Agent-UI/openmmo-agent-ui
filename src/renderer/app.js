@@ -1,7 +1,7 @@
 'use strict'
 
 import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswered } from './dom.js'
-import { dutyState, xpProgressPct } from './duty.js'
+import { attributeCells, dutyState, hungerReading, xpProgressPct } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
@@ -48,22 +48,6 @@ const feedHidden = new Set()
 /// prompt should still resolve for an action against it moments earlier.
 const monsterNames = new Map()
 const MONSTER_LINE_RE = /Monster:\s*(\S+)\s*\[([^\]]+)\]/g
-
-/// Mirrors agent-client's shop_info::format_price and the fork's
-/// splitGold/GoldAmount.svelte: 1g = 100s = 10,000c, smallest unit (copper)
-/// in, omitting denominations that are zero (but always showing copper if
-/// the whole amount is).
-function formatGold(copper) {
-  const total = Math.trunc(Math.abs(copper))
-  const gold = Math.trunc(total / 10000)
-  const silver = Math.trunc((total % 10000) / 100)
-  const bronze = total % 100
-  const parts = []
-  if (gold > 0) parts.push(`${gold}g`)
-  if (silver > 0) parts.push(`${silver}s`)
-  if (bronze > 0 || parts.length === 0) parts.push(`${bronze}c`)
-  return `${copper < 0 ? '-' : ''}${parts.join(' ')}`
-}
 
 function learnMonsterNames(text) {
   MONSTER_LINE_RE.lastIndex = 0
@@ -411,11 +395,16 @@ function setVitals(v) {
     $('dutyVitals').hidden = true
     $('dutyLevel').hidden = true
     $('dutyName').textContent = settings?.characterName || '—'
+    // The clock stands outside the vitals block that hiding covers, so a
+    // dropped session would otherwise leave it stopped at the last time seen.
+    $('dutyClock').textContent = ''
     actionToasts.clear()
-    bagWorn.renderBag([])
+    bagWorn.renderBag([], null, null)
     bagWorn.renderWorn({})
     bagWorn.renderSkills({})
     setXp(null)
+    setFood(null)
+    setStatSheet(null, null)
     return
   }
   const s = v.self
@@ -429,13 +418,51 @@ function setVitals(v) {
   $('hpFill').style.width = `${pct}%`
   $('hpText').textContent = `${s.health}/${s.max_health}`
   $('hp').classList.toggle('low', pct <= 33)
-  $('dutyGold').textContent = v.gold == null ? '' : formatGold(v.gold)
   $('dutyClock').textContent =
     v.time && v.time.hour != null
       ? `${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
   actionToasts.push(settings, v.actions, monsterNames)
-  bagWorn.renderBag(v.bag)
+  bagWorn.renderBag(v.bag, v.weight, v.gold)
+  setFood(v.hunger)
+  setStatSheet(v.attributes, v.hunger)
+}
+
+/// Food, beside HP and XP. Official NPCs are exempt from hunger, so the bar
+/// stays out of the header rather than reading as a starving character.
+function setFood(hunger) {
+  const reading = hungerReading(hunger)
+  $('food').hidden = !reading
+  if (!reading) return
+  $('foodFill').style.width = `${reading.pct}%`
+  $('foodText').textContent = reading.text
+  $('food').dataset.tone = reading.tone
+}
+
+/// The character sheet behind the level chip: what was rolled once, and the
+/// conditions that move. The chip stops offering a sheet when there is nothing
+/// in it to read.
+function setStatSheet(attributes, hunger) {
+  const cells = attributeCells(attributes)
+  const grid = $('statGrid')
+  grid.innerHTML = ''
+  for (const cell of cells) {
+    const el = document.createElement('div')
+    el.className = 'stat-cell'
+    const label = document.createElement('span')
+    label.className = 'stat-key'
+    label.textContent = cell.label
+    const value = document.createElement('span')
+    value.className = 'stat-value'
+    value.textContent = cell.value
+    el.append(label, value)
+    grid.appendChild(el)
+  }
+  // The bar already carries the number; the sheet says what the band costs.
+  const reading = hungerReading(hunger)
+  $('sheetHunger').textContent = reading ? reading.label : 'Exempt'
+  $('sheetGuard').textContent = Number.isFinite(attributes?.guard) ? attributes.guard : '—'
+  $('dutyLevel').disabled = cells.length === 0
 }
 
 /// Progress towards the next level. Its own channel because the totals are

@@ -182,6 +182,9 @@ async function pollFeed(port) {
     gold: body.gold ?? null,
     time: body.time || null,
     bag: body.bag || [],
+    weight: body.weight || null,
+    attributes: body.attributes || null,
+    hunger: body.hunger || null,
     actions: lastActions,
   })
 }
