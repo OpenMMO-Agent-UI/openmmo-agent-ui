@@ -123,7 +123,17 @@
           <div class="duty-id">
             <p class="duty-name">
               <span id="dutyName">—</span>
-              <span class="duty-level" id="dutyLevel" hidden></span>
+              <!-- The level chip is what the character sheet hangs off: it is
+                   already the "who this character is" badge, and the rolled
+                   attributes belong with it rather than in the session menu,
+                   which holds actions. -->
+              <button
+                class="duty-level"
+                id="dutyLevel"
+                popovertarget="statSheet"
+                title="Character sheet"
+                hidden
+              ></button>
             </p>
             <p class="duty-state" id="status">Off duty</p>
           </div>
@@ -138,11 +148,32 @@
               <span class="hp-track"><span class="hp-fill" id="xpFill"></span></span>
               <span class="hp-text" id="xpText"></span>
             </div>
-            <p class="duty-meta">
-              <span id="dutyGold"></span>
-              <span id="dutyClock"></span>
-            </p>
+            <!-- Third bar, same shape as HP and XP: food is the other reading
+                 that drains and that a person acts on. -->
+            <div class="hp food" id="food" hidden>
+              <span class="hp-label">FOOD</span>
+              <span class="hp-track"><span class="hp-fill" id="foodFill"></span></span>
+              <span class="hp-text" id="foodText"></span>
+            </div>
           </div>
+        </div>
+
+        <!-- The world clock reads as the room's clock, not as one of the
+             character's stats: centred on the bar itself, not on the space left
+             between the duty card and the session controls — those two are not
+             the same width, so a flow-centred clock leaned right. The duty card
+             is bounded (name cap, bar width) so it cannot reach the centre even
+             at the 1080px minimum window. -->
+        <p class="world-clock" id="dutyClock"></p>
+
+        <!-- Same native popover as the session menu: light dismiss, Escape and
+             the top layer for free. -->
+        <div id="statSheet" class="menu sheet" popover>
+          <p class="menu-label">Attributes</p>
+          <div class="stat-grid" id="statGrid"></div>
+          <p class="menu-label">Condition</p>
+          <p class="sheet-line"><span>Guard</span><span id="sheetGuard">—</span></p>
+          <p class="sheet-line"><span>Hunger</span><span id="sheetHunger">—</span></p>
         </div>
 
         <span class="spacer"></span>
@@ -347,6 +378,13 @@
                 <span class="bag-head-item">Item</span>
               </div>
               <div id="bagList" class="bag-list"></div>
+              <!-- The bag's two totals: what the purse holds and what the load
+                   weighs. Gold sits here rather than in the header because it
+                   is the same reading as the bag — what a town trip changes. -->
+              <p class="bag-totals" id="bagTotals" hidden>
+                <span id="bagGold"></span>
+                <span id="bagWeight"></span>
+              </p>
               <p class="empty" id="bagEmpty">Nothing carried yet.</p>
               <button id="bagLabelsSubmit" class="ghost" hidden>Apply labels</button>
               <p class="hint" id="bagLabelsStatus"></p>

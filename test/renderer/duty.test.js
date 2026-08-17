@@ -44,3 +44,40 @@ test('a dropped connection is named, not left as a phase id', async () => {
   assert.deepEqual(dutyState(true, 'disconnected', 0), { label: 'Disconnected', tone: 'bad' })
   assert.deepEqual(dutyState(true, 'switching', 0), { label: 'Switching', tone: 'live' })
 })
+
+// The bands the server judges (shared/src/hunger.rs): Normal at 300+, Hungry
+// at 100+, Weak below. The header says what the character can still do,
+// because that is what a person acts on.
+test('a fed character reads by the fraction, in brass', async () => {
+  const { hungerReading } = await dutyPromise
+  assert.deepEqual(hungerReading({ satiation: 700, band: 'Normal', max: 1000 }), {
+    pct: 70,
+    text: '700/1000',
+    label: 'Fed',
+    tone: 'ok',
+  })
+})
+
+test('the two bands worth acting on name the cost, not the band', async () => {
+  const { hungerReading } = await dutyPromise
+  assert.equal(hungerReading({ satiation: 200, band: 'Hungry', max: 1000 }).label, 'Hungry · no sprint')
+  assert.equal(hungerReading({ satiation: 50, band: 'Weak', max: 1000 }).tone, 'bad')
+})
+
+// Official NPCs are exempt from hunger, so no reading ever arrives for them.
+test('no satiation reading means no bar at all', async () => {
+  const { hungerReading } = await dutyPromise
+  assert.equal(hungerReading(null), null)
+  assert.equal(hungerReading({ band: 'Normal' }), null)
+})
+
+test('attributes read in the order the game rolls them, guard excluded', async () => {
+  const { attributeCells } = await dutyPromise
+  const cells = attributeCells({ str: 14, dex: 12, con: 13, int: 10, wis: 11, cha: 9, guard: 12 })
+  assert.deepEqual(
+    cells.map((c) => c.label),
+    ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+  )
+  assert.equal(cells[0].value, 14)
+  assert.deepEqual(attributeCells(null), [])
+})

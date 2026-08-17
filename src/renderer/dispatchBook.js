@@ -49,6 +49,7 @@ const BUILTIN_COORDS = [
   { name: 'Aldermark', x: -1471.4, y: 0.9, z: 4741.2 },
   { name: 'Old Crypt', x: -1450, y: 0.7, z: 4720 },
   { name: 'Orc Warrens', x: -1616, y: 1.05, z: 4918 },
+  { name: 'Ogre Stronghold', x: -1785.2, y: 1.4, z: 5072.3 },
 ]
 let customCoords = []
 

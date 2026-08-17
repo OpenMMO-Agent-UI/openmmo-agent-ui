@@ -157,12 +157,49 @@ function bagMarkCheckbox(label, itemName, checked, onChange) {
   return cell
 }
 
+/// Carried against the carry cap, from the agent's /api/state. Item weights
+/// are tenths of a kilo, the same reading the game's own inventory shows, and
+/// the cap already carries the hunger band's penalty — a weak character's
+/// ceiling drops with it.
+export function bagWeightText(weight) {
+  if (!weight || !Number.isFinite(weight.carried) || !(weight.capacity > 0)) return null
+  const kg = (v) => (v / 10).toFixed(1)
+  return `${kg(weight.carried)} / ${kg(weight.capacity)} kg`
+}
+
+/// Mirrors agent-client's shop_info::format_price and the fork's
+/// splitGold/GoldAmount.svelte: 1g = 100s = 10,000c, smallest unit (copper)
+/// in, omitting denominations that are zero (but always showing copper if
+/// the whole amount is).
+export function formatGold(copper) {
+  const total = Math.trunc(Math.abs(copper))
+  const gold = Math.trunc(total / 10000)
+  const silver = Math.trunc((total % 10000) / 100)
+  const bronze = total % 100
+  const parts = []
+  if (gold > 0) parts.push(`${gold}g`)
+  if (silver > 0) parts.push(`${silver}s`)
+  if (bronze > 0 || parts.length === 0) parts.push(`${bronze}c`)
+  return `${copper < 0 ? '-' : ''}${parts.join(' ')}`
+}
+
+function renderBagTotals(weight, gold) {
+  const weightText = bagWeightText(weight)
+  const goldText = gold == null ? '' : formatGold(gold)
+  $('bagGold').textContent = goldText
+  const weightEl = $('bagWeight')
+  weightEl.textContent = weightText || ''
+  weightEl.classList.toggle('over', weightText !== null && weight.carried > weight.capacity)
+  $('bagTotals').hidden = !goldText && !weightText
+}
+
 /// agent-client keeps each pickup as its own bag instance rather than
 /// merging stacks, so raw entries repeat the same item many times over —
 /// grouped by item + enchant here into one line each, with a total count.
 /// Each row carries its own Sellable/Dropable checkboxes, staged into
 /// stagedLabels until Apply labels commits them.
-export function renderBag(bag) {
+export function renderBag(bag, weight, gold) {
+  renderBagTotals(weight, gold)
   const box = $('bagList')
   box.innerHTML = ''
   const grouped = new Map()
