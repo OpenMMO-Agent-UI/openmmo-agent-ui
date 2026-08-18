@@ -49,6 +49,13 @@ jobs:
         run: |
           npm ci
           npm --prefix deps/OpenMMO/client ci
+      - name: Cache game model assets
+        uses: actions/cache@v4
+        with:
+          path: deps/OpenMMO/client/public/models
+          key: game-models-${{ hashFiles('deps/OpenMMO/assets.lock') }}
+      - name: Fetch game model assets
+        run: bash deps/OpenMMO/tools/fetch-assets.sh client/public/models
       - name: Inspect existing release
         id: release
         env:
