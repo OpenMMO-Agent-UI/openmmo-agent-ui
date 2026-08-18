@@ -97,7 +97,14 @@ function validatePin(repo) {
     fail(`deps/OpenMMO origin ${checkoutUrl} does not match configured remote ${configuredUrl}`)
   }
 
-  git(checkout, 'fetch', 'origin', '--tags', '--prune')
+  git(
+    checkout,
+    'fetch',
+    '--tags',
+    '--prune',
+    'origin',
+    '+refs/heads/*:refs/remotes/origin/*',
+  )
   const refs = git(
     checkout,
     'for-each-ref',

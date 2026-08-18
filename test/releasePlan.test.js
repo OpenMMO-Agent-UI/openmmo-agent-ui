@@ -123,6 +123,22 @@ test('rejects a tag that is not valid v-prefixed SemVer', () => {
   assert.match(result.stderr, /valid SemVer prefixed with v/)
 })
 
+test('fetches configured submodule branch refs before validating reachability', () => {
+  const fixture = makeFixture()
+  try {
+    const checkout = path.join(fixture.parent, 'deps', 'OpenMMO')
+    git(checkout, 'update-ref', '-d', 'refs/remotes/origin/integration')
+    git(checkout, 'config', '--unset-all', 'remote.origin.fetch')
+
+    const result = runPlan(fixture)
+
+    assert.equal(result.status, 0, result.stderr)
+    assert.equal(JSON.parse(result.stdout).openmmoSha, fixture.openmmoSha)
+  } finally {
+    fixture.cleanup()
+  }
+})
+
 test('accepts an alphanumeric prerelease identifier with a leading zero', () => {
   const fixture = makeFixture()
   try {
