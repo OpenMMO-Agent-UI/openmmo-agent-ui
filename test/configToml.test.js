@@ -12,14 +12,26 @@ const { DEFAULTS } = require('../src/settingsStore')
 /// a new upstream release is what would silently drop it. Reading the real
 /// constants keeps this repo's default and floor honest instead of restating
 /// numbers that agent-client may no longer agree with.
-function rustConstant(name) {
-  const source = fs.readFileSync(
+function rustSource() {
+  return fs.readFileSync(
     path.join(__dirname, '..', 'deps', 'OpenMMO', 'agent-client', 'src', 'openai.rs'),
     'utf8',
   )
-  const match = source.match(new RegExp(`${name}: usize = (\\d+);`))
-  assert.ok(match, `agent-client's openai.rs no longer defines ${name}`)
-  return Number(match[1])
+}
+
+function rustConstantOr(fallback, ...names) {
+  const source = rustSource()
+  for (const name of names) {
+    const match = source.match(new RegExp(`${name}: usize = (\\d+);`))
+    if (match) return Number(match[1])
+  }
+  return fallback
+}
+
+function rustConstant(...names) {
+  const value = rustConstantOr(null, ...names)
+  if (value != null) return value
+  assert.fail(`agent-client's openai.rs no longer defines ${names.join(' or ')}`)
 }
 
 function settings(overrides = {}) {
@@ -57,7 +69,7 @@ test('history cap is written into [openai] and nowhere else', () => {
 })
 
 test('history cap default matches the cap agent-client hardcoded before it was configurable', () => {
-  const fallback = rustConstant('DEFAULT_MAX_MESSAGES')
+  const fallback = rustConstant('DEFAULT_MAX_MESSAGES', 'MAX_MESSAGES')
 
   assert.equal(DEFAULTS.maxMessages, fallback)
   // Both an unset setting and a stored zero have to land on the same value the
@@ -75,7 +87,7 @@ test('history cap is always written as an integer', () => {
 })
 
 test('history cap never goes below the floor agent-client would clamp it to', () => {
-  const floor = rustConstant('MIN_MAX_MESSAGES')
+  const floor = rustConstantOr(3, 'MIN_MAX_MESSAGES')
 
   // Below the floor the Rust trim computes `turn.len() - (max_messages - 1)`
   // on a usize and panics mid-turn, so a hand-edited config.toml carrying 1
