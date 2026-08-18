@@ -17,7 +17,10 @@ name: Release sync from upstream
 
 on:
   schedule:
-    - cron: '23 * * * *' # hourly; the check job costs seconds
+    # Every 5 minutes (GitHub's floor), offset from the :00/:05 herd that
+    # gets delayed hardest. The check job costs seconds and the repo is
+    # public, so the minutes are free; the agent only wakes on a new release.
+    - cron: '3-58/5 * * * *'
   workflow_dispatch:
 
 permissions:
