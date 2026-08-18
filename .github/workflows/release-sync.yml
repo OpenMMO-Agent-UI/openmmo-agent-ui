@@ -47,7 +47,10 @@ jobs:
           # sync has run; a brand-new release isn't there yet, so compare
           # fails and we correctly wake the agent.
           tag="$(gh api repos/Julian-adv/OpenMMO/releases --jq '[.[] | select(.draft == false)] | sort_by(.published_at) | reverse | .[0].tag_name')"
-          relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}^{}" "refs/tags/${tag}" | head -1 | cut -f1)"
+          # Peeled ref first: an annotated tag's own object SHA 404s in the
+          # compare API, which read as "unknown" and woke the agent every run.
+          relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}^{}" | cut -f1)"
+          [[ -n "$relsha" ]] || relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}" | cut -f1)"
           pin="$(git ls-tree HEAD deps/OpenMMO | awk '{print $3}')"
           status="$(gh api "repos/OpenMMO-Agent-UI/OpenMMO/compare/${relsha}...${pin}" --jq .status 2>/dev/null || echo unknown)"
           echo "release=$tag ($relsha) pin=$pin compare=$status"
@@ -80,6 +83,17 @@ jobs:
           workspaces: deps/OpenMMO
       - name: Install wasm-pack
         run: curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+      - name: Cache game model assets
+        uses: actions/cache@v4
+        with:
+          path: deps/OpenMMO/client/public/models
+          key: game-models-${{ hashFiles('deps/OpenMMO/assets.lock') }}
+      - name: Fetch game model assets
+        # Upstream's client tests read real .glb files (fetched from a
+        # Hugging Face dataset, never stored in git) — without them the
+        # Step 3 gate fails on asset-reading tests. Idempotent and
+        # sha-verified, so the cache makes this a no-op most runs.
+        run: bash deps/OpenMMO/tools/fetch-assets.sh client/public/models
       - name: Wire the PAT into every github.com remote (incl. the fork submodule)
         env:
           PAT: ${{ secrets.WIKI_RELEASE_TOKEN }}
@@ -100,7 +114,8 @@ jobs:
             summary instead, and on an abort describe exactly which step and
             why. Skip the skill's "Local environment prerequisites" section:
             this runner already has rustup (with wasm32-unknown-unknown),
-            wasm-pack, node 22, and an authenticated gh.
+            wasm-pack, node 22, an authenticated gh, and the game model
+            assets pre-fetched under deps/OpenMMO/client/public/models.
           show_full_output: true
           claude_args: |
             --model claude-sonnet-5
@@ -114,7 +129,8 @@ jobs:
           # gate's question after the fact: Julian's latest release must now
           # be contained in the pin AND published as a client release.
           tag="$(gh api repos/Julian-adv/OpenMMO/releases --jq '[.[] | select(.draft == false)] | sort_by(.published_at) | reverse | .[0].tag_name')"
-          relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}^{}" "refs/tags/${tag}" | head -1 | cut -f1)"
+          relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}^{}" | cut -f1)"
+          [[ -n "$relsha" ]] || relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}" | cut -f1)"
           git fetch --quiet origin master
           pin="$(git ls-tree origin/master deps/OpenMMO | awk '{print $3}')"
           status="$(gh api "repos/OpenMMO-Agent-UI/OpenMMO/compare/${relsha}...${pin}" --jq .status 2>/dev/null || echo unknown)"
