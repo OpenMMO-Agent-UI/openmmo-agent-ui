@@ -19,6 +19,14 @@ function gitSucceeds(cwd, ...args) {
   return spawnSync('git', args, { cwd, stdio: 'ignore' }).status === 0
 }
 
+function resolvedUrl(cwd, url) {
+  return git(cwd, 'ls-remote', '--get-url', url)
+}
+
+function displayUrl(url) {
+  return url.replace(/https:\/\/[^/@]+@github\.com\//, 'https://github.com/')
+}
+
 function parseArgs(argv) {
   const [command, ...rest] = argv
   if (command !== 'plan' && command !== 'validate-pin') {
@@ -93,8 +101,11 @@ function validatePin(repo) {
     fail('deps/OpenMMO must not configure branch tracking; the gitlink SHA is authoritative')
   }
   const checkoutUrl = git(checkout, 'remote', 'get-url', 'origin')
-  if (checkoutUrl !== configuredUrl) {
-    fail(`deps/OpenMMO origin ${checkoutUrl} does not match configured remote ${configuredUrl}`)
+  const expectedUrl = resolvedUrl(repo, configuredUrl)
+  if (checkoutUrl !== expectedUrl) {
+    fail(
+      `deps/OpenMMO origin ${displayUrl(checkoutUrl)} does not match configured remote ${displayUrl(expectedUrl)}`,
+    )
   }
 
   git(
