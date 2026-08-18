@@ -101,6 +101,29 @@ jobs:
             why. Skip the skill's "Local environment prerequisites" section:
             this runner already has rustup (with wasm32-unknown-unknown),
             wasm-pack, node 22, and an authenticated gh.
+          show_full_output: true
           claude_args: |
             --model claude-sonnet-5
             --settings .claude/skills/openmmo-release-sync/cron-settings.json
+      - name: Fail loudly unless the sync actually shipped
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # An agent that hits a wall ends its run politely, which reads as
+          # job success — v0.29.0 silently didn't ship that way. Re-ask the
+          # gate's question after the fact: Julian's latest release must now
+          # be contained in the pin AND published as a client release.
+          tag="$(gh api repos/Julian-adv/OpenMMO/releases --jq '[.[] | select(.draft == false)] | sort_by(.published_at) | reverse | .[0].tag_name')"
+          relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}^{}" "refs/tags/${tag}" | head -1 | cut -f1)"
+          git fetch --quiet origin master
+          pin="$(git ls-tree origin/master deps/OpenMMO | awk '{print $3}')"
+          status="$(gh api "repos/OpenMMO-Agent-UI/OpenMMO/compare/${relsha}...${pin}" --jq .status 2>/dev/null || echo unknown)"
+          ver="${tag#agent-client-}"
+          draft="$(gh release view "$ver" --json isDraft --jq .isDraft 2>/dev/null || echo missing)"
+          echo "release=$tag pin-contains-it=$status client-release-$ver=$draft"
+          if [[ ("$status" == "identical" || "$status" == "ahead") && "$draft" == "false" ]]; then
+            echo "shipped."
+          else
+            echo "::error::sync job finished but $tag did not ship (compare=$status, $ver draft-state=$draft) — read the agent summary above" >&2
+            exit 1
+          fi
