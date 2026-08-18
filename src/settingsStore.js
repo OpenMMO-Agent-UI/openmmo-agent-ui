@@ -56,10 +56,11 @@ const DEFAULTS = {
   /// What drives Automatic play: 'none' is the LLM agent, anything else is a
   /// rule-based worker inside agent-client (no LLM, no API key).
   workerKind: 'none',
-  workerLevelMargin: 2,
-  workerLowHealthPct: 40,
+  workerLevelMargin: 0,
+  workerLowHealthPct: 70,
+  workerFoodStock: 10,
   workerPotionStock: 10,
-  workerBagFullPct: 80,
+  workerBagFullPct: 90,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
   rustLog: 'info',
@@ -223,6 +224,7 @@ function importExistingConfig(settings) {
   take('workerKind', worker.kind)
   take('workerLevelMargin', worker.level_margin)
   take('workerLowHealthPct', worker.low_health_pct)
+  take('workerFoodStock', worker.food_stock)
   take('workerPotionStock', worker.potion_stock)
   take('workerBagFullPct', worker.bag_full_pct)
   take('minIntervalSecs', npc.min_interval_secs)

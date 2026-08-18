@@ -91,6 +91,7 @@ const FIELDS = {
   workerKind: 'text',
   workerLevelMargin: 'int',
   workerLowHealthPct: 'int',
+  workerFoodStock: 'int',
   workerPotionStock: 'int',
   workerBagFullPct: 'int',
   llm: 'text',

@@ -100,6 +100,7 @@ test('the engine picker and its knobs reach the generated config', () => {
       workerKind: 'fighter',
       workerLevelMargin: 4,
       workerLowHealthPct: 55,
+      workerFoodStock: 4,
       workerPotionStock: 6,
       workerBagFullPct: 70,
     }),
@@ -109,6 +110,7 @@ test('the engine picker and its knobs reach the generated config', () => {
   assert.match(table, /^kind = "fighter"$/m)
   assert.match(table, /^level_margin = 4$/m)
   assert.match(table, /^low_health_pct = 55$/m)
+  assert.match(table, /^food_stock = 4$/m)
   assert.match(table, /^potion_stock = 6$/m)
   assert.match(table, /^bag_full_pct = 70$/m)
 })
@@ -145,6 +147,6 @@ test('a blank threshold falls back to the default instead of writing 0', () => {
   // unanswered field must not silently become one.
   const table = workerTable(renderConfigToml(settings({ workerLowHealthPct: '', workerBagFullPct: undefined })))
 
-  assert.match(table, /^low_health_pct = 40$/m)
-  assert.match(table, /^bag_full_pct = 80$/m)
+  assert.match(table, /^low_health_pct = 70$/m)
+  assert.match(table, /^bag_full_pct = 90$/m)
 })

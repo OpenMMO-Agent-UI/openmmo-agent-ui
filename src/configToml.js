@@ -103,9 +103,10 @@ function renderConfigToml(s) {
     '[npcs.worker]',
     `kind = ${tomlString(s.workerKind || 'none')}`,
     `level_margin = ${Math.max(0, Math.round(Number(s.workerLevelMargin)) || 0)}`,
-    `low_health_pct = ${clampPercent(s.workerLowHealthPct, 40)}`,
+    `low_health_pct = ${clampPercent(s.workerLowHealthPct, 70)}`,
+    `food_stock = ${Math.max(0, Math.round(Number(s.workerFoodStock)) || 0)}`,
     `potion_stock = ${Math.max(0, Math.round(Number(s.workerPotionStock)) || 0)}`,
-    `bag_full_pct = ${clampPercent(s.workerBagFullPct, 80)}`,
+    `bag_full_pct = ${clampPercent(s.workerBagFullPct, 90)}`,
   )
   lines.push('')
   return lines.join('\n')
