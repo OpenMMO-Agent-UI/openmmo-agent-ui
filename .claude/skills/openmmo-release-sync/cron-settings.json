@@ -6,6 +6,8 @@
       "Bash(npm *)",
       "Bash(gh *)",
       "Bash(node *)",
+      "Bash(bash *)",
+      "Bash(curl *)",
       "Bash(cd *)",
       "Read",
       "Edit",

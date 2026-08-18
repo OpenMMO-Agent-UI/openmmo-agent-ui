@@ -138,6 +138,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 cd client
 npm ci
+bash ../tools/fetch-assets.sh client/public/
 npm run build:wasm
 npm test
 npm run check
@@ -149,6 +150,11 @@ cd ..
 (These mirror `deps/OpenMMO/.github/workflows/ci.yml` exactly — if that
 workflow file has changed since this was written, match the current
 version of it instead of this list.)
+
+`fetch-assets.sh` downloads the binary client assets that some tests read
+directly; they are pinned in `assets.lock` but intentionally not tracked in
+git. Run it before `npm test`, otherwise tests that load real `.glb` rigs can
+fail with missing files even when the code is fine.
 
 `build:wasm` regenerates `data/monster_attack_clips.json` from monster
 `.glb` models — if this checkout is missing LFS model assets, the

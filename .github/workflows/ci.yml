@@ -38,6 +38,7 @@ jobs:
       - run: npm --prefix deps/OpenMMO/client ci
       - run: npm run validate:pin
       - run: npm test
+      - run: bash deps/OpenMMO/tools/fetch-assets.sh client/public/
       - run: npm --prefix deps/OpenMMO/client run build:wasm
       - run: npm --prefix deps/OpenMMO/client test
       - run: npm --prefix deps/OpenMMO/client run check
