@@ -7,6 +7,7 @@ import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
 import * as settingsPanel from './settingsPanel.js'
 import * as signInFlow from './signInFlow.js'
+import * as updateBanner from './updateBanner.js'
 
 const api = window.agentApp
 
@@ -1039,6 +1040,9 @@ async function init() {
       void persistImmediateSetting(patch)
     },
   })
+
+  $('appVersion').textContent = info.appVersion
+  updateBanner.mount(api)(info.update)
 
   renderFeedFilters()
   bagWorn.renderWorn({})
