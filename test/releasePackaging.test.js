@@ -88,3 +88,24 @@ test('macOS releases require Apple notarization and Gatekeeper verification', ()
   assert.match(workflow, /spctl --assess --type execute --verbose=4 "\$app"/)
   assert.doesNotMatch(workflow, /CSC_IDENTITY_AUTO_DISCOVERY/)
 })
+
+test('the update channel file yields the version, artifact, and checksum it names', () => {
+  const { parseFeed } = require('../scripts/verify-update-feed.js')
+  const channel = [
+    'version: 0.31.0',
+    'files:',
+    '  - url: openmmo-agent-v0.31.0-p35-macos-arm64.zip',
+    '    sha512: nested-must-not-win',
+    '    size: 191',
+    'path: openmmo-agent-v0.31.0-p35-macos-arm64.zip',
+    'sha512: top-level-checksum',
+    "releaseDate: '2026-08-19T00:00:00.000Z'",
+    '',
+  ].join('\n')
+
+  assert.deepEqual(parseFeed(channel), {
+    version: '0.31.0',
+    file: 'openmmo-agent-v0.31.0-p35-macos-arm64.zip',
+    sha512: 'top-level-checksum',
+  })
+})

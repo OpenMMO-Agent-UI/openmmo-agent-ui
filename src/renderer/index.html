@@ -12,6 +12,16 @@
   <body data-screen="server" data-mode="ai">
     <div id="errors" class="toast" hidden></div>
 
+    <!-- Sits above every screen: an update that finished downloading while
+         the agent was grinding must still be visible when the player comes
+         back, whichever screen they left it on. -->
+    <div id="updateBanner" class="update-banner" hidden>
+      <span id="updateBannerText"></span>
+      <button id="updateRestart" class="primary small">Restart to update</button>
+      <button id="updateDownload" class="ghost small" hidden>Download</button>
+      <button id="updateDismiss" class="ghost small" aria-label="Dismiss">×</button>
+    </div>
+
     <!-- CONNECTION PROFILE — always the first screen on a cold launch. -->
     <section id="screen-server" class="screen screen-entry">
       <div class="glow"></div>
@@ -552,6 +562,10 @@
             <p class="hint">Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
             <h3 class="settings-section">This app</h3>
             <p class="hint">OpenMMO Agent UI is free and open source. It runs the agent on your own machine, under your own model quota.</p>
+            <p class="hint">Version <strong id="appVersion">—</strong> · <span id="updateStatus">Updates install automatically.</span></p>
+            <div class="row">
+              <button id="updateCheck" class="ghost small">Check for updates</button>
+            </div>
           </div>
         </div>
         <div class="modal-foot">

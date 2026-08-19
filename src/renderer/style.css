@@ -285,6 +285,27 @@ pre {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
+.update-banner {
+  position: fixed;
+  z-index: 60;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px 8px 16px;
+  border-radius: 8px;
+  background: #14211a;
+  border: 1px solid #2c4a39;
+  color: #b7e6cb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
 /* ---------- screens ---------- */
 
 .screen {

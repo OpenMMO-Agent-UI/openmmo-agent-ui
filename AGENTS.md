@@ -20,19 +20,8 @@ is the commit type: `feat`, `fix`, `refactor`, `chore`, `docs`.
 
 ## Commit messages
 
-[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/). Types:
-`feat` `fix` `refactor` `chore` `docs` `ci` `test` `revert`. Scope is optional
-but recommended — the chart, module, or subsystem (`cert-manager`, `ansible`,
-`k8s`).
-
-```
-feat(cert-manager): add GCP DNS01 solver
-
-feat!: drop support for standalone SeaweedFS mode
-
-BREAKING CHANGE: seaweedfs_mode=standalone is no longer supported; all
-deployments require HA.
-```
+- Message format: conventional commits
+- Scope of work: logical commits
 
 ## Interactive commands
 

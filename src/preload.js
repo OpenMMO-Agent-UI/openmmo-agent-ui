@@ -55,6 +55,9 @@ contextBridge.exposeInMainWorld('agentApp', {
   updatePreset: (characterId, id, preset) =>
     ipcRenderer.invoke('presets:update', { characterId, id, ...preset }),
   deletePreset: (characterId, id) => ipcRenderer.invoke('presets:delete', { characterId, id }),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  openDownloadPage: () => ipcRenderer.invoke('update:download-page'),
   openView: () => ipcRenderer.invoke('view:open'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),
@@ -72,4 +75,5 @@ contextBridge.exposeInMainWorld('agentApp', {
   onViewMemory: on('view:memory'),
   onViewStop: on('view:stop'),
   onPlayState: on('play:state'),
+  onUpdateState: on('update:state'),
 })

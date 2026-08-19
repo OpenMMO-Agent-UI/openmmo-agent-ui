@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@aptabase/electron": "^0.3.1",
+    "electron-updater": "^6.8.9",
     "ws": "^8.21.1"
   },
   "build": {
@@ -37,6 +38,12 @@
       "src/**/*",
       "config/release.json",
       "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/OpenMMO-Agent-UI/openmmo-agent-wiki/releases/latest/download"
+      }
     ],
     "extraResources": [
       {

@@ -26,6 +26,7 @@ const { PlaySessionCoordinator } = require('./playSession')
 const { validateLlmSettings } = require('./llmValidation')
 const { translateText } = require('./translate')
 const telemetry = require('./telemetry')
+const updater = require('./updater')
 
 const agent = new AgentProcess()
 const clientServer = new ClientServer()
@@ -500,6 +501,7 @@ app.whenReady().then(() => {
 
   startMemoryWatch()
   createWindow()
+  updater.init({ send, stopAgent: () => agent.stopAndWait() })
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -510,15 +512,33 @@ app.on('window-all-closed', () => {
   app.quit()
 })
 
-app.on('before-quit', () => {
+/// Quitting waits for agent-client to actually exit rather than firing a
+/// kill and moving on. Every exit path runs through here, including the one
+/// electron-updater takes to install a downloaded update — and an installer
+/// that starts while the child still holds its files open leaves the app
+/// half-replaced. The child's own stop() escalates to SIGKILL, and the race
+/// below is the last resort so a wedged process can never make the app
+/// unquittable.
+let quitting = false
+app.on('before-quit', (event) => {
   stopFeedPolling()
   clientServer.stop()
   proxy.stop()
-  agent.stop()
+  updater.stop()
+  if (quitting) return
+  quitting = true
+  event.preventDefault()
+  const settled = Promise.race([
+    agent.stopAndWait(),
+    new Promise((resolve) => setTimeout(resolve, 8000)),
+  ])
+  void settled.then(() => app.quit())
 })
 
 ipcMain.handle('app:info', () => ({
   settings,
+  appVersion: app.getVersion(),
+  update: updater.current(),
   backends: settingsStore.BACKENDS,
   classes: settingsStore.CLASSES,
   agentDir: agentDir(),
@@ -1026,6 +1046,12 @@ ipcMain.handle('view:open', async () => {
   await openSpectatorView()
   return { ok: true }
 })
+
+ipcMain.handle('update:check', () => updater.check())
+
+ipcMain.handle('update:install', () => updater.install())
+
+ipcMain.handle('update:download-page', () => updater.openDownloadPage())
 
 ipcMain.handle('shell:open', (_e, target) => {
   // A button whose target has not been filled in yet must do nothing, not
