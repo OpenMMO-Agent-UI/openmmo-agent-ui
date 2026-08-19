@@ -4,6 +4,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { app } = require('electron')
 
+const { syncSeed } = require('./seedSync')
+
 const releaseConfig = require('../config/release.json')
 
 /// The OpenMMO checkout `agentDir()`/`clientDist()` (server.js) resolve
@@ -40,22 +42,21 @@ function agentDir() {
 /// start or grows at runtime and has no business being in the bundle.
 const SEED_ENTRIES = ['system_prompt.txt', 'user_prompts', 'templates', 'animation_durations.json']
 
-/// Copies a seed entry into the runtime dir the first time it's missing.
-/// Never overwrites — a hand-edited user_prompts/ or a relaunch after the
-/// files already exist must leave them alone.
-function copySeedEntry(src, dest) {
-  if (!fs.existsSync(src) || fs.existsSync(dest)) return
-  fs.mkdirSync(path.dirname(dest), { recursive: true })
-  fs.cpSync(src, dest, { recursive: true })
-}
-
+/// Re-seeded on every version change, not just the first run. These files
+/// track the agent-client we bundle — a release that reworks the system
+/// prompt or adds an animation duration ships a binary that expects the new
+/// copy. Before auto-update that mostly self-corrected, because upgrading
+/// meant a fresh install; with updates landing in place, a never-overwrite
+/// rule would pin every user's prompts to whichever version they first
+/// installed. syncSeed() keeps hand edits regardless (src/seedSync.js).
 function seedRuntimeData() {
   if (!app.isPackaged) return
-  const seedData = path.join(packagedSeedDir(), 'data')
-  const runtimeData = path.join(agentDir(), 'data')
-  for (const entry of SEED_ENTRIES) {
-    copySeedEntry(path.join(seedData, entry), path.join(runtimeData, entry))
-  }
+  return syncSeed({
+    seedDir: path.join(packagedSeedDir(), 'data'),
+    runtimeDir: path.join(agentDir(), 'data'),
+    version: app.getVersion(),
+    entries: SEED_ENTRIES,
+  })
 }
 
 /// { parentCommit, openmmoCommit, protocolVersion } for the exact desktop and
