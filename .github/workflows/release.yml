@@ -196,6 +196,13 @@ jobs:
           OPENMMO_BUILD_SHA: ${{ needs.validate.outputs.openmmo-sha }}
           OPENMMO_PROTOCOL_VERSION: ${{ needs.validate.outputs.protocol }}
         run: npm run ${{ matrix.command }} -- --config.extraMetadata.version="$APP_VERSION" --config.artifactName="$ARTIFACT_NAME"
+      - name: Verify the update channel file exists
+        shell: bash
+        # electron-builder emits it as a side effect of `build.publish` being
+        # configured. If that ever stops, every installed client goes quiet
+        # instead of updating, and the upload below would not notice.
+        run: ls out/latest*.yml
+
       - name: Verify macOS notarization
         if: matrix.os == 'macos-14'
         run: |
@@ -207,7 +214,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: out/${{ matrix.artifact }}
+          # The channel file rides along with the installer it describes:
+          # electron-updater reads latest*.yml to decide there is an update at
+          # all, so a release that ships without one is invisible to every
+          # client already in the field.
+          path: |
+            out/${{ matrix.artifact }}
+            out/latest*.yml
           if-no-files-found: error
 
   draft-release:
