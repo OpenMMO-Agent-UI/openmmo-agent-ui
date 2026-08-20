@@ -12,6 +12,7 @@ const { preserveLegacyUserData } = require('./appPaths')
 preserveLegacyUserData(app)
 
 const settingsStore = require('./settingsStore')
+const i18n = require('./i18n')
 const personalityText = require('./personalityText')
 const { agentDir, seedRuntimeData } = require('./runtimeEnv')
 const { renderConfigToml } = require('./configToml')
@@ -237,7 +238,7 @@ function stopFeedPolling() {
 async function spectatorSceneUrl() {
   const base = await clientServer.start(settings.terrain)
   const mirror = proxy.mirrorUrl
-  if (!mirror) throw new Error('The relay is not listening yet.')
+  if (!mirror) throw new Error(i18n.t('The relay is not listening yet.'))
   return `${base}/?observe=${encodeURIComponent(mirror)}`
 }
 
@@ -293,7 +294,7 @@ function profileCipher() {
           ]).toString('utf8'),
         )
       }
-      throw new Error('Connection-profile secrets cannot be decrypted')
+      throw new Error(i18n.t('Connection-profile secrets cannot be decrypted'))
     },
   }
 }
@@ -324,16 +325,16 @@ function validateGlobalLlm() {
   if (settingsStore.usesWorker(settings)) return { ok: true }
   const backend = settingsStore.BACKENDS.find((candidate) => candidate.id === settings.llm)
   if (!backend || backend.kind === 'none') {
-    return { ok: false, error: 'Set up an LLM to use Automatic play' }
+    return { ok: false, error: i18n.t('Set up an LLM to use Automatic play') }
   }
   if (backend.kind === 'http' && !settings.models[settings.llm]) {
-    return { ok: false, error: `Pick a model for ${backend.label}` }
+    return { ok: false, error: i18n.t('Pick a model for {backend}', { backend: backend.label }) }
   }
   if (settings.llm === 'openrouter' && !settings.openrouterKey) {
-    return { ok: false, error: 'OpenRouter needs an API key' }
+    return { ok: false, error: i18n.t('OpenRouter needs an API key') }
   }
   if (settings.llm === 'openai' && (!settings.openaiBaseUrl || !settings.openaiKey)) {
-    return { ok: false, error: 'OpenAI-compatible mode needs a Base URL and API key' }
+    return { ok: false, error: i18n.t('OpenAI-compatible mode needs a Base URL and API key') }
   }
   return { ok: true }
 }
@@ -348,11 +349,11 @@ async function stopAiController() {
 function waitForAgentWorld() {
   let cancel
   const promise = new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => finish(new Error('AI did not enter the world in time')), 30000)
+    const timeout = setTimeout(() => finish(new Error(i18n.t('AI did not enter the world in time'))), 30000)
     const ready = (url) => finish(null, url)
     const fatal = (message) => finish(new Error(message))
     const state = (next) => {
-      if (!next.running && next.exitCode != null) finish(new Error('AI exited before entering the world'))
+      if (!next.running && next.exitCode != null) finish(new Error(i18n.t('AI exited before entering the world')))
     }
     function finish(error, url) {
       clearTimeout(timeout)
@@ -365,7 +366,7 @@ function waitForAgentWorld() {
     agent.once('watch-ready', ready)
     agent.once('fatal', fatal)
     agent.on('state', state)
-    cancel = () => finish(new Error('AI startup canceled'))
+    cancel = () => finish(new Error(i18n.t('AI startup canceled')))
   })
   promise.cancel = cancel
   return promise
@@ -375,7 +376,7 @@ async function startManualController(context) {
   closePreflightSession()
   const profile = selectedProfileSettings()
   const refreshToken = profileStore.credential(profile.id)
-  if (!refreshToken) throw new Error('Not signed in')
+  if (!refreshToken) throw new Error(i18n.t('Not signed in'))
   currentIdToken = await googleAuth.mintIdToken(
     refreshToken,
     profile.googleClientId,
@@ -393,7 +394,7 @@ async function startManualController(context) {
   const readiness = new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       manualReadiness = null
-      reject(new Error('Manual client did not enter the world in time'))
+      reject(new Error(i18n.t('Manual client did not enter the world in time')))
     }, 30000)
     manualReadiness = {
       finish(error) {
@@ -535,6 +536,10 @@ app.on('before-quit', (event) => {
   void settled.then(() => app.quit())
 })
 
+/// The renderer asks for a dictionary at startup and on every switch; the file
+/// read and its cache stay on this side (see src/i18n.js).
+ipcMain.handle('i18n:dict', (_e, language) => i18n.dictionary(language))
+
 ipcMain.handle('app:info', () => ({
   settings,
   appVersion: app.getVersion(),
@@ -572,7 +577,7 @@ ipcMain.handle('profiles:select', (_e, id) => {
 
 ipcMain.handle('profiles:test', async (_e, id) => {
   const profile = profileStore.withSecrets(id)
-  if (!profile) return { ok: false, error: 'Connection profile not found' }
+  if (!profile) return { ok: false, error: i18n.t('Connection profile not found') }
   try {
     await characterSession.testConnection(profile.serverUrl, profile.terrainOrigin)
     profileStore.setValidation(id, { ok: true, checkedAt: Date.now() })
@@ -710,7 +715,7 @@ ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
 })
 
 ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const profileId = profileStore.selected().id
   const file = personalityPath(profileId, characterId)
   fs.mkdirSync(path.dirname(file), { recursive: true })
@@ -744,7 +749,7 @@ ipcMain.handle('labels:get', (_e, { characterId }) => {
 })
 
 ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const profileId = profileStore.selected().id
   const clean = {
     sellable: Array.isArray(labels?.sellable) ? [...new Set(labels.sellable)] : [],
@@ -774,7 +779,7 @@ ipcMain.handle('coordinates:list', (_e, { characterId }) => {
 })
 
 ipcMain.handle('coordinates:add', (_e, { characterId, name, x, y, z }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const { read, write } = characterStore.open('coordinates', profileStore.selected().id, characterId)
   const list = read()
   list.push({ id: crypto.randomUUID(), name, x, y, z })
@@ -783,7 +788,7 @@ ipcMain.handle('coordinates:add', (_e, { characterId, name, x, y, z }) => {
 })
 
 ipcMain.handle('coordinates:delete', (_e, { characterId, id }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const { read, write } = characterStore.open('coordinates', profileStore.selected().id, characterId)
   const list = read().filter((c) => c.id !== id)
   write(list)
@@ -797,7 +802,7 @@ ipcMain.handle('presets:list', (_e, { characterId }) => {
 })
 
 ipcMain.handle('presets:add', (_e, { characterId, name, prompt }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
   const list = read()
   list.push({ id: crypto.randomUUID(), name, prompt })
@@ -806,11 +811,11 @@ ipcMain.handle('presets:add', (_e, { characterId, name, prompt }) => {
 })
 
 ipcMain.handle('presets:update', (_e, { characterId, id, name, prompt }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
   const list = read()
   const preset = list.find((p) => p.id === id)
-  if (!preset) return { ok: false, error: 'Preset not found' }
+  if (!preset) return { ok: false, error: i18n.t('Preset not found') }
   preset.name = name
   preset.prompt = prompt
   write(list)
@@ -818,7 +823,7 @@ ipcMain.handle('presets:update', (_e, { characterId, id, name, prompt }) => {
 })
 
 ipcMain.handle('presets:delete', (_e, { characterId, id }) => {
-  if (!characterId) return { ok: false, error: 'No character selected' }
+  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
   const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
   const list = read().filter((p) => p.id !== id)
   write(list)
@@ -868,7 +873,7 @@ async function reopenPreflightSession(refreshToken, profile = selectedProfileSet
 /// Shared tail of both sign-in paths below.
 async function finishSignIn(refreshToken, profileId, generation) {
   const profile = profileStore.withSecrets(profileId)
-  if (!profile) throw new Error('Connection profile no longer exists')
+  if (!profile) throw new Error(i18n.t('Connection profile no longer exists'))
   const idToken = await googleAuth.mintIdToken(
     refreshToken,
     profile.googleClientId,
@@ -877,7 +882,7 @@ async function finishSignIn(refreshToken, profileId, generation) {
   const session = await characterSession.openSession(profile.serverUrl, idToken)
   if (generation !== authGeneration || profileStore.selected().id !== profileId) {
     session.close()
-    return { ok: false, canceled: true, error: 'Sign-in canceled' }
+    return { ok: false, canceled: true, error: i18n.t('Sign-in canceled') }
   }
   closePreflightSession()
   preflightSession = session
@@ -907,7 +912,7 @@ async function finishSignIn(refreshToken, profileId, generation) {
 async function ensurePreflightSession() {
   if (preflightSession) return { ok: true }
   const refreshToken = profileStore.credential(profileStore.selected().id)
-  if (!refreshToken) return { ok: false, error: 'Not signed in' }
+  if (!refreshToken) return { ok: false, error: i18n.t('Not signed in') }
   try {
     await reopenPreflightSession(refreshToken)
     currentCharacters = preflightSession.characters
@@ -929,7 +934,7 @@ ipcMain.handle('auth:continue', async () => {
     const profileId = profileStore.selected().id
     const generation = ++authGeneration
     const refreshToken = profileStore.credential(profileId)
-    if (!refreshToken) throw new Error('No cached credential to continue with')
+    if (!refreshToken) throw new Error(i18n.t('No cached credential to continue with'))
     return await finishSignIn(refreshToken, profileId, generation)
   } catch (err) {
     return signInError(err)
@@ -989,7 +994,7 @@ ipcMain.handle('play:enter', async (_e, characterId) => {
   const ready = await ensurePreflightSession()
   if (!ready.ok) return ready
   const character = currentCharacters.find((candidate) => candidate.id === characterId)
-  if (!character) return { ok: false, error: 'That character is no longer in this account roster' }
+  if (!character) return { ok: false, error: i18n.t('That character is no longer in this account roster') }
   const characterName = character.name
   settings = settingsStore.save({ ...settings, characterName })
   activeCharacterId = characterId
@@ -1031,9 +1036,9 @@ ipcMain.handle('play:leave', async (_e, destination) => {
 /// A directive: best-effort, delivered as a relay-forged whisper.
 /// Only meaningful once agent-client is actually running and connected.
 ipcMain.handle('directive:send', (_e, text) => {
-  if (!agent.running) return { ok: false, error: 'Not running' }
+  if (!agent.running) return { ok: false, error: i18n.t('Not running') }
   const delivered = proxy.sendDirective(settings.characterName, text)
-  if (!delivered) return { ok: false, error: 'Not connected yet — try again in a moment' }
+  if (!delivered) return { ok: false, error: i18n.t('Not connected yet — try again in a moment') }
   return { ok: true }
 })
 

@@ -1,5 +1,7 @@
 'use strict'
 
+import { t } from './i18n.js'
+
 export const $ = (id) => document.getElementById(id)
 
 /// A `min`/`max` attribute as a number. `Number('')` is 0, so an absent
@@ -59,7 +61,7 @@ export function setScreen(name) {
 export function confirmAction(message, okLabel = 'Delete') {
   return new Promise((resolve) => {
     $('confirmMessage').textContent = message
-    $('confirmOk').textContent = okLabel
+    $('confirmOk').textContent = t(okLabel)
     $('confirmModal').hidden = false
     const finish = (result) => {
       $('confirmModal').hidden = true

@@ -1,5 +1,7 @@
 'use strict'
 
+import { t } from './renderer/i18n.js'
+
 function clone(value) {
   return value == null ? value : structuredClone(value)
 }
@@ -124,7 +126,7 @@ export class AppWorkflow {
       return this.publish({
         screen: 'character',
         busy: false,
-        errors: result.errors || [result.error || 'Could not enter the game'],
+        errors: result.errors || [result.error || t('Could not enter the game')],
       })
     }
     return this.publish({

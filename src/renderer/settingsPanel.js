@@ -2,6 +2,7 @@
 
 import { $, readField } from './dom.js'
 import { applyToastCssVars } from './actionToasts.js'
+import { t } from './i18n.js'
 
 const ACTIVE_CADENCES = [
   ['Very fast', 3],
@@ -27,9 +28,15 @@ export function nearestCadenceIndex(options, seconds) {
 }
 
 export function humanInterval(secs) {
-  if (secs >= 3600 && secs % 3600 === 0) return `${secs / 3600} hour${secs === 3600 ? '' : 's'}`
-  if (secs >= 60) return `${+(secs / 60).toFixed(1)} minute${secs === 60 ? '' : 's'}`
-  return `${secs} second${secs === 1 ? '' : 's'}`
+  if (secs >= 3600 && secs % 3600 === 0) {
+    const hours = secs / 3600
+    return t(secs === 3600 ? '{n} hour' : '{n} hours', { n: hours })
+  }
+  if (secs >= 60) {
+    const minutes = +(secs / 60).toFixed(1)
+    return t(secs === 60 ? '{n} minute' : '{n} minutes', { n: minutes })
+  }
+  return t(secs === 1 ? '{n} second' : '{n} seconds', { n: secs })
 }
 
 /// Reads the stored seconds, not the slider's preset: the Advanced fields can
@@ -43,10 +50,15 @@ function renderCadenceLabels(settings) {
   // reporting "Infinity calls a minute" in the meantime.
   const active = Math.max(1, settings.minIntervalSecs || 1)
   const idle = Math.max(1, settings.idleIntervalSecs || 1)
-  $('activeCadenceLabel').textContent = `${activeName} · ${humanInterval(active)}`
-  $('activeCadenceHint').textContent = `Up to about ${(60 / active).toFixed(1)} calls a minute while something is happening.`
-  $('idleCadenceLabel').textContent = `${idleName} · ${humanInterval(idle)}`
-  $('idleCadenceHint').textContent = `One call every ${humanInterval(idle)} when the world is quiet.`
+  $('activeCadenceLabel').textContent = `${t(activeName)} · ${humanInterval(active)}`
+  $('activeCadenceHint').textContent = t(
+    'Up to about {calls} calls a minute while something is happening.',
+    { calls: (60 / active).toFixed(1) },
+  )
+  $('idleCadenceLabel').textContent = `${t(idleName)} · ${humanInterval(idle)}`
+  $('idleCadenceHint').textContent = t('One call every {interval} when the world is quiet.', {
+    interval: humanInterval(idle),
+  })
 }
 
 /// Cadence sliders persist through the Apply-gated flow (like the rest of
@@ -78,8 +90,8 @@ function syncToast(settings) {
 }
 
 function renderAudioLabels(settings) {
-  $('bgmVolumeLabel').textContent = settings.bgmMuted ? 'Muted' : `${settings.bgmVolume}%`
-  $('sfxVolumeLabel').textContent = settings.sfxMuted ? 'Muted' : `${settings.sfxVolume}%`
+  $('bgmVolumeLabel').textContent = settings.bgmMuted ? t('Muted') : `${settings.bgmVolume}%`
+  $('sfxVolumeLabel').textContent = settings.sfxMuted ? t('Muted') : `${settings.sfxVolume}%`
 }
 
 /// The game client's own BGM/SFX volume lives in its iframe's separate

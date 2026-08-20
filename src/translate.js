@@ -1,6 +1,7 @@
 'use strict'
 
 const { httpEndpoint } = require('./backends')
+const { t } = require('./i18n')
 
 const TIMEOUT_MS = 10000
 
@@ -34,8 +35,8 @@ function isConfigured(settings) {
 
 async function translateText(settings, { text, target }, adapters = {}) {
   const endpoint = provider(settings)
-  if (!endpoint) return { ok: false, error: 'No translation endpoint configured' }
-  if (!text || !target) return { ok: false, error: 'Nothing to translate' }
+  if (!endpoint) return { ok: false, error: t('No translation endpoint configured') }
+  if (!text || !target) return { ok: false, error: t('Nothing to translate') }
 
   const request = adapters.fetch || fetch
   const headers = { 'content-type': 'application/json' }
@@ -57,23 +58,31 @@ async function translateText(settings, { text, target }, adapters = {}) {
     })
     if (!response.ok) {
       const detail = typeof response.text === 'function' ? (await response.text()).slice(0, 300) : ''
-      return { ok: false, error: `Translation returned HTTP ${response.status}${detail ? `: ${detail}` : ''}` }
+      return {
+        ok: false,
+        error:
+          t('Translation returned HTTP {status}', { status: response.status }) +
+          (detail ? `: ${detail}` : ''),
+      }
     }
     const body = await response.json()
     const content = body?.choices?.[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) {
-      return { ok: false, error: 'Translation endpoint returned no text' }
+      return { ok: false, error: t('Translation endpoint returned no text') }
     }
     // A model that ignores the "translation only" instruction answers with a
     // multi-option essay instead. Observed on a real endpoint whose structured
     // output preset was switched off mid-session.
     const translated = content.trim()
     if (translated.length > text.length * 10 + 100) {
-      return { ok: false, error: 'Translation endpoint returned an explanation, not a translation' }
+      return {
+        ok: false,
+        error: t('Translation endpoint returned an explanation, not a translation'),
+      }
     }
     return { ok: true, text: translated }
   } catch (error) {
-    return { ok: false, error: `Translation failed: ${error.message}` }
+    return { ok: false, error: t('Translation failed: {reason}', { reason: error.message }) }
   }
 }
 

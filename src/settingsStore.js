@@ -5,6 +5,7 @@ const path = require('node:path')
 const { app, safeStorage } = require('electron')
 
 const { agentDir } = require('./runtimeEnv')
+const { LANGUAGES, resolveLocale, setLanguage, t } = require('./i18n')
 const { BACKENDS } = require('./backends')
 const { parseToml } = require('./toml')
 
@@ -94,6 +95,11 @@ const DEFAULTS = {
   /// Anonymous usage analytics (src/telemetry.js). Checked at send time, so
   /// the Settings toggle takes effect immediately, no restart needed.
   telemetry: true,
+  /// The UI's own language, and only the UI's: the agent's words come from its
+  /// personality prompt, and chat translation from the game client's dropdown.
+  /// Resolved from the OS on first run (see load), so a Taiwanese or Korean
+  /// machine opens in its own language without being asked.
+  language: 'en',
 }
 
 const SECRET_KEYS = ['openrouterKey', 'openaiKey', 'googleClientSecret', 'translateKey']
@@ -164,6 +170,11 @@ function load() {
   const secrets = decryptSecrets(stored.secrets)
   const settings = { ...DEFAULTS, ...stored, models: { ...DEFAULTS.models, ...(stored.models || {}) } }
   delete settings.secrets
+  // Only the first run has no stored choice to respect.
+  if (!LANGUAGES.some((l) => l.id === stored.language)) {
+    settings.language = resolveLocale(app.getLocale())
+  }
+  setLanguage(settings.language)
   // A worker that no longer exists (one retired between versions) would fail
   // validation on every Play with nothing to point at — fall back to the LLM
   // agent instead of stranding the session.
@@ -175,6 +186,7 @@ function load() {
 }
 
 function save(settings) {
+  setLanguage(settings.language)
   const secrets = {}
   for (const key of SECRET_KEYS) secrets[key] = settings[key] || ''
   const plain = { ...settings }
@@ -261,34 +273,45 @@ const WORKERS = ['none', 'fighter', 'fisher']
 /// window has already switched to the spectator view.
 function validate(s) {
   const errors = []
-  if (!/^wss?:\/\//.test(s.server)) errors.push('Server URL must start with ws:// or wss://')
-  else if (!/\/ws\/?$/.test(s.server)) errors.push('Server URL must end in /ws')
+  if (!/^wss?:\/\//.test(s.server)) errors.push(t('Server URL must start with ws:// or wss://'))
+  else if (!/\/ws\/?$/.test(s.server)) errors.push(t('Server URL must end in /ws'))
   if (s.authMode === 'npc_token' && !/^npc_/.test(s.npcAccount)) {
-    errors.push('Token auth needs an account name starting with npc_')
+    errors.push(t('Token auth needs an account name starting with npc_'))
   }
   const cls = CLASSES.find((c) => c.id === s.characterClass)
-  if (!cls) errors.push(`Unknown class ${s.characterClass}`)
+  if (!cls) errors.push(t('Unknown class {class}', { class: s.characterClass }))
   else if (!cls.genders.includes(s.gender)) {
-    errors.push(`${s.characterClass} has no ${s.gender} model — pick ${cls.genders.join(' or ')}`)
+    errors.push(
+      t('{class} has no {gender} model — pick {allowed}', {
+        class: t(s.characterClass),
+        gender: t(s.gender),
+        allowed: cls.genders.map((g) => t(g)).join(t(' or ')),
+      }),
+    )
   }
-  if (!WORKERS.includes(s.workerKind || 'none')) errors.push(`Unknown worker ${s.workerKind}`)
+  if (!WORKERS.includes(s.workerKind || 'none')) {
+    errors.push(t('Unknown worker {worker}', { worker: s.workerKind }))
+  }
   const backend = BACKENDS.find((b) => b.id === s.llm)
   if (!usesWorker(s) && backend && backend.kind === 'http' && !s.models[s.llm]) {
-    errors.push(`Pick a model for ${backend.label}`)
+    errors.push(t('Pick a model for {backend}', { backend: backend.label }))
   }
   // Under Google auth, the pre-flight session (characterSession.js) always
   // resolves an exact character before Play — agent-client should never fall
   // back to its own characters.first()/auto-create guesswork.
   if (s.authMode === 'google' && !s.characterName) {
-    errors.push('Choose or create a character first')
+    errors.push(t('Choose or create a character first'))
   }
   if (!usesWorker(s) && s.llm === 'openai' && !s.openaiBaseUrl) {
-    errors.push('OpenAI-compatible mode needs a base URL')
+    errors.push(t('OpenAI-compatible mode needs a base URL'))
   }
   if (isLoopbackUrl(s.server)) {
     errors.push(
-      `Server points at this machine (${s.server}). That is the relay's own address, ` +
-        `not a game server — set it back to ${DEFAULTS.server} under Connection.`,
+      t(
+        "Server points at this machine ({server}). That is the relay's own address, " +
+          'not a game server — set it back to {default} under Connection.',
+        { server: s.server, default: DEFAULTS.server },
+      ),
     )
   }
   return errors

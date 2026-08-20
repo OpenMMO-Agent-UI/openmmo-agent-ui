@@ -7,6 +7,7 @@ const path = require('node:path')
 const { app } = require('electron')
 
 const { agentDir, buildInfo, packagedSeedDir, repoRoot } = require('./runtimeEnv')
+const { t } = require('./i18n')
 const { writeConfig } = require('./configToml')
 
 const LOG_CAP = 600
@@ -149,7 +150,7 @@ class AgentProcess extends EventEmitter {
   }
 
   async start(settings) {
-    if (this.running) throw new Error('Agent is already running')
+    if (this.running) throw new Error(t('Agent is already running'))
 
     const binary = resolveBinary(settings.binaryPath)
     if (!binary) {
@@ -165,11 +166,15 @@ class AgentProcess extends EventEmitter {
     // binary into an error the user sees, rather than a bare "spawn ENOEXEC"
     // arriving in the log a moment after the UI has already said "running".
     const probe = await probeBinary(binary)
-    if (!probe.ok) throw new Error(`agent-client at ${binary} will not run: ${probe.error}`)
+    if (!probe.ok) {
+      throw new Error(
+        t('agent-client at {path} will not run: {reason}', { path: binary, reason: probe.error }),
+      )
+    }
 
     const cwd = agentDir()
     if (!fs.existsSync(path.join(cwd, 'data'))) {
-      throw new Error(`No data/ directory next to the agent at ${cwd}`)
+      throw new Error(t('No data/ directory next to the agent at {path}', { path: cwd }))
     }
 
     const configFile = writeConfig(settings)

@@ -17,9 +17,9 @@
          back, whichever screen they left it on. -->
     <div id="updateBanner" class="update-banner" hidden>
       <span id="updateBannerText"></span>
-      <button id="updateRestart" class="primary small">Restart to update</button>
-      <button id="updateDownload" class="ghost small" hidden>Download</button>
-      <button id="updateDismiss" class="ghost small" aria-label="Dismiss">×</button>
+      <button id="updateRestart" class="primary small" data-i18n>Restart to update</button>
+      <button id="updateDownload" class="ghost small" hidden data-i18n>Download</button>
+      <button id="updateDismiss" class="ghost small" aria-label="Dismiss" data-i18n-attr="aria-label">×</button>
     </div>
 
     <!-- CONNECTION PROFILE — always the first screen on a cold launch. -->
@@ -27,31 +27,31 @@
       <div class="glow"></div>
       <div class="card server-card">
         <p class="wordmark">OpenMMO</p>
-        <h1 class="display">Choose a server</h1>
-        <p class="lede">A server profile keeps the world and its Google sign-in together.</p>
-        <div id="profileList" class="profile-list" role="listbox" aria-label="Servers"></div>
+        <h1 class="display" data-i18n>Choose a server</h1>
+        <p class="lede" data-i18n>A server profile keeps the world and its Google sign-in together.</p>
+        <div id="profileList" class="profile-list" role="listbox" aria-label="Servers" data-i18n-attr="aria-label"></div>
         <div class="profile-actions">
-          <button id="profileNew" class="ghost small">New</button>
-          <button id="profileEdit" class="ghost small">Edit</button>
-          <button id="profileDuplicate" class="ghost small">Duplicate</button>
-          <button id="profileDelete" class="ghost small danger-outline">Delete</button>
+          <button id="profileNew" class="ghost small" data-i18n>New</button>
+          <button id="profileEdit" class="ghost small" data-i18n>Edit</button>
+          <button id="profileDuplicate" class="ghost small" data-i18n>Duplicate</button>
+          <button id="profileDelete" class="ghost small danger-outline" data-i18n>Delete</button>
           <span class="spacer"></span>
-          <button id="profileTest" class="ghost small">Test connection</button>
+          <button id="profileTest" class="ghost small" data-i18n>Test connection</button>
         </div>
         <div id="profileEditor" class="profile-editor" hidden>
-          <p id="profileEditorTitle" class="editor-title">New server</p>
-          <label>Profile name<input id="profileName" /></label>
-          <label>Game server<input id="profileServer" placeholder="wss://realm.example/ws" /></label>
-          <label>Terrain origin <span class="optional">(derived automatically)</span><input id="profileTerrain" placeholder="https://realm.example" /></label>
-          <label>Google client ID<input id="profileClientId" placeholder="….apps.googleusercontent.com" /></label>
-          <label>Google client secret<input id="profileClientSecret" type="password" placeholder="leave empty to keep the stored secret" /></label>
+          <p id="profileEditorTitle" class="editor-title" data-i18n>New server</p>
+          <label data-i18n>Profile name<input id="profileName" /></label>
+          <label data-i18n>Game server<input id="profileServer" placeholder="wss://realm.example/ws" /></label>
+          <label data-i18n>Terrain origin <span class="optional" data-i18n>(derived automatically)</span><input id="profileTerrain" placeholder="https://realm.example" /></label>
+          <label data-i18n>Google client ID<input id="profileClientId" placeholder="….apps.googleusercontent.com" /></label>
+          <label data-i18n>Google client secret<input id="profileClientSecret" type="password" placeholder="leave empty to keep the stored secret" data-i18n-attr="placeholder" /></label>
           <div class="row profile-editor-actions">
-            <button id="profileCancel" class="ghost">Cancel</button>
-            <button id="profileSave" class="primary">Save profile</button>
+            <button id="profileCancel" class="ghost" data-i18n>Cancel</button>
+            <button id="profileSave" class="primary" data-i18n>Save profile</button>
           </div>
         </div>
         <p id="profileStatus" class="hint"></p>
-        <button id="profileContinue" class="primary block">Continue</button>
+        <button id="profileContinue" class="primary block" data-i18n>Continue</button>
       </div>
     </section>
 
@@ -62,28 +62,28 @@
         <p class="wordmark">OpenMMO</p>
 
         <div id="loginChecking">
-          <h1 class="display">Signing in</h1>
-          <p class="lede pulsing">Checking for a saved Google sign-in…</p>
+          <h1 class="display" data-i18n>Signing in</h1>
+          <p class="lede pulsing" data-i18n>Checking for a saved Google sign-in…</p>
         </div>
 
         <div id="loginCode" hidden>
-          <h1 class="display">Sign in to continue</h1>
-          <p class="lede">Open the Google device page, then enter this code.</p>
-          <button id="banner-open" class="primary block">Open google.com/device</button>
+          <h1 class="display" data-i18n>Sign in to continue</h1>
+          <p class="lede" data-i18n>Open the Google device page, then enter this code.</p>
+          <button id="banner-open" class="primary block" data-i18n>Open google.com/device</button>
           <div class="code-block">
             <code id="banner-code" class="device-code">—</code>
-            <button id="banner-copy" class="ghost small">Copy</button>
+            <button id="banner-copy" class="ghost small" data-i18n>Copy</button>
           </div>
-          <p class="hint pulsing">Waiting for you to finish in the browser…</p>
+          <p class="hint pulsing" data-i18n>Waiting for you to finish in the browser…</p>
         </div>
 
         <div id="loginFailed" hidden>
-          <h1 class="display">Sign-in didn't finish</h1>
-          <p class="lede">Nothing on this machine changed. Try again, or go back and pick a different server.</p>
-          <button id="loginRetry" class="primary block">Try again</button>
+          <h1 class="display" data-i18n>Sign-in didn't finish</h1>
+          <p class="lede" data-i18n>Nothing on this machine changed. Try again, or go back and pick a different server.</p>
+          <button id="loginRetry" class="primary block" data-i18n>Try again</button>
         </div>
 
-        <button id="loginCancel" class="linklike">Back to servers</button>
+        <button id="loginCancel" class="linklike" data-i18n>Back to servers</button>
       </div>
     </section>
 
@@ -97,26 +97,26 @@
         <p class="wordmark">OpenMMO</p>
         <div class="account-line">
           <span id="accountName"></span>
-          <button id="switchAccount" class="linklike-inline">Switch account</button>
-          <button id="openSettingsFromCharacter" class="linklike-inline">Settings</button>
+          <button id="switchAccount" class="linklike-inline" data-i18n>Switch account</button>
+          <button id="openSettingsFromCharacter" class="linklike-inline" data-i18n>Settings</button>
         </div>
 
         <div id="rosterPanel">
-          <h1 class="display">Choose your character</h1>
-          <p class="lede">Pick one to enter the world.</p>
+          <h1 class="display" data-i18n>Choose your character</h1>
+          <p class="lede" data-i18n>Pick one to enter the world.</p>
           <div id="characterList" class="roster"></div>
         </div>
 
         <div id="createPanel" hidden>
-          <button id="backToRoster" class="linklike-inline back">‹ Back to your characters</button>
-          <h1 class="display">Create a character</h1>
-          <label>Character name<input id="newCharacterName" placeholder="unique across the server" /></label>
+          <button id="backToRoster" class="linklike-inline back" data-i18n>‹ Back to your characters</button>
+          <h1 class="display" data-i18n>Create a character</h1>
+          <label data-i18n>Character name<input id="newCharacterName" placeholder="unique across the server" data-i18n-attr="placeholder" /></label>
           <div class="row">
-            <label>Class<select id="characterClass"></select></label>
-            <label>Gender<select id="gender"></select></label>
+            <label data-i18n>Class<select id="characterClass"></select></label>
+            <label data-i18n>Gender<select id="gender"></select></label>
           </div>
           <p class="hint" id="genderHint"></p>
-          <button id="createCharacter" class="primary block">Create and enter the world</button>
+          <button id="createCharacter" class="primary block" data-i18n>Create and enter the world</button>
         </div>
       </div>
     </section>
@@ -142,10 +142,11 @@
                 id="dutyLevel"
                 popovertarget="statSheet"
                 title="Character sheet"
+                data-i18n-attr="title"
                 hidden
               ></button>
             </p>
-            <p class="duty-state" id="status">Off duty</p>
+            <p class="duty-state" id="status" data-i18n>Off duty</p>
           </div>
           <div class="duty-vitals" id="dutyVitals" hidden>
             <div class="hp" id="hp">
@@ -161,7 +162,7 @@
             <!-- Third bar, same shape as HP and XP: food is the other reading
                  that drains and that a person acts on. -->
             <div class="hp food" id="food" hidden>
-              <span class="hp-label">FOOD</span>
+              <span class="hp-label" data-i18n>FOOD</span>
               <span class="hp-track"><span class="hp-fill" id="foodFill"></span></span>
               <span class="hp-text" id="foodText"></span>
             </div>
@@ -179,27 +180,27 @@
         <!-- Same native popover as the session menu: light dismiss, Escape and
              the top layer for free. -->
         <div id="statSheet" class="menu sheet" popover>
-          <p class="menu-label">Attributes</p>
+          <p class="menu-label" data-i18n>Attributes</p>
           <div class="stat-grid" id="statGrid"></div>
-          <p class="menu-label">Condition</p>
-          <p class="sheet-line"><span>Guard</span><span id="sheetGuard">—</span></p>
-          <p class="sheet-line"><span>Hunger</span><span id="sheetHunger">—</span></p>
+          <p class="menu-label" data-i18n>Condition</p>
+          <p class="sheet-line"><span data-i18n>Guard</span><span id="sheetGuard">—</span></p>
+          <p class="sheet-line"><span data-i18n>Hunger</span><span id="sheetHunger">—</span></p>
         </div>
 
         <span class="spacer"></span>
 
-        <button id="restart" class="primary" hidden>Apply &amp; restart</button>
+        <button id="restart" class="primary" hidden data-i18n>Apply &amp; restart</button>
 
         <!-- Who is driving the character: the app's largest state, so it says
              so in words rather than leaving two unlabelled icons to it. -->
-        <div class="mode-switch" role="group" aria-label="Who plays">
+        <div class="mode-switch" role="group" aria-label="Who plays" data-i18n-attr="aria-label">
           <button id="modeAi" class="mode-button on" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 7V4h6v3M8 13h.01M16 13h.01M9 17h6"/></svg>
             <span>Agent</span>
           </button>
           <button id="modeManual" class="mode-button" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v5-3a1.5 1.5 0 0 1 3 0v6c0 5-3 8-8 8h-1c-3 0-5-1-7-4l-2-3a1.7 1.7 0 0 1 2.8-1.9L7 15Z"/></svg>
-            <span>Manual</span>
+            <span data-i18n>Manual</span>
           </button>
         </div>
 
@@ -214,6 +215,7 @@
           popovertarget="sessionMenu"
           title="Session"
           aria-label="Session"
+          data-i18n-attr="title,aria-label"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="19" cy="12" r="1.4" /></svg>
         </button>
@@ -221,19 +223,19 @@
         <!-- Native popover: light dismiss, Escape, and the top layer come
              free, so this menu needs no open/close code of its own. -->
         <div id="sessionMenu" class="menu" popover>
-          <p class="menu-label">Spectator view</p>
-          <button id="reloadView" popovertarget="sessionMenu" popovertargetaction="hide">Reload the view</button>
+          <p class="menu-label" data-i18n>Spectator view</p>
+          <button id="reloadView" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Reload the view</button>
           <p class="menu-note" id="mem"></p>
-          <p class="menu-label">This session</p>
-          <button id="changeCharacter" popovertarget="sessionMenu" popovertargetaction="hide">Change character</button>
-          <button id="changeServer" popovertarget="sessionMenu" popovertargetaction="hide">Change server</button>
+          <p class="menu-label" data-i18n>This session</p>
+          <button id="changeCharacter" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Change character</button>
+          <button id="changeServer" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Change server</button>
           <p class="menu-note" id="agentPid"></p>
-          <p class="menu-label">Community</p>
+          <p class="menu-label" data-i18n>Community</p>
           <button id="githubLink" popovertarget="sessionMenu" popovertargetaction="hide">GitHub ↗</button>
-          <button id="wikiLink" popovertarget="sessionMenu" popovertargetaction="hide">Wiki ↗</button>
+          <button id="wikiLink" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Wiki ↗</button>
           <button id="discordLink" popovertarget="sessionMenu" popovertargetaction="hide">Discord ↗</button>
-          <p class="menu-label">Support</p>
-          <button id="supportLink" popovertarget="sessionMenu" popovertargetaction="hide">Support the developer ↗</button>
+          <p class="menu-label" data-i18n>Support</p>
+          <button id="supportLink" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Support the developer ↗</button>
         </div>
       </header>
 
@@ -243,29 +245,29 @@
              be, where to go, what to send), and what it has done (turns, log).
              The rule is the only thing stating that; the labels appear on
              hover and focus rather than waiting on an OS tooltip. -->
-        <nav class="rail" aria-label="Panels">
-          <button data-drawer="worn" aria-label="Character" aria-expanded="false" aria-controls="drawer">
+        <nav class="rail" aria-label="Panels" data-i18n-attr="aria-label">
+          <button data-drawer="worn" aria-label="Character" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.4" /><path d="M4.5 20v-1.5a5 5 0 0 1 5-5h5a5 5 0 0 1 5 5V20" /></svg>
           </button>
-          <button data-drawer="bag" aria-label="Bag" aria-expanded="false" aria-controls="drawer">
+          <button data-drawer="bag" aria-label="Bag" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 8V6a5 5 0 0 1 10 0v2" /><path d="M5 8h14l1 12H4z" /><path d="M9 11v2M15 11v2" /></svg>
           </button>
           <span class="rail-rule"></span>
-          <button data-drawer="prompt" aria-label="Personality &amp; memory" aria-expanded="false" aria-controls="drawer">
+          <button data-drawer="prompt" aria-label="Personality &amp; memory" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h9l5 5v11H5z" /><path d="M14 4v5h5" /><path d="M8 13h8M8 17h5" /></svg>
           </button>
-          <button data-drawer="coords" aria-label="Coordinates" aria-expanded="false" aria-controls="drawer">
+          <button data-drawer="coords" aria-label="Coordinates" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12Z" /><circle cx="12" cy="9" r="2.5" /></svg>
           </button>
-          <button data-drawer="presets" aria-label="Dispatch presets" aria-expanded="false" aria-controls="drawer">
+          <button data-drawer="presets" aria-label="Dispatch presets" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z" /></svg>
           </button>
           <span class="rail-rule"></span>
-          <button data-drawer="activity" aria-label="Activity" aria-expanded="false" aria-controls="drawer">
+          <button data-drawer="activity" aria-label="Activity" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
           </button>
           <span class="rail-spacer"></span>
-          <button id="openSettingsFromGame" aria-label="Settings">
+          <button id="openSettingsFromGame" aria-label="Settings" data-i18n-attr="aria-label">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M8 17h12" /><circle cx="16" cy="7" r="2" /><circle cx="6" cy="17" r="2" /></svg>
           </button>
         </nav>
@@ -274,9 +276,9 @@
           <div class="gamesurface">
             <iframe id="frame" hidden></iframe>
             <div id="placeholder">
-              <h2>Nothing to watch yet</h2>
-              <p>Start the agent and its world appears here, rendered by the real game client from the agent's own view.</p>
-              <p class="hint" id="viewHint">Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.</p>
+              <h2 data-i18n>Nothing to watch yet</h2>
+              <p data-i18n>Start the agent and its world appears here, rendered by the real game client from the agent's own view.</p>
+              <p class="hint" id="viewHint" data-i18n>Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.</p>
             </div>
             <div id="actionToasts" class="action-toasts"></div>
           </div>
@@ -287,15 +289,15 @@
                game surface, not an overlay on top of it — so it never covers
                the scene or its HUD. -->
           <div class="directive-panel" id="directivePanel">
-            <p class="directive-label">Dispatch</p>
+            <p class="directive-label" data-i18n>Dispatch</p>
             <div class="directive-log" id="directiveLog" hidden>
-              <div class="directive-line directive-you"><span class="directive-tag">You</span><span id="directiveSent"></span></div>
+              <div class="directive-line directive-you"><span class="directive-tag" data-i18n>You</span><span id="directiveSent"></span></div>
               <div class="directive-line directive-agent"><span class="directive-tag">Agent</span><span id="directiveReply">waiting…</span></div>
             </div>
             <div class="directive-presets" id="directivePresets"></div>
             <form id="directiveForm" class="directive-form">
               <input id="directiveInput" placeholder="Send word to your character…" autocomplete="off" />
-              <button type="submit" class="ghost">Send</button>
+              <button type="submit" class="ghost" data-i18n>Send</button>
             </form>
           </div>
         </div>
@@ -303,89 +305,89 @@
         <aside class="drawer" id="drawer" hidden aria-labelledby="drawerTitle">
           <div class="drawer-head">
             <p class="drawer-title" id="drawerTitle"></p>
-            <button id="drawerClose" class="icon-quiet" aria-label="Close this panel">
+            <button id="drawerClose" class="icon-quiet" aria-label="Close this panel" data-i18n-attr="aria-label">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" /></svg>
             </button>
           </div>
           <div class="drawer-body">
             <div data-drawer-panel="activity" hidden>
               <div class="tabs subtabs" id="activityTabs" role="tablist">
-                <button class="tab on" data-activity-tab="thoughts" role="tab">Thoughts</button>
-                <button class="tab" data-activity-tab="log" role="tab">Log</button>
+                <button class="tab on" data-activity-tab="thoughts" role="tab" data-i18n>Thoughts</button>
+                <button class="tab" data-activity-tab="log" role="tab" data-i18n>Log</button>
               </div>
               <div data-activity-panel="thoughts">
                 <div id="feedFilters"></div>
                 <div class="row pane-controls">
-                  <label class="check"><input type="checkbox" id="feedFollow" checked /> Follow</label>
-                  <button id="clearFeed" class="ghost small">Clear</button>
+                  <label class="check" data-i18n><input type="checkbox" id="feedFollow" checked /> Follow</label>
+                  <button id="clearFeed" class="ghost small" data-i18n>Clear</button>
                 </div>
                 <div id="feed"></div>
-                <p class="hint">Every prompt the agent sends and every reply it gets. Click a turn to expand it.</p>
+                <p class="hint" data-i18n>Every prompt the agent sends and every reply it gets. Click a turn to expand it.</p>
               </div>
               <div data-activity-panel="log" hidden>
                 <div class="row pane-controls">
-                  <label class="check"><input type="checkbox" id="autoscroll" checked /> Follow</label>
-                  <button id="clearLog" class="ghost small">Clear</button>
+                  <label class="check" data-i18n><input type="checkbox" id="autoscroll" checked /> Follow</label>
+                  <button id="clearLog" class="ghost small" data-i18n>Clear</button>
                 </div>
                 <pre id="log"></pre>
               </div>
             </div>
             <div data-drawer-panel="presets" hidden>
-              <p class="hint">Click a preset to send it now. Built-in presets can't be edited or removed.</p>
+              <p class="hint" data-i18n>Click a preset to send it now. Built-in presets can't be edited or removed.</p>
               <div id="presetsList" class="presets-list"></div>
               <!-- Collapsed by default: the list is what this panel is for, and
                    the form used to take half a 340px drawer to sit unused. -->
               <details class="add" id="presetsAdd">
                 <summary id="presetsAddLabel">Write a new preset</summary>
                 <form id="presetsForm" class="presets-form">
-                  <input id="presetName" placeholder="Name" autocomplete="off" required />
-                  <textarea id="presetPrompt" placeholder="Prompt to send" required></textarea>
+                  <input id="presetName" placeholder="Name" autocomplete="off" required data-i18n-attr="placeholder" />
+                  <textarea id="presetPrompt" placeholder="Prompt to send" required data-i18n-attr="placeholder"></textarea>
                   <div class="row">
                     <button type="submit" class="ghost" id="presetsSubmit">Add</button>
-                    <button type="button" class="ghost" id="presetsCancelEdit" hidden>Cancel</button>
+                    <button type="button" class="ghost" id="presetsCancelEdit" hidden data-i18n>Cancel</button>
                   </div>
                 </form>
               </details>
             </div>
             <div data-drawer-panel="prompt" hidden>
               <div class="tabs subtabs" id="personalityTabs" role="tablist">
-                <button class="tab on" data-subtab="personality" role="tab">Personality</button>
-                <button class="tab" data-subtab="memory" role="tab">Memory</button>
+                <button class="tab on" data-subtab="personality" role="tab" data-i18n>Personality</button>
+                <button class="tab" data-subtab="memory" role="tab" data-i18n>Memory</button>
               </div>
               <div data-subtab-panel="personality">
-                <p class="hint">How <span id="instanceCharacterName">this character</span> plays — its own personality, on top of the shared rules.</p>
+                <p class="hint" id="instanceHint"></p>
                 <textarea id="instanceText" spellcheck="false"></textarea>
-                <button id="saveInstance" class="ghost">Save</button>
+                <button id="saveInstance" class="ghost" data-i18n>Save</button>
                 <p class="hint" id="instanceFile"></p>
               </div>
               <div data-subtab-panel="memory" hidden>
-                <p class="hint">What <span id="memoryCharacterName">this character</span> remembers — written by the agent itself, read-only.</p>
+                <p class="hint" id="memoryHint"></p>
                 <pre id="memoryText" class="memory-view"></pre>
-                <p class="empty" id="memoryEmpty">Nothing remembered yet.</p>
+                <p class="empty" id="memoryEmpty" data-i18n>Nothing remembered yet.</p>
               </div>
             </div>
             <div data-drawer-panel="worn" hidden>
               <div class="tabs subtabs" id="characterTabs" role="tablist">
-                <button class="tab on" data-character-tab="worn" role="tab">Equipment</button>
-                <button class="tab" data-character-tab="skills" role="tab">Skills</button>
+                <button class="tab on" data-character-tab="worn" role="tab" data-i18n>Equipment</button>
+                <button class="tab" data-character-tab="skills" role="tab" data-i18n>Skills</button>
               </div>
               <div data-character-panel="worn">
                 <div id="wornList" class="worn-list"></div>
-                <p class="empty" id="wornEmpty">Nothing worn yet.</p>
+                <p class="empty" id="wornEmpty" data-i18n>Nothing worn yet.</p>
               </div>
               <div data-character-panel="skills" hidden>
                 <div id="skillsList" class="skills-list"></div>
-                <p class="empty" id="skillsEmpty">No skills trained yet. They start at the first swing, cast, or cast line.</p>
+                <p class="empty" id="skillsEmpty" data-i18n>No skills trained yet. They start at the first swing, cast, or cast line.</p>
               </div>
             </div>
             <div data-drawer-panel="bag" hidden>
-              <p class="hint">Mark what the agent may sell or drop, then apply.</p>
+              <p class="hint" data-i18n>Mark what the agent may sell or drop, then apply.</p>
               <!-- The two columns are named once here instead of per row: the
                    marks used to be an S and a D you had to hover to decode. -->
               <div class="bag-head" id="bagHead" hidden>
-                <span>Sell</span>
-                <span>Drop</span>
-                <span class="bag-head-item">Item</span>
+                <span data-i18n>Sell</span>
+                <span data-i18n>Drop</span>
+                <span class="bag-head-item" data-i18n>Item</span>
               </div>
               <div id="bagList" class="bag-list"></div>
               <!-- The bag's two totals: what the purse holds and what the load
@@ -395,24 +397,24 @@
                 <span id="bagGold"></span>
                 <span id="bagWeight"></span>
               </p>
-              <p class="empty" id="bagEmpty">Nothing carried yet.</p>
-              <button id="bagLabelsSubmit" class="ghost" hidden>Apply labels</button>
+              <p class="empty" id="bagEmpty" data-i18n>Nothing carried yet.</p>
+              <button id="bagLabelsSubmit" class="ghost" hidden data-i18n>Apply labels</button>
               <p class="hint" id="bagLabelsStatus"></p>
             </div>
             <div data-drawer-panel="coords" hidden>
-              <p class="hint">Click a spot to send your character there. Built-in spots can't be removed.</p>
+              <p class="hint" data-i18n>Click a spot to send your character there. Built-in spots can't be removed.</p>
               <div id="coordsList" class="coords-list"></div>
               <details class="add">
-                <summary>Mark a new spot</summary>
+                <summary data-i18n>Mark a new spot</summary>
                 <form id="coordsForm" class="coords-form">
-                  <input id="coordName" placeholder="Name" autocomplete="off" required />
+                  <input id="coordName" placeholder="Name" autocomplete="off" required data-i18n-attr="placeholder" />
                   <div class="row">
                     <input id="coordX" type="number" step="any" placeholder="x" required />
                     <input id="coordY" type="number" step="any" placeholder="y" required />
                     <input id="coordZ" type="number" step="any" placeholder="z" required />
                   </div>
-                  <button type="button" id="coordUseCurrent" class="ghost" disabled>Use current position</button>
-                  <button type="submit" class="ghost">Add</button>
+                  <button type="button" id="coordUseCurrent" class="ghost" disabled data-i18n>Use current position</button>
+                  <button type="submit" class="ghost" data-i18n>Add</button>
                 </form>
               </details>
             </div>
@@ -425,15 +427,15 @@
     <div id="settingsModal" class="modal" hidden>
       <div class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="modal-head">
-          <span id="settingsTitle">Settings</span>
-          <button id="settingsClose" class="ghost" aria-label="Close settings">×</button>
+          <span id="settingsTitle" data-i18n>Settings</span>
+          <button id="settingsClose" class="ghost" aria-label="Close settings" data-i18n-attr="aria-label">×</button>
         </div>
-        <div class="tabs" id="settingsTabs" role="tablist" aria-label="Settings sections">
+        <div class="tabs" id="settingsTabs" role="tablist" aria-label="Settings sections" data-i18n-attr="aria-label">
           <button class="tab on" id="tab-llm" data-settings-tab="llm" role="tab" aria-selected="true" aria-controls="panel-llm">LLM</button>
-          <button class="tab" id="tab-agent" data-settings-tab="agent" role="tab" aria-selected="false" aria-controls="panel-agent">Behaviour</button>
-          <button class="tab" id="tab-display" data-settings-tab="display" role="tab" aria-selected="false" aria-controls="panel-display">Display</button>
-          <button class="tab" id="tab-audio" data-settings-tab="audio" role="tab" aria-selected="false" aria-controls="panel-audio">Audio</button>
-          <button class="tab" id="tab-about" data-settings-tab="about" role="tab" aria-selected="false" aria-controls="panel-about">About</button>
+          <button class="tab" id="tab-agent" data-settings-tab="agent" role="tab" aria-selected="false" aria-controls="panel-agent" data-i18n>Behaviour</button>
+          <button class="tab" id="tab-display" data-settings-tab="display" role="tab" aria-selected="false" aria-controls="panel-display" data-i18n>Display</button>
+          <button class="tab" id="tab-audio" data-settings-tab="audio" role="tab" aria-selected="false" aria-controls="panel-audio" data-i18n>Audio</button>
+          <button class="tab" id="tab-about" data-settings-tab="about" role="tab" aria-selected="false" aria-controls="panel-about" data-i18n>About</button>
         </div>
         <div class="modal-body">
           <div id="panel-llm" data-settings-panel="llm" role="tabpanel" aria-labelledby="tab-llm">
@@ -441,11 +443,11 @@
             <label>Backend<select id="llm"></select></label>
             <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
             <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
-            <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted by this machine" /></label>
+            <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted by this machine" data-i18n-attr="placeholder" /></label>
             <label data-for="openai">Reasoning effort<select id="reasoningEffort">
-                <option value="none">None</option><option value="low">Low</option>
-                <option value="medium">Medium</option><option value="high">High</option>
-                <option value="">Provider default</option>
+                <option value="none" data-i18n>None</option><option value="low" data-i18n>Low</option>
+                <option value="medium" data-i18n>Medium</option><option value="high" data-i18n>High</option>
+                <option value="" data-i18n>Provider default</option>
               </select></label>
             <p class="hint" id="backendHint"></p>
             <div class="row">
@@ -453,125 +455,137 @@
               <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" /></label>
               <label data-for="openai">Messages kept<input id="maxMessages" type="number" min="3" max="401" step="1" /></label>
             </div>
-            <p class="hint">Apply checks your CLI sign-in, or sends one disclosed one-token request to the provider.</p>
+            <p class="hint" data-i18n>Apply checks your CLI sign-in, or sends one disclosed one-token request to the provider.</p>
 
-            <h3 class="settings-section">Chat translation</h3>
-            <p class="hint">Translates other players' chat in the spectator view. Pick the language, or turn it off, in the chat panel's own dropdown. Saved as you go — the agent keeps running.</p>
-            <label class="check"><input type="checkbox" id="translateUseLlm" /> Same endpoint as the agent</label>
+            <h3 class="settings-section" data-i18n>Chat translation</h3>
+            <p class="hint" data-i18n>Translates other players' chat in the spectator view. Pick the language, or turn it off, in the chat panel's own dropdown. Saved as you go — the agent keeps running.</p>
+            <label class="check" data-i18n><input type="checkbox" id="translateUseLlm" /> Same endpoint as the agent</label>
             <p class="hint" id="translateShareHint" hidden></p>
             <label>Base URL<input id="translateBaseUrl" placeholder="http://192.168.1.120:1234/v1" /></label>
             <label>Model<input id="translateModel" placeholder="gemma-4-e2b-it-mlx" /></label>
-            <label>API key<input type="password" id="translateKey" placeholder="optional — local endpoints need none" /></label>
+            <label>API key<input type="password" id="translateKey" placeholder="optional — local endpoints need none" data-i18n-attr="placeholder" /></label>
             <div class="row test-row">
-              <button id="translateTest" class="ghost small">Test</button>
+              <button id="translateTest" class="ghost small" data-i18n>Test</button>
               <p class="hint" id="translateTestResult" hidden></p>
             </div>
           </div>
           <div id="panel-agent" data-settings-panel="agent" role="tabpanel" aria-labelledby="tab-agent" hidden>
-            <h3 class="settings-section">Automatic play</h3>
-            <label>Driven by<select id="workerKind">
+            <h3 class="settings-section" data-i18n>Automatic play</h3>
+            <label data-i18n>Driven by<select id="workerKind">
                 <option value="none">LLM agent</option>
-                <option value="fighter">Monster Fighter</option>
-                <option value="fisher">Fisher</option>
+                <option value="fighter" data-i18n>Monster Fighter</option>
+                <option value="fisher" data-i18n>Fisher</option>
               </select></label>
             <p class="hint" id="workerHint"></p>
             <div id="workerKnobs" hidden>
               <div class="row">
-                <label>Level margin<input type="number" id="workerLevelMargin" min="0" max="50" /></label>
-                <label>Drink below (%)<input type="number" id="workerLowHealthPct" min="1" max="99" /></label>
+                <label data-i18n>Level margin<input type="number" id="workerLevelMargin" min="0" max="50" /></label>
+                <label data-i18n>Drink below (%)<input type="number" id="workerLowHealthPct" min="1" max="99" /></label>
               </div>
               <div class="row">
-                <label>Food to stock<input type="number" id="workerFoodStock" min="0" max="99" /></label>
-                <label>Potions to stock<input type="number" id="workerPotionStock" min="0" max="99" /></label>
-                <label>Bag full at (%)<input type="number" id="workerBagFullPct" min="1" max="100" /></label>
+                <label data-i18n>Food to stock<input type="number" id="workerFoodStock" min="0" max="99" /></label>
+                <label data-i18n>Potions to stock<input type="number" id="workerPotionStock" min="0" max="99" /></label>
+                <label data-i18n>Bag full at (%)<input type="number" id="workerBagFullPct" min="1" max="100" /></label>
               </div>
             </div>
 
             <div id="paceSettings">
-              <h3 class="settings-section">Pace</h3>
-              <label class="slider">Thinking while busy <strong id="activeCadenceLabel"></strong>
+              <h3 class="settings-section" data-i18n>Pace</h3>
+              <label class="slider" data-i18n>Thinking while busy <strong id="activeCadenceLabel"></strong>
                 <input id="activeCadence" type="range" min="0" max="4" step="1" />
               </label>
               <p class="hint" id="activeCadenceHint"></p>
-              <label class="slider">Thinking while quiet <strong id="idleCadenceLabel"></strong>
+              <label class="slider" data-i18n>Thinking while quiet <strong id="idleCadenceLabel"></strong>
                 <input id="idleCadence" type="range" min="0" max="4" step="1" />
               </label>
               <p class="hint" id="idleCadenceHint"></p>
-              <label class="check"><input type="checkbox" id="alwaysActive" /> Keep adventuring while alone</label>
-              <p class="hint">Turn this off to stop calling the model when no other player is nearby.</p>
+              <label class="check" data-i18n><input type="checkbox" id="alwaysActive" /> Keep adventuring while alone</label>
+              <p class="hint" data-i18n>Turn this off to stop calling the model when no other player is nearby.</p>
             </div>
 
             <details class="advanced">
-              <summary>Advanced</summary>
+              <summary data-i18n>Advanced</summary>
               <div id="advancedLlmOnly">
                 <div class="row">
-                  <label>Busy interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
-                  <label>Quiet interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
+                  <label data-i18n>Busy interval (s)<input type="number" id="minIntervalSecs" min="1" /></label>
+                  <label data-i18n>Quiet interval (s)<input type="number" id="idleIntervalSecs" min="1" /></label>
                 </div>
-                <p class="hint">Exact seconds, for a pace between the named steps above.</p>
+                <p class="hint" data-i18n>Exact seconds, for a pace between the named steps above.</p>
                 <div class="row">
-                  <label>Concurrent calls<input type="number" id="maxConcurrent" min="1" /></label>
-                  <label>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
+                  <label data-i18n>Concurrent calls<input type="number" id="maxConcurrent" min="1" /></label>
+                  <label data-i18n>Request timeout (s)<input type="number" id="requestTimeoutSecs" min="1" /></label>
                 </div>
               </div>
               <div class="row">
-                <label>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>
-                <label>Log level<select id="rustLog">
+                <label data-i18n>Watch port<input type="number" id="watchPort" min="0" max="65535" /></label>
+                <label data-i18n>Log level<select id="rustLog">
                     <option value="info">info</option><option value="debug">debug</option><option value="warn">warn</option>
                   </select></label>
               </div>
             </details>
           </div>
           <div id="panel-display" data-settings-panel="display" role="tabpanel" aria-labelledby="tab-display" hidden>
-            <h3 class="settings-section">Action captions</h3>
-            <p class="hint">The lines that appear over the world as your character acts. Repeats of one action collapse into a count.</p>
+            <h3 class="settings-section" data-i18n>Language</h3>
+            <!-- Each language names itself: a name nobody in the room can read
+                 is no help choosing. Saved and applied on change, like the rest
+                 of this tab. -->
+            <label data-i18n>Interface language<select id="language">
+                <option value="en">English</option>
+                <option value="zh-TW">繁體中文</option>
+                <option value="ko">한국어</option>
+              </select></label>
+            <p class="hint" data-i18n>The agent's own words, and the game client's chat, keep their own languages.</p>
+
+            <h3 class="settings-section" data-i18n>Action captions</h3>
+            <p class="hint" data-i18n>The lines that appear over the world as your character acts. Repeats of one action collapse into a count.</p>
             <div class="toast-preview-box">
-              <div id="toastPreview" class="action-toast">Move→north ×3</div>
+              <span class="toast-preview-label" data-i18n>Preview</span>
+              <div id="toastPreview" class="action-toast" data-i18n>Move→north ×3</div>
             </div>
-            <label class="slider">Text size <strong id="toastFontSizeLabel"></strong>
+            <label class="slider" data-i18n>Text size <strong id="toastFontSizeLabel"></strong>
               <input id="toastFontSize" type="range" min="10" max="20" step="1" />
             </label>
-            <label class="slider">Background opacity <strong id="toastOpacityLabel"></strong>
+            <label class="slider" data-i18n>Background opacity <strong id="toastOpacityLabel"></strong>
               <input id="toastOpacity" type="range" min="0" max="100" step="1" />
             </label>
-            <label class="slider">Stays on screen <strong id="toastPersistSecsLabel"></strong>
+            <label class="slider" data-i18n>Stays on screen <strong id="toastPersistSecsLabel"></strong>
               <input id="toastPersistSecs" type="range" min="2" max="20" step="1" />
             </label>
-            <label class="slider">Fades over <strong id="toastFadeSecsLabel"></strong>
+            <label class="slider" data-i18n>Fades over <strong id="toastFadeSecsLabel"></strong>
               <input id="toastFadeSecs" type="range" min="0.1" max="2" step="0.1" />
             </label>
-            <label class="slider">Shown at once <strong id="toastMaxCountLabel"></strong>
+            <label class="slider" data-i18n>Shown at once <strong id="toastMaxCountLabel"></strong>
               <input id="toastMaxCount" type="range" min="1" max="20" step="1" />
             </label>
           </div>
           <div id="panel-audio" data-settings-panel="audio" role="tabpanel" aria-labelledby="tab-audio" hidden>
-            <p class="notice" id="audioUnavailable">Start the agent to control its game audio here.</p>
-            <p class="hint">Sets the game client's own volume, mirrored from the spectator view.</p>
-            <label class="slider">Music <strong id="bgmVolumeLabel"></strong>
+            <p class="notice" id="audioUnavailable" data-i18n>Start the agent to control its game audio here.</p>
+            <p class="hint" data-i18n>Sets the game client's own volume, mirrored from the spectator view.</p>
+            <label class="slider" data-i18n>Music <strong id="bgmVolumeLabel"></strong>
               <input id="bgmVolume" type="range" min="0" max="100" step="1" />
             </label>
-            <label class="check"><input type="checkbox" id="bgmMuted" /> Mute music</label>
-            <label class="slider">Sound effects <strong id="sfxVolumeLabel"></strong>
+            <label class="check" data-i18n><input type="checkbox" id="bgmMuted" /> Mute music</label>
+            <label class="slider" data-i18n>Sound effects <strong id="sfxVolumeLabel"></strong>
               <input id="sfxVolume" type="range" min="0" max="100" step="1" />
             </label>
-            <label class="check"><input type="checkbox" id="sfxMuted" /> Mute sound effects</label>
+            <label class="check" data-i18n><input type="checkbox" id="sfxMuted" /> Mute sound effects</label>
           </div>
           <div id="panel-about" data-settings-panel="about" role="tabpanel" aria-labelledby="tab-about" hidden>
-            <h3 class="settings-section">Privacy</h3>
-            <label class="check"><input type="checkbox" id="telemetryEnabled" /> Share anonymous usage statistics</label>
-            <p class="hint">Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
-            <h3 class="settings-section">This app</h3>
-            <p class="hint">OpenMMO Agent UI is free and open source. It runs the agent on your own machine, under your own model quota.</p>
-            <p class="hint">Version <strong id="appVersion">—</strong> · <span id="updateStatus">Updates install automatically.</span></p>
+            <h3 class="settings-section" data-i18n>Privacy</h3>
+            <label class="check" data-i18n><input type="checkbox" id="telemetryEnabled" /> Share anonymous usage statistics</label>
+            <p class="hint" data-i18n>Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
+            <h3 class="settings-section" data-i18n>This app</h3>
+            <p class="hint" data-i18n>OpenMMO Agent UI is free and open source. It runs the agent on your own machine, under your own model quota.</p>
+            <p class="hint"><span data-i18n>Version</span> <strong id="appVersion">—</strong> · <span id="updateStatus">Updates install automatically.</span></p>
             <div class="row">
-              <button id="updateCheck" class="ghost small">Check for updates</button>
+              <button id="updateCheck" class="ghost small" data-i18n>Check for updates</button>
             </div>
           </div>
         </div>
         <div class="modal-foot">
-          <p id="settingsDirty" class="foot-note" hidden>Changes are staged until you apply them.</p>
-          <p id="settingsAuto" class="foot-note" hidden>Changes here save as you make them.</p>
-          <button id="settingsApply" class="primary">Apply</button>
+          <p id="settingsDirty" class="foot-note" hidden></p>
+          <p id="settingsAuto" class="foot-note" hidden data-i18n>Changes here save as you make them.</p>
+          <button id="settingsApply" class="primary" data-i18n>Apply</button>
         </div>
       </div>
     </div>
@@ -581,12 +595,12 @@
     <div id="confirmModal" class="modal" hidden>
       <div class="modal-card">
         <div class="modal-head">
-          <span id="confirmTitle">Are you sure?</span>
+          <span id="confirmTitle" data-i18n>Are you sure?</span>
         </div>
         <div class="modal-body">
           <p id="confirmMessage"></p>
           <div class="row confirm-actions">
-            <button id="confirmCancel" class="ghost">Cancel</button>
+            <button id="confirmCancel" class="ghost" data-i18n>Cancel</button>
             <button id="confirmOk" class="danger">Delete</button>
           </div>
         </div>

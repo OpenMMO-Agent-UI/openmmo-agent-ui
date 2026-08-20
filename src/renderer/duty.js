@@ -1,5 +1,7 @@
 'use strict'
 
+import { t } from './i18n.js'
+
 /// What the header's state word says, in one place. Two callers used to write
 /// that slot with two different vocabularies: setStatus wrote "running (pid
 /// 4213)" or "stopped" off the agent process, applyPlayState wrote the raw
@@ -56,7 +58,7 @@ export function hungerReading(hunger) {
   return {
     pct: Math.max(0, Math.min(100, (hunger.satiation / max) * 100)),
     text: `${hunger.satiation}/${max}`,
-    label: band.label,
+    label: t(band.label),
     tone: band.tone,
   }
 }
@@ -76,10 +78,10 @@ export function attributeCells(attributes) {
 }
 
 export function dutyState(running, phase, retryMs) {
-  if (!running) return { label: 'Off duty', tone: 'off' }
+  if (!running) return { label: t('Off duty'), tone: 'off' }
   if (phase === 'retrying') {
     const secs = Math.ceil(Math.max(0, retryMs || 0) / 1000)
-    return { label: secs ? `Retrying in ${secs}s` : 'Retrying', tone: 'bad' }
+    return { label: secs ? t('Retrying in {secs}s', { secs }) : t('Retrying'), tone: 'bad' }
   }
-  return { label: PHASE_WORDS[phase] || 'On duty', tone: PHASE_TONES[phase] || 'live' }
+  return { label: t(PHASE_WORDS[phase] || 'On duty'), tone: PHASE_TONES[phase] || 'live' }
 }
