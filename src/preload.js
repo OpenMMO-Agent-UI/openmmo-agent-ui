@@ -10,6 +10,7 @@ const on = (channel) => (handler) => {
 
 contextBridge.exposeInMainWorld('agentApp', {
   info: () => ipcRenderer.invoke('app:info'),
+  dictionary: (language) => ipcRenderer.invoke('i18n:dict', language),
   listProfiles: () => ipcRenderer.invoke('profiles:list'),
   createProfile: (input) => ipcRenderer.invoke('profiles:create', input),
   updateProfile: (id, patch) => ipcRenderer.invoke('profiles:update', id, patch),

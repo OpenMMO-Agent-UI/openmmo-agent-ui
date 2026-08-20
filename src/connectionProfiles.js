@@ -4,13 +4,15 @@ const crypto = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
 
+const { t } = require('./i18n')
+
 const BUILTIN_PROFILE_ID = 'openmmo-to-nexus'
 const STORE_VERSION = 1
 
 function deriveTerrainOrigin(serverUrl) {
   const url = new URL(serverUrl)
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-    throw new Error('Server URL must use ws:// or wss://')
+    throw new Error(t('Server URL must use ws:// or wss://'))
   }
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
   url.pathname = ''
@@ -25,17 +27,17 @@ function clone(value) {
 
 function normalizeProfile(input, current = {}) {
   const serverUrl = input.serverUrl ?? current.serverUrl
-  if (!serverUrl) throw new Error('Server URL is required')
+  if (!serverUrl) throw new Error(t('Server URL is required'))
   deriveTerrainOrigin(serverUrl)
   const name = String(input.name ?? current.name ?? '').trim()
-  if (!name) throw new Error('Profile name is required')
+  if (!name) throw new Error(t('Profile name is required'))
   const terrainOrigin =
     input.terrainOrigin === undefined
       ? current.terrainOrigin || deriveTerrainOrigin(serverUrl)
       : input.terrainOrigin || deriveTerrainOrigin(serverUrl)
   const terrain = new URL(terrainOrigin)
   if (terrain.protocol !== 'http:' && terrain.protocol !== 'https:') {
-    throw new Error('Terrain origin must use http:// or https://')
+    throw new Error(t('Terrain origin must use http:// or https://'))
   }
   return {
     ...current,
@@ -177,7 +179,7 @@ class ConnectionProfileStore {
   }
 
   select(id) {
-    if (!this.rawProfile(id)) throw new Error('Connection profile not found')
+    if (!this.rawProfile(id)) throw new Error(t('Connection profile not found'))
     this.state.selectedProfileId = id
     this.persist()
     return this.get(id)
@@ -199,9 +201,9 @@ class ConnectionProfileStore {
   }
 
   update(id, patch) {
-    if (id === BUILTIN_PROFILE_ID) throw new Error('Built-in connection profile is immutable')
+    if (id === BUILTIN_PROFILE_ID) throw new Error(t('Built-in connection profile is immutable'))
     const index = this.state.profiles.findIndex((profile) => profile.id === id)
-    if (index === -1) throw new Error('Connection profile not found')
+    if (index === -1) throw new Error(t('Connection profile not found'))
     this.state.profiles[index] = {
       ...normalizeProfile(patch, this.state.profiles[index]),
       id,
@@ -219,7 +221,7 @@ class ConnectionProfileStore {
 
   duplicate(id) {
     const source = this.withSecrets(id)
-    if (!source) throw new Error('Connection profile not found')
+    if (!source) throw new Error(t('Connection profile not found'))
     return this.create({
       ...source,
       name: `${source.name} copy`,
@@ -229,10 +231,10 @@ class ConnectionProfileStore {
   }
 
   delete(id) {
-    if (id === BUILTIN_PROFILE_ID) throw new Error('Built-in connection profile is immutable')
+    if (id === BUILTIN_PROFILE_ID) throw new Error(t('Built-in connection profile is immutable'))
     const before = this.state.profiles.length
     this.state.profiles = this.state.profiles.filter((profile) => profile.id !== id)
-    if (this.state.profiles.length === before) throw new Error('Connection profile not found')
+    if (this.state.profiles.length === before) throw new Error(t('Connection profile not found'))
     delete this.secrets.profiles[id]
     delete this.secrets.credentials[id]
     if (this.state.selectedProfileId === id) this.state.selectedProfileId = BUILTIN_PROFILE_ID
@@ -245,7 +247,7 @@ class ConnectionProfileStore {
   }
 
   setCredential(id, refreshToken) {
-    if (!this.rawProfile(id)) throw new Error('Connection profile not found')
+    if (!this.rawProfile(id)) throw new Error(t('Connection profile not found'))
     if (refreshToken) this.secrets.credentials[id] = refreshToken
     else delete this.secrets.credentials[id]
     this.persist()
@@ -257,7 +259,7 @@ class ConnectionProfileStore {
       this.state.builtinLastSession = clone(lastSession)
     } else {
       const profile = this.rawProfile(id)
-      if (!profile) throw new Error('Connection profile not found')
+      if (!profile) throw new Error(t('Connection profile not found'))
       profile.lastSession = clone(lastSession)
     }
   }
@@ -274,7 +276,7 @@ class ConnectionProfileStore {
       this.state.builtinValidation = clone(validation)
     } else {
       const profile = this.rawProfile(id)
-      if (!profile) throw new Error('Connection profile not found')
+      if (!profile) throw new Error(t('Connection profile not found'))
       profile.validation = clone(validation)
     }
     this.persist()

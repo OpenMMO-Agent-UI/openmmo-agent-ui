@@ -4,6 +4,7 @@ const { WebSocket } = require('ws')
 
 const { encode, decode, variantOf } = require('./msgpack')
 const { protocolVersion } = require('./runtimeEnv')
+const { t } = require('./i18n')
 
 /// The pre-flight session: a direct, throwaway WebSocket
 /// connection to the game server — bypassing agent-client entirely — that
@@ -50,7 +51,11 @@ function nextMessage(ws, timeoutMs) {
     }
     function onClose(code, reason) {
       cleanup()
-      reject(new Error(`The server closed the connection (${code}) ${reason || ''}`.trim()))
+      reject(
+        new Error(
+          `${t('The server closed the connection ({code})', { code })} ${reason || ''}`.trim(),
+        ),
+      )
     }
     function onError(err) {
       cleanup()
@@ -88,7 +93,7 @@ async function testConnection(serverUrl, terrainOrigin, fetchFn = fetch) {
     ws.send(encode({ ClientInfo: [protocolVersion(), 'desktop', 'profile-test'] }))
     ws.send(encode({ Authenticate: [''] }))
     const reply = await nextMessage(ws, PROFILE_TEST_TIMEOUT_MS)
-    if (!reply) throw new Error('Server did not acknowledge the pinned protocol')
+    if (!reply) throw new Error(t('Server did not acknowledge the pinned protocol'))
     if (reply[0] === 'AuthError') {
       const message = authErrorMessage(reply[0], reply[1]) || ''
       if (PROTOCOL_MISMATCH.test(message)) throw new ProtocolMismatchError(message)
@@ -110,7 +115,7 @@ async function testConnection(serverUrl, terrainOrigin, fetchFn = fetch) {
       redirect: 'follow',
       signal: AbortSignal.timeout(5000),
     })
-    if (!res.ok) throw new Error(`Terrain origin returned HTTP ${res.status}`)
+    if (!res.ok) throw new Error(t('Terrain origin returned HTTP {status}', { status: res.status }))
   }
   return { ok: true }
 }
@@ -172,14 +177,16 @@ async function createCharacter(ws, characterName, characterClass, gender) {
   ws.send(encode({ RollCharacterStats: [characterClass, gender] }))
   const rolled = await nextMessage(ws, REPLY_TIMEOUT_MS)
   if (!rolled || rolled[0] !== 'CharacterStatsRolled') {
-    throw new Error('The server did not confirm a stat roll')
+    throw new Error(t('The server did not confirm a stat roll'))
   }
 
   ws.send(encode({ CreateCharacter: [characterName, characterClass, gender] }))
   const created = await nextMessage(ws, REPLY_TIMEOUT_MS)
-  if (!created) throw new Error('The server did not respond to character creation')
+  if (!created) throw new Error(t('The server did not respond to character creation'))
   const [name, body] = created
-  if (name === 'CharacterError') throw new Error((Array.isArray(body) && body[0]) || 'Character creation failed')
+  if (name === 'CharacterError') {
+    throw new Error((Array.isArray(body) && body[0]) || t('Character creation failed'))
+  }
   if (name !== 'CharacterCreated') throw new Error(`Unexpected reply to character creation: ${name}`)
   return characterFromWire(body[0])
 }
@@ -187,9 +194,11 @@ async function createCharacter(ws, characterName, characterClass, gender) {
 async function deleteCharacter(ws, characterId) {
   ws.send(encode({ DeleteCharacter: [characterId] }))
   const reply = await nextMessage(ws, REPLY_TIMEOUT_MS)
-  if (!reply) throw new Error('The server did not respond to character deletion')
+  if (!reply) throw new Error(t('The server did not respond to character deletion'))
   const [name, body] = reply
-  if (name === 'CharacterError') throw new Error((Array.isArray(body) && body[0]) || 'Character deletion failed')
+  if (name === 'CharacterError') {
+    throw new Error((Array.isArray(body) && body[0]) || t('Character deletion failed'))
+  }
   if (name !== 'CharacterDeleted') throw new Error(`Unexpected reply to character deletion: ${name}`)
 }
 
