@@ -2,6 +2,7 @@
 
 import { AppWorkflow } from '../workflow.js'
 import { $, showErrors, setScreen, confirmAction } from './dom.js'
+import { t, language } from './i18n.js'
 import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
 
@@ -69,7 +70,7 @@ export function showDeviceCode(code) {
   $('loginCode').dataset.url = url
   // Label the button with the page it actually opens, rather than the one
   // hardcoded in the markup — a custom profile can point somewhere else.
-  $('banner-open').textContent = `Open ${url.replace(/^https?:\/\//, '')}`
+  $('banner-open').textContent = t('Open {page}', { page: url.replace(/^https?:\/\//, '') })
   showLoginState('code')
 }
 
@@ -87,11 +88,11 @@ export function agoLabel(checkedAt, now = Date.now()) {
     ['hour', 3600],
     ['minute', 60],
   ]
-  const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
+  const relative = new Intl.RelativeTimeFormat(language(), { numeric: 'auto' })
   for (const [unit, span] of units) {
     if (Math.abs(seconds) >= span) return relative.format(Math.round(seconds / span), unit)
   }
-  return 'just now'
+  return t('just now')
 }
 
 /// One reading of a profile's verification state, used by both the row's dot
@@ -102,17 +103,17 @@ export function profileStatus(profile) {
   if (validation?.ok) {
     return {
       tone: 'ok',
-      label: 'Verified',
-      detail: `Verified ${agoLabel(validation.checkedAt)}`,
+      label: t('Verified'),
+      detail: t('Verified {ago}', { ago: agoLabel(validation.checkedAt) }),
     }
   }
   if (validation?.error) {
-    return { tone: 'bad', label: 'Unreachable', detail: validation.error }
+    return { tone: 'bad', label: t('Unreachable'), detail: validation.error }
   }
   return {
     tone: 'unknown',
-    label: 'Not verified',
-    detail: 'Not verified yet — Continue checks the server before signing in.',
+    label: t('Not verified'),
+    detail: t('Not verified yet — Continue checks the server before signing in.'),
   }
 }
 
@@ -144,8 +145,8 @@ function renderProfiles(focusSelected = false) {
     row.querySelector('.profile-name').textContent = profile.name
     row.querySelector('.profile-meta').textContent = profile.serverUrl
     const flags = row.querySelector('.profile-flags')
-    if (profile.kind === 'builtin') flags.appendChild(tag('Built-in'))
-    if (profile.lastSession?.characterId != null) flags.appendChild(tag('Last played', true))
+    if (profile.kind === 'builtin') flags.appendChild(tag(t('Built-in')))
+    if (profile.lastSession?.characterId != null) flags.appendChild(tag(t('Last played'), true))
     row.addEventListener('click', () => selectProfile(profile.id))
     // Double-click continues, matching how a character slot is entered: one
     // click to consider it, a second to commit.
@@ -160,7 +161,7 @@ function renderProfiles(focusSelected = false) {
   $('profileNew').disabled = inert
   $('profileTest').disabled = inert || !selected
   $('profileContinue').disabled = inert || !selected
-  $('profileContinue').textContent = connecting ? 'Connecting…' : 'Continue'
+  $('profileContinue').textContent = connecting ? t('Connecting…') : t('Continue')
   $('profileContinue').classList.toggle('working', connecting)
   if (focusSelected) box.querySelector('.profile-row.on')?.focus()
 }
@@ -204,7 +205,9 @@ function renderProfileStatus() {
 
 function openProfileEditor(profile = null) {
   editingProfileId = profile?.id || null
-  $('profileEditorTitle').textContent = profile ? `Edit ${profile.name}` : 'New server'
+  $('profileEditorTitle').textContent = profile
+    ? t('Edit {name}', { name: profile.name })
+    : t('New server')
   $('profileName').value = profile?.name || ''
   $('profileServer').value = profile?.serverUrl || ''
   $('profileTerrain').value = profile?.terrainOrigin || ''
@@ -305,23 +308,31 @@ function filledSlot(character, index) {
     '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" ' +
     'stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v5M14 11v5" /></svg>' +
-    '<span>Delete</span>' +
+    '<span></span>' +
     '</button>'
   slot.querySelector('.slot-no').textContent = SLOT_NUMERALS[index]
   slot.querySelector('.slot-name').textContent = character.name
-  slot.querySelector('.slot-class').textContent = `${character.class} · ${character.gender}`
-  slot.querySelector('.slot-level').textContent = `Lv ${character.level}`
-  slot.querySelector('.slot-cue').textContent = entering ? 'Entering' : '›'
+  slot.querySelector('.slot-class').textContent = `${t(character.class)} · ${t(character.gender)}`
+  slot.querySelector('.slot-level').textContent = t('Lv {level}', { level: character.level })
+  slot.querySelector('.slot-cue').textContent = entering ? t('Entering') : '›'
+  slot.querySelector('.slot-delete span').textContent = t('Delete')
   // Its own column rather than stacked under the class: in the name block it
   // made whichever slot carried it taller than the others.
-  if (isLastPlayed(character.id)) slot.querySelector('.slot-flags').appendChild(tag('Last played', true))
+  if (isLastPlayed(character.id)) slot.querySelector('.slot-flags').appendChild(tag(t('Last played'), true))
 
   const pick = slot.querySelector('.slot-pick')
   const remove = slot.querySelector('.slot-delete')
   pick.disabled = enteringId != null
   remove.disabled = enteringId != null
-  pick.setAttribute('aria-label', `Play ${character.name}, level ${character.level} ${character.class}`)
-  remove.setAttribute('aria-label', `Delete ${character.name}`)
+  pick.setAttribute(
+    'aria-label',
+    t('Play {name}, level {level} {class}', {
+      name: character.name,
+      level: character.level,
+      class: t(character.class),
+    }),
+  )
+  remove.setAttribute('aria-label', t('Delete {name}', { name: character.name }))
   pick.addEventListener('click', () => void enterCharacter(character))
   remove.addEventListener('click', () => void deleteCharacterSlot(character.id, character.name))
   return slot
@@ -333,10 +344,11 @@ function emptySlot(index) {
   slot.innerHTML =
     '<button type="button" class="slot-pick">' +
     '<span class="slot-no"></span>' +
-    '<span class="slot-empty-label">Create a character</span>' +
+    '<span class="slot-empty-label"></span>' +
     '<span class="slot-cue">+</span>' +
     '</button>'
   slot.querySelector('.slot-no').textContent = SLOT_NUMERALS[index]
+  slot.querySelector('.slot-empty-label').textContent = t('Create a character')
   const pick = slot.querySelector('.slot-pick')
   pick.disabled = enteringId != null
   pick.addEventListener('click', () => showCreate(true))
@@ -365,7 +377,7 @@ async function enterCharacter(character) {
     // The pre-flight loads (personality, coords, presets, bag labels) are all
     // disk reads that can fail. Without this the slot just quietly came back to
     // life, as if the click had never happened.
-    showErrors([`Could not enter as ${character.name}: ${err.message}`])
+    showErrors([t('Could not enter as {name}: {reason}', { name: character.name, reason: err.message })])
   } finally {
     // Cleared whether the join succeeded (the screen has moved on and this
     // render is harmless) or failed (the roll has to come back to life).
@@ -379,18 +391,21 @@ async function enterCharacter(character) {
 /// user_prompt.txt.
 async function loadInstancePrompt() {
   const name = deps.getSettings().characterName
-  $('instanceCharacterName').textContent = name || 'this character'
+  $('instanceHint').textContent = t(
+    'How {name} plays — its own personality, on top of the shared rules.',
+    { name: name || t('this character') },
+  )
   if (!name) {
     $('instanceText').value = ''
     $('instanceFile').textContent = ''
     return
   }
   $('instanceText').value = await api.getInstancePrompt(selectedCharacterId, name)
-  $('instanceFile').textContent = `Personality for this server and character`
+  $('instanceFile').textContent = t('Personality for this server and character')
 }
 
 async function deleteCharacterSlot(id, name) {
-  if (!(await confirmAction(`Delete ${name}? This cannot be undone.`))) return
+  if (!(await confirmAction(t('Delete {name}? This cannot be undone.', { name })))) return
   const res = await api.deleteCharacter(id)
   if (!res.ok) {
     showErrors([res.error])
@@ -432,7 +447,7 @@ function bind() {
   $('profileDelete').addEventListener('click', async () => {
     const profile = profileById(selectedProfileId)
     if (!profile || profile.kind === 'builtin') return
-    if (!(await confirmAction(`Delete ${profile.name} and its saved Google login?`))) return
+    if (!(await confirmAction(t('Delete {name} and its saved Google login?', { name: profile.name })))) return
     profiles = await api.deleteProfile(profile.id)
     selectedProfileId = profiles.find((candidate) => candidate.selected)?.id || profiles[0]?.id
     renderProfiles()
@@ -487,16 +502,16 @@ function bind() {
     showErrors([])
     const name = $('newCharacterName').value.trim()
     if (!name) {
-      showErrors(['Character name is required'])
+      showErrors([t('Character name is required')])
       $('newCharacterName').focus()
       return
     }
     $('createCharacter').disabled = true
-    $('createCharacter').textContent = 'Creating…'
+    $('createCharacter').textContent = t('Creating…')
     const settings = deps.getSettings()
     const res = await api.createCharacter(name, settings.characterClass, settings.gender)
     $('createCharacter').disabled = false
-    $('createCharacter').textContent = 'Create and enter the world'
+    $('createCharacter').textContent = t('Create and enter the world')
     if (!res.ok) {
       showErrors([res.error])
       return
@@ -533,4 +548,13 @@ export function init(dependencies) {
 
 export function start() {
   return workflow.start()
+}
+
+/// Redraws the rows this flow owns. The entry screens are where a first run
+/// picks a language, and their rows are written in JS rather than marked up,
+/// so without this the list keeps its old language behind the modal.
+export function rerender() {
+  renderProfiles()
+  renderProfileStatus()
+  renderCharacterList()
 }

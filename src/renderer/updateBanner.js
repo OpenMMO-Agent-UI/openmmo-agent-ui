@@ -1,18 +1,23 @@
 'use strict'
 
 import { $ } from './dom.js'
+import { t } from './i18n.js'
 
 /// What the banner says for each updater state, and which buttons go with
 /// it. Split out from the DOM so the wording — the only part with any
 /// judgement in it — is testable. `null` means show nothing: a check that
 /// found nothing, or a failed check with no update pending, is not news.
 export function bannerFor(state) {
-  const version = state?.version ? `v${state.version}` : 'A new version'
+  const version = state?.version ? `v${state.version}` : t('A new version')
   if (state?.status === 'ready') {
-    return { text: `${version} is ready to install.`, restart: true, download: false }
+    return { text: t('{version} is ready to install.', { version }), restart: true, download: false }
   }
   if (state?.status === 'error') {
-    return { text: `${version} could not install automatically.`, restart: false, download: true }
+    return {
+      text: t('{version} could not install automatically.', { version }),
+      restart: false,
+      download: true,
+    }
   }
   return null
 }
@@ -21,17 +26,17 @@ export function bannerFor(state) {
 export function statusLine(state) {
   switch (state?.status) {
     case 'checking':
-      return 'Checking for updates…'
+      return t('Checking for updates…')
     case 'downloading':
-      return `Downloading v${state.version ?? '…'}…`
+      return t('Downloading v{version}…', { version: state.version ?? '…' })
     case 'ready':
-      return `v${state.version} is ready — restart to install.`
+      return t('v{version} is ready — restart to install.', { version: state.version })
     case 'error':
-      return 'Automatic update failed. Download the new version manually.'
+      return t('Automatic update failed. Download the new version manually.')
     case 'disabled':
-      return 'Updates are off in a development build.'
+      return t('Updates are off in a development build.')
     default:
-      return 'Up to date. Updates install automatically.'
+      return t('Up to date. Updates install automatically.')
   }
 }
 
@@ -63,7 +68,7 @@ export function mount(api) {
     $('updateBanner').hidden = true
   })
   $('updateCheck').addEventListener('click', async () => {
-    $('updateStatus').textContent = 'Checking for updates…'
+    $('updateStatus').textContent = t('Checking for updates…')
     render(await api.checkUpdate())
   })
   api.onUpdateState(render)

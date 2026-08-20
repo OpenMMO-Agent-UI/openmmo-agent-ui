@@ -1,6 +1,7 @@
 'use strict'
 
 import { $ } from './dom.js'
+import { t } from './i18n.js'
 
 function toastTtlMs(settings) {
   return (settings?.toastPersistSecs ?? 7) * 1000
@@ -29,60 +30,66 @@ export function actionLabel(action, monsterNames) {
   switch (action.type) {
     case 'say': {
       const msg = String(action.message ?? '')
-      return `Say "${msg.length > 24 ? `${msg.slice(0, 24)}…` : msg}"`
+      return t('Say "{message}"', { message: msg.length > 24 ? `${msg.slice(0, 24)}…` : msg })
     }
     case 'attack': {
       const id = action.monster_id ?? action.target ?? action.id ?? '?'
-      return `Attack→${monsterNames.get(id) ?? id}`
+      return t('Attack→{target}', { target: monsterNames.get(id) ?? id })
     }
     case 'move':
-      if (action.target) return `Move→${action.target}`
+      if (action.target) return t('Move→{target}', { target: action.target })
       if (action.x != null || action.z != null) {
         const x = action.x != null ? Math.round(action.x) : '?'
         const z = action.z != null ? Math.round(action.z) : '?'
-        return `Move→(${x}, ${z})`
+        return t('Move→({x}, {z})', { x, z })
       }
-      if (action.direction) return `Move→${action.direction}${action.distance != null ? ` ${action.distance}m` : ''}`
-      if (action.depth != null) return `Move→floor ${action.depth}`
-      return 'Move'
+      if (action.direction) {
+        return action.distance != null
+          ? t('Move→{direction} {distance}m', { direction: t(action.direction), distance: action.distance })
+          : t('Move→{direction}', { direction: t(action.direction) })
+      }
+      if (action.depth != null) return t('Move→floor {depth}', { depth: action.depth })
+      return t('Move')
     case 'respawn':
-      return 'Respawn'
+      return t('Respawn')
     case 'fish':
-      return 'Fish'
+      return t('Fish')
     case 'stop_fishing':
-      return 'Stop fishing'
+      return t('Stop fishing')
     case 'offer_deal':
-      return `Offer→${action.item ?? '?'}${action.player ? ` to ${action.player}` : ''}`
+      return action.player
+        ? t('Offer→{item} to {player}', { item: action.item ?? '?', player: action.player })
+        : t('Offer→{item}', { item: action.item ?? '?' })
     case 'open_trade':
-      return `Trade→${action.player ?? '?'}`
+      return t('Trade→{player}', { player: action.player ?? '?' })
     case 'party_invite':
-      return `Invite→${action.player ?? '?'}`
+      return t('Invite→{player}', { player: action.player ?? '?' })
     case 'party_accept':
-      return 'Accept party'
+      return t('Accept party')
     case 'party_decline':
-      return 'Decline party'
+      return t('Decline party')
     case 'party_leave':
-      return 'Leave party'
+      return t('Leave party')
     case 'use':
-      return `Use→${action.item ?? '?'}`
+      return t('Use→{item}', { item: action.item ?? '?' })
     case 'pickup':
-      return `Pickup→${action.item ?? '?'}`
+      return t('Pickup→{item}', { item: action.item ?? '?' })
     case 'sell':
-      return `Sell→${action.item ?? '?'}`
+      return t('Sell→{item}', { item: action.item ?? '?' })
     case 'buy':
-      return `Buy→${action.item ?? '?'}`
+      return t('Buy→{item}', { item: action.item ?? '?' })
     case 'drop':
-      return `Drop→${action.item ?? '?'}`
+      return t('Drop→{item}', { item: action.item ?? '?' })
     case 'buyback':
-      return `Buyback→${action.item ?? '?'}`
+      return t('Buyback→{item}', { item: action.item ?? '?' })
     case 'break_prop':
-      return `Break→prop ${action.prop_id ?? action.id ?? '?'}`
+      return t('Break→prop {id}', { id: action.prop_id ?? action.id ?? '?' })
     case 'open_chest':
-      return action.chest ? `Open chest→${action.chest}` : 'Open chest'
+      return action.chest ? t('Open chest→{chest}', { chest: action.chest }) : t('Open chest')
     case 'reroll':
-      return 'Reroll'
+      return t('Reroll')
     case 'wait':
-      return 'Wait'
+      return t('Wait')
     default:
       return action.type ? String(action.type) : ''
   }

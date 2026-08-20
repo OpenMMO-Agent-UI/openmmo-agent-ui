@@ -1,6 +1,7 @@
 'use strict'
 
 import { $, confirmAction } from './dom.js'
+import { t } from './i18n.js'
 
 const api = window.agentApp
 
@@ -47,7 +48,7 @@ export function renderWorn(worn) {
     row.className = item ? 'worn-row' : 'worn-row worn-bare'
     const name = document.createElement('span')
     name.className = 'worn-slot'
-    name.textContent = label
+    name.textContent = t(label)
     const value = document.createElement('span')
     value.className = 'worn-item'
     value.textContent = item ? itemLabel(item.itemDefId, item.enchant) : '—'
@@ -92,7 +93,7 @@ export function renderSkills(skills) {
   const box = $('skillsList')
   box.innerHTML = ''
   const rows = Object.entries(skills && typeof skills === 'object' ? skills : {})
-    .map(([id, progress]) => ({ id, name: SKILL_NAMES[id] || itemLabel(id), progress }))
+    .map(([id, progress]) => ({ id, name: SKILL_NAMES[id] ? t(SKILL_NAMES[id]) : itemLabel(id), progress }))
     .sort((a, b) => a.name.localeCompare(b.name))
   $('skillsEmpty').hidden = rows.length > 0
   for (const row of rows) {
@@ -103,7 +104,7 @@ export function renderSkills(skills) {
     name.textContent = row.name
     const level = document.createElement('span')
     level.className = 'skill-level'
-    level.textContent = `Lv ${row.progress.level}`
+    level.textContent = t('Lv {level}', { level: row.progress.level })
     const pct = skillProgressPct(row.progress)
     const track = document.createElement('div')
     track.className = 'skill-track'
@@ -111,7 +112,7 @@ export function renderSkills(skills) {
     track.setAttribute('aria-valuemin', '0')
     track.setAttribute('aria-valuemax', '100')
     track.setAttribute('aria-valuenow', String(Math.round(pct)))
-    track.title = `${row.progress.xp} XP`
+    track.title = t('{xp} XP', { xp: row.progress.xp })
     const fill = document.createElement('span')
     fill.className = 'skill-fill'
     fill.style.width = `${pct}%`
@@ -151,7 +152,7 @@ function bagMarkCheckbox(label, itemName, checked, onChange) {
   const input = document.createElement('input')
   input.type = 'checkbox'
   input.checked = checked
-  input.setAttribute('aria-label', `${label} ${itemName}`)
+  input.setAttribute('aria-label', `${t(label)} ${itemName}`)
   input.addEventListener('change', () => onChange(input.checked))
   cell.append(input)
   return cell
@@ -164,7 +165,7 @@ function bagMarkCheckbox(label, itemName, checked, onChange) {
 export function bagWeightText(weight) {
   if (!weight || !Number.isFinite(weight.carried) || !(weight.capacity > 0)) return null
   const kg = (v) => (v / 10).toFixed(1)
-  return `${kg(weight.carried)} / ${kg(weight.capacity)} kg`
+  return t('{carried} / {capacity} kg', { carried: kg(weight.carried), capacity: kg(weight.capacity) })
 }
 
 /// Mirrors agent-client's shop_info::format_price and the fork's
@@ -265,29 +266,34 @@ function enchantCollisions() {
 
 export async function submitBagLabels(characterId, characterName) {
   if (!characterId) {
-    $('bagLabelsStatus').textContent = 'No character selected.'
+    $('bagLabelsStatus').textContent = t('No character selected.')
     return
   }
   try {
     const collisions = enchantCollisions()
     if (collisions.length) {
       const proceed = await confirmAction(
-        `${collisions.join(', ')} — you carry more than one enchant level, and sell/drop can't tell them apart. ` +
-          'The agent might act on the wrong one. Apply labels anyway?',
+        t(
+          '{items} — you carry more than one enchant level, and sell/drop can\'t tell them apart. ' +
+            'The agent might act on the wrong one. Apply labels anyway?',
+          { items: collisions.join(', ') },
+        ),
         'Apply anyway',
       )
       if (!proceed) {
-        $('bagLabelsStatus').textContent = 'Cancelled.'
+        $('bagLabelsStatus').textContent = t('Cancelled.')
         return
       }
     }
-    $('bagLabelsStatus').textContent = 'Applying…'
+    $('bagLabelsStatus').textContent = t('Applying…')
     const res = await api.saveBagLabels(characterId, characterName, {
       sellable: [...stagedLabels.sellable],
       dropable: [...stagedLabels.dropable],
     })
-    $('bagLabelsStatus').textContent = res.ok ? 'Labels applied.' : res.error || 'Failed to apply labels.'
+    $('bagLabelsStatus').textContent = res.ok
+      ? t('Labels applied.')
+      : res.error || t('Failed to apply labels.')
   } catch (err) {
-    $('bagLabelsStatus').textContent = err?.message || 'Failed to apply labels.'
+    $('bagLabelsStatus').textContent = err?.message || t('Failed to apply labels.')
   }
 }

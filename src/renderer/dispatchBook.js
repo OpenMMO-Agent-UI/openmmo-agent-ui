@@ -1,6 +1,7 @@
 'use strict'
 
 import { $, showErrors } from './dom.js'
+import { t } from './i18n.js'
 
 const api = window.agentApp
 
@@ -12,7 +13,7 @@ let pendingDirective = null
 export function trackDirective(text) {
   pendingDirective = { text, sentAt: Date.now() }
   $('directiveSent').textContent = text
-  $('directiveReply').textContent = 'waiting…'
+  $('directiveReply').textContent = t('waiting…')
   $('directiveLog').hidden = false
   // The one deliberate animation moment (see style.css) — a brief ember
   // pulse marking that word was actually sent.
@@ -77,7 +78,7 @@ function coordRow(coord, removable) {
     del.type = 'button'
     del.className = 'ghost small coord-delete'
     del.textContent = '×'
-    del.title = 'Remove'
+    del.title = t('Remove')
     del.addEventListener('click', async () => {
       const res = await api.deleteCoordinate(currentCharacterId, coord.id)
       if (res.ok) {
@@ -97,9 +98,12 @@ export function renderCoords() {
   for (const coord of customCoords) box.appendChild(coordRow(coord, true))
 }
 
+/// `builtin` marks the two whose names are ours to translate; a player-written
+/// preset keeps whatever they typed. Their prompts stay English either way —
+/// they are sent to the model, not shown.
 const BUILTIN_PRESETS = [
-  { name: 'Idle', prompt: 'Stay at where you are and do nothing.' },
-  { name: 'Fight Monsters', prompt: 'Walk around and fight monsters.' },
+  { name: 'Idle', prompt: 'Stay at where you are and do nothing.', builtin: true },
+  { name: 'Fight Monsters', prompt: 'Walk around and fight monsters.', builtin: true },
 ]
 let customPresets = []
 let editingPresetId = null
@@ -118,7 +122,7 @@ function presetRow(preset, editable) {
   const go = document.createElement('button')
   go.type = 'button'
   go.className = 'preset-go'
-  go.textContent = preset.name
+  go.textContent = preset.builtin ? t(preset.name) : preset.name
   go.title = preset.prompt
   go.addEventListener('click', () => sendDirective(preset.prompt))
   row.appendChild(go)
@@ -127,7 +131,7 @@ function presetRow(preset, editable) {
     edit.type = 'button'
     edit.className = 'ghost small preset-edit'
     edit.textContent = '✎'
-    edit.title = 'Edit'
+    edit.title = t('Edit')
     edit.addEventListener('click', () => startEditPreset(preset))
     row.appendChild(edit)
 
@@ -135,7 +139,7 @@ function presetRow(preset, editable) {
     del.type = 'button'
     del.className = 'ghost small preset-delete'
     del.textContent = '×'
-    del.title = 'Remove'
+    del.title = t('Remove')
     del.addEventListener('click', async () => {
       const res = await api.deletePreset(currentCharacterId, preset.id)
       if (res.ok) {
@@ -150,6 +154,12 @@ function presetRow(preset, editable) {
 }
 
 export function renderPresets() {
+  // The form's own two labels are only ever written by startEditPreset /
+  // cancelEditPreset, so an untouched form would keep the markup's English.
+  if (!editingPresetId) {
+    $('presetsAddLabel').textContent = t('Write a new preset')
+    $('presetsSubmit').textContent = t('Add')
+  }
   const box = $('presetsList')
   box.innerHTML = ''
   for (const preset of BUILTIN_PRESETS) box.appendChild(presetRow(preset, false))
@@ -166,7 +176,7 @@ function renderDirectivePresets() {
     const chip = document.createElement('button')
     chip.type = 'button'
     chip.className = 'chip directive-preset-chip'
-    chip.textContent = preset.name
+    chip.textContent = preset.builtin ? t(preset.name) : preset.name
     chip.title = preset.prompt
     chip.addEventListener('click', () => sendDirective(preset.prompt))
     box.appendChild(chip)
@@ -178,18 +188,18 @@ function startEditPreset(preset) {
   // The form is collapsed until it's wanted, and Edit is one of the ways it is
   // wanted — otherwise the click fills in a form nobody can see.
   $('presetsAdd').open = true
-  $('presetsAddLabel').textContent = `Editing ${preset.name}`
+  $('presetsAddLabel').textContent = t('Editing {name}', { name: preset.name })
   $('presetName').value = preset.name
   $('presetPrompt').value = preset.prompt
-  $('presetsSubmit').textContent = 'Save'
+  $('presetsSubmit').textContent = t('Save')
   $('presetsCancelEdit').hidden = false
 }
 
 function cancelEditPreset() {
   editingPresetId = null
   $('presetsForm').reset()
-  $('presetsAddLabel').textContent = 'Write a new preset'
-  $('presetsSubmit').textContent = 'Add'
+  $('presetsAddLabel').textContent = t('Write a new preset')
+  $('presetsSubmit').textContent = t('Add')
   $('presetsCancelEdit').hidden = true
 }
 

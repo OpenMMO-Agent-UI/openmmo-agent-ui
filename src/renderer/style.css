@@ -2459,8 +2459,9 @@ textarea:disabled {
   background: #0d0f14;
 }
 
-.toast-preview-box::before {
-  content: 'Preview';
+/* The word comes from the markup (data-i18n) rather than `content:`, which
+   nothing can translate. */
+.toast-preview-label {
   position: absolute;
   top: 8px;
   left: 12px;

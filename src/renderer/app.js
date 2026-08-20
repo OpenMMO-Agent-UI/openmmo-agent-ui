@@ -8,6 +8,7 @@ import * as dispatchBook from './dispatchBook.js'
 import * as settingsPanel from './settingsPanel.js'
 import * as signInFlow from './signInFlow.js'
 import * as updateBanner from './updateBanner.js'
+import { t, setDictionary, applyI18n } from './i18n.js'
 
 const api = window.agentApp
 
@@ -120,7 +121,9 @@ async function persist(patch) {
 }
 
 function renderClassOptions() {
-  $('characterClass').innerHTML = classes.map((c) => `<option value="${c.id}">${c.id}</option>`).join('')
+  $('characterClass').innerHTML = classes
+    .map((c) => `<option value="${c.id}">${t(c.id)}</option>`)
+    .join('')
   $('characterClass').value = settings.characterClass
   renderGenderOptions()
 }
@@ -128,13 +131,16 @@ function renderClassOptions() {
 function renderGenderOptions() {
   const cls = classes.find((c) => c.id === settings.characterClass)
   const allowed = cls ? cls.genders : ['male', 'female']
-  $('gender').innerHTML = allowed.map((g) => `<option value="${g}">${g}</option>`).join('')
+  $('gender').innerHTML = allowed.map((g) => `<option value="${g}">${t(g)}</option>`).join('')
   if (!allowed.includes(settings.gender)) settings.gender = allowed[0]
   $('gender').value = settings.gender
   $('genderHint').textContent =
     allowed.length === 1
-      ? `Only a ${allowed[0]} model exists for ${settings.characterClass}.`
-      : 'Changing gender on an existing character recreates it — level and items reset.'
+      ? t('Only a {gender} model exists for {class}.', {
+          gender: t(allowed[0]),
+          class: t(settings.characterClass),
+        })
+      : t('Changing gender on an existing character recreates it — level and items reset.')
 }
 
 /// Where the agent's own LLM is, for the parts of the panel that need to show
@@ -162,7 +168,7 @@ const WORKER_HINTS = {
 /// LLM-scheduler knobs only throttle the LLM driver, hidden for rule workers.
 function renderWorker() {
   const kind = settings.workerKind || 'none'
-  $('workerHint').textContent = WORKER_HINTS[kind] || ''
+  $('workerHint').textContent = WORKER_HINTS[kind] ? t(WORKER_HINTS[kind]) : ''
   $('workerKnobs').hidden = kind !== 'fighter'
   const llmDriven = kind === 'none'
   $('paceSettings').hidden = !llmDriven
@@ -189,10 +195,15 @@ function renderBackend() {
   $('model').closest('label').hidden = b.kind === 'none'
   $('backendHint').textContent =
     b.kind === 'cli'
-      ? `Runs the ${b.id} CLI on this machine, under your own login and quota. It must work in a terminal first.`
+      ? t(
+          'Runs the {cli} CLI on this machine, under your own login and quota. It must work in a terminal first.',
+          { cli: b.id },
+        )
       : b.kind === 'http'
-        ? 'The key is stored encrypted by the OS and handed to the agent as an environment variable, never written to config.toml.'
-        : 'No LLM: the character connects and idles.'
+        ? t(
+            'The key is stored encrypted by the OS and handed to the agent as an environment variable, never written to config.toml.',
+          )
+        : t('No LLM: the character connects and idles.')
   renderTranslation()
 }
 
@@ -213,7 +224,9 @@ function renderTranslation() {
   const hint = $('translateShareHint')
   hint.hidden = Boolean(shared)
   if (!shared) {
-    hint.textContent = `${backend().label || 'This backend'} runs on this machine, so there is no endpoint to share.`
+    hint.textContent = t('{backend} runs on this machine, so there is no endpoint to share.', {
+      backend: backend().label || t('This backend'),
+    })
   }
 
   for (const id of TRANSLATION_FIELDS) $(id).disabled = on
@@ -239,16 +252,14 @@ function renderDutyState() {
 function setStatus(state) {
   running = state.running
   renderDutyState()
-  $('agentPid').textContent = running ? `Agent · pid ${state.pid}` : ''
+  $('agentPid').textContent = running ? t('Agent · pid {pid}', { pid: state.pid }) : ''
   $('restart').hidden = !(running && dirtyWhileRunning)
   $('pauseAgent').querySelector('.i-pause').toggleAttribute('hidden', !running)
   $('pauseAgent').querySelector('.i-play').toggleAttribute('hidden', running)
-  $('pauseAgent').title = running ? 'Pause the agent' : 'Resume the agent'
+  $('pauseAgent').title = running ? t('Pause the agent') : t('Resume the agent')
   $('pauseAgent').setAttribute('aria-label', $('pauseAgent').title)
   $('directiveInput').disabled = !running
-  $('directiveInput').placeholder = running
-    ? 'Send word to your character…'
-    : 'Not running — nothing to dispatch to'
+  renderDirectivePlaceholder()
   $('directiveForm').querySelector('button[type="submit"]').disabled = !running
   if (!running) {
     const frame = $('frame')
@@ -263,6 +274,12 @@ function setStatus(state) {
   // The staged-changes note says whether Apply will also restart the agent,
   // so it has to follow the agent starting or stopping under an open modal.
   updateSettingsFooter()
+}
+
+function renderDirectivePlaceholder() {
+  $('directiveInput').placeholder = running
+    ? t('Send word to your character…')
+    : t('Not running — nothing to dispatch to')
 }
 
 function appendLog(item) {
@@ -281,7 +298,10 @@ let memoryPollTimer = null
 /// same per-character scoping as the personality prompt.
 async function loadMemory() {
   const name = settings.characterName
-  $('memoryCharacterName').textContent = name || 'this character'
+  $('memoryHint').textContent = t(
+    'What {name} remembers — written by the agent itself, read-only.',
+    { name: name || t('this character') },
+  )
   if (!name) {
     $('memoryText').textContent = ''
     $('memoryEmpty').hidden = true
@@ -372,6 +392,9 @@ function applyView() {
 /// view now, so a scene that cannot open has nothing to fall back to — saying
 /// so is better than an empty frame.
 function showViewProblem(message) {
+  // Unmarked from here on: a later language switch would otherwise re-apply
+  // the markup's default hint over the problem it is reporting.
+  $('viewHint').removeAttribute('data-i18n')
   $('viewHint').textContent = message
   const frame = $('frame')
   frame.hidden = true
@@ -462,7 +485,7 @@ function setStatSheet(attributes, hunger) {
   }
   // The bar already carries the number; the sheet says what the band costs.
   const reading = hungerReading(hunger)
-  $('sheetHunger').textContent = reading ? reading.label : 'Exempt'
+  $('sheetHunger').textContent = reading ? reading.label : t('Exempt')
   $('sheetGuard').textContent = Number.isFinite(attributes?.guard) ? attributes.guard : '—'
   $('dutyLevel').disabled = cells.length === 0
 }
@@ -498,7 +521,8 @@ function appendFeed(items) {
     const head = document.createElement('div')
     head.className = 'feed-head'
     const timing = item.d == null ? '' : ` · ${(item.d / 1000).toFixed(1)}s`
-    head.textContent = `${new Date(item.t).toLocaleTimeString()} ${FEED_LABELS[item.k] || item.k}${timing}`
+    const label = FEED_LABELS[item.k] ? t(FEED_LABELS[item.k]) : item.k
+    head.textContent = `${new Date(item.t).toLocaleTimeString()} ${label}${timing}`
 
     const body = document.createElement('div')
     body.className = 'feed-body'
@@ -523,7 +547,7 @@ function renderFeedFilters() {
   box.innerHTML = ''
   for (const kind of FEED_KINDS) {
     const b = document.createElement('button')
-    b.textContent = FEED_LABELS[kind] || kind
+    b.textContent = FEED_LABELS[kind] ? t(FEED_LABELS[kind]) : kind
     b.className = 'chip on'
     b.addEventListener('click', () => {
       const off = feedHidden.has(kind)
@@ -558,8 +582,8 @@ function updateSettingsFooter() {
   // Applying restarts a live agent (see the settingsApply handler) — that is
   // a session interruption, and it should be on the button, not a surprise.
   $('settingsDirty').textContent = running
-    ? 'Applying saves these changes and restarts the agent.'
-    : 'Changes are staged until you apply them.'
+    ? t('Applying saves these changes and restarts the agent.')
+    : t('Changes are staged until you apply them.')
 }
 
 function markSettingsDirty() {
@@ -579,7 +603,9 @@ function openSettings() {
 }
 
 async function closeSettings() {
-  if (settingsDirty && !(await confirmAction('Discard unapplied settings changes?', 'Discard'))) return
+  if (settingsDirty && !(await confirmAction(t('Discard unapplied settings changes?'), 'Discard'))) {
+    return
+  }
   if (settingsDirty && settingsSnapshot) {
     settings = settingsSnapshot
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
@@ -672,7 +698,7 @@ function openDrawer(kind) {
     btn.classList.toggle('on', on)
     btn.setAttribute('aria-expanded', String(on))
   }
-  $('drawerTitle').textContent = DRAWER_TITLES[kind]
+  $('drawerTitle').textContent = t(DRAWER_TITLES[kind])
   for (const panel of document.querySelectorAll('[data-drawer-panel]')) {
     panel.hidden = panel.dataset.drawerPanel !== kind
   }
@@ -769,25 +795,25 @@ function bindActions() {
       $('instanceText').value,
     )
     if (!res.ok) {
-      $('instanceFile').textContent = res.error || 'Save failed'
+      $('instanceFile').textContent = res.error || t('Save failed')
       return
     }
     if (!running) {
-      $('instanceFile').textContent = `Saved to ${res.file}`
+      $('instanceFile').textContent = t('Saved to {file}', { file: res.file })
       return
     }
     // Only prompt customization here — restarting takes agent-client with
     // it, same as clicking Apply & restart, just without the extra click.
-    $('instanceFile').textContent = 'Saved — applying…'
+    $('instanceFile').textContent = t('Saved — applying…')
     const restarted = await api.restart()
     if (!restarted.ok) {
       showErrors(restarted.errors)
-      $('instanceFile').textContent = `Saved to ${res.file} — restart failed`
+      $('instanceFile').textContent = t('Saved to {file} — restart failed', { file: res.file })
       return
     }
     dirtyWhileRunning = false
     setStatus(restarted.status)
-    $('instanceFile').textContent = `Saved to ${res.file} — applied`
+    $('instanceFile').textContent = t('Saved to {file} — applied', { file: res.file })
   })
 
   $('bagLabelsSubmit').addEventListener('click', () =>
@@ -824,8 +850,8 @@ function bindActions() {
   // code is being carried to another window, so "did that work" matters.
   $('banner-copy').addEventListener('click', async () => {
     await navigator.clipboard.writeText($('banner-code').textContent)
-    $('banner-copy').textContent = 'Copied'
-    setTimeout(() => ($('banner-copy').textContent = 'Copy'), 1500)
+    $('banner-copy').textContent = t('Copied')
+    setTimeout(() => ($('banner-copy').textContent = t('Copy')), 1500)
   })
 
   $('clearLog').addEventListener('click', () => ($('log').textContent = ''))
@@ -853,22 +879,24 @@ function bindActions() {
     else applyPlayState(result.session)
   })
   $('changeCharacter').addEventListener('click', async () => {
-    if (!(await confirmAction('Leave this session and choose another character?', 'Leave'))) return
+    if (!(await confirmAction(t('Leave this session and choose another character?'), 'Leave'))) {
+      return
+    }
     await api.leavePlay('character')
     setScreen('character')
   })
   $('changeServer').addEventListener('click', async () => {
-    if (!(await confirmAction('Leave this session and choose another server?', 'Leave'))) return
+    if (!(await confirmAction(t('Leave this session and choose another server?'), 'Leave'))) return
     await api.leavePlay('server')
     await signInFlow.start()
   })
   $('settingsApply').addEventListener('click', async () => {
     showErrors([])
     $('settingsApply').disabled = true
-    $('settingsApply').textContent = 'Validating…'
+    $('settingsApply').textContent = t('Validating…')
     const applied = await api.applySettings(settings)
     $('settingsApply').disabled = false
-    $('settingsApply').textContent = 'Apply'
+    $('settingsApply').textContent = t('Apply')
     if (!applied.ok) {
       showErrors(applied.errors)
       return
@@ -919,6 +947,8 @@ function bindActions() {
   // validate to check, and a privacy choice should never sit staged behind
   // an unrelated LLM validation round-trip. Main gates every event on the
   // stored value at send time, so this takes effect on the very next event.
+  $('language').addEventListener('change', () => void switchLanguage($('language').value))
+
   $('telemetryEnabled').addEventListener('change', () => {
     const patch = { telemetry: $('telemetryEnabled').checked }
     settings = { ...settings, ...patch }
@@ -947,7 +977,7 @@ function bindActions() {
     const result = $('translateTestResult')
     $('translateTest').disabled = true
     result.hidden = false
-    result.textContent = 'Translating…'
+    result.textContent = t('Translating…')
     const patch = Object.fromEntries(TRANSLATION_FIELDS.map((id) => [id, $(id).value.trim()]))
     const outcome = await api.testTranslate(patch)
     $('translateTest').disabled = false
@@ -961,7 +991,7 @@ window.addEventListener('message', (event) => {
   if (event.source !== $('frame').contentWindow) return
   if (event.data?.type === 'openmmo-manual-ready') void api.manualReady()
   if (event.data?.type === 'openmmo-manual-error') {
-    void api.manualReady(event.data.error || 'Manual client could not enter the world')
+    void api.manualReady(event.data.error || t('Manual client could not enter the world'))
   }
   // The spectator client is a different origin with no preload of its own, so
   // the endpoint call (and the API key it carries) stays on this side.
@@ -992,11 +1022,41 @@ async function persistImmediateSetting(patch) {
   settings = await api.saveSettings(patch)
 }
 
+/// The dictionary is a file the main process owns, so a switch costs one
+/// round-trip and then a re-scan of every marked node.
+async function applyLanguage(language) {
+  setDictionary(await api.dictionary(language), language)
+  document.documentElement.lang = language
+  applyI18n(document)
+}
+
+/// ponytail: the switch redraws the markup and the panels it was made from, not
+/// every rendered list — a feed line or an action caption keeps the language it
+/// was written in until its next update. Re-render the rest if that ever shows.
+async function switchLanguage(language) {
+  const patch = { language }
+  settings = { ...settings, ...patch }
+  if (settingsSnapshot) settingsSnapshot.language = language
+  await applyLanguage(language)
+  await persistImmediateSetting(patch)
+  renderClassOptions()
+  renderBackend()
+  renderWorker()
+  settingsPanel.syncAll(settings)
+  signInFlow.rerender()
+  renderDutyState()
+  renderDirectivePlaceholder()
+  updateSettingsFooter()
+}
+
 async function init() {
   const info = await api.info()
   settings = info.settings
   backends = info.backends
   classes = info.classes
+
+  await applyLanguage(settings.language)
+  writeField('language', 'text', settings.language)
 
   $('llm').innerHTML = backends
     .filter((backend) => backend.kind !== 'none')
@@ -1073,7 +1133,7 @@ async function init() {
     settingsPanel.updateAudioAvailability()
   })
   api.onViewMemory((mb) => {
-    $('mem').textContent = mb ? `Using ${mb} MB` : ''
+    $('mem').textContent = mb ? t('Using {mb} MB', { mb }) : ''
     $('mem').classList.toggle('high', mb > 1500)
   })
   api.onViewError(showViewProblem)
