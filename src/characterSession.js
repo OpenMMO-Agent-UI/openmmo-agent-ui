@@ -3,7 +3,7 @@
 const { WebSocket } = require('ws')
 
 const { encode, decode, variantOf } = require('./msgpack')
-const { protocolVersion } = require('./runtimeEnv')
+const { protocolVersion, stampLayoutVersion } = require('./runtimeEnv')
 const { t } = require('./i18n')
 
 /// The pre-flight session: a direct, throwaway WebSocket
@@ -90,7 +90,7 @@ async function testConnection(serverUrl, terrainOrigin, fetchFn = fetch) {
   let ws
   try {
     ws = await connect(serverUrl)
-    ws.send(encode({ ClientInfo: [protocolVersion(), 'desktop', 'profile-test'] }))
+    ws.send(encode({ ClientInfo: [protocolVersion(), 'desktop', stampLayoutVersion('profile-test')] }))
     ws.send(encode({ Authenticate: [''] }))
     const reply = await nextMessage(ws, PROFILE_TEST_TIMEOUT_MS)
     if (!reply) throw new Error(t('Server did not acknowledge the pinned protocol'))
@@ -137,7 +137,7 @@ async function openSession(serverUrl, idToken) {
   // nothing on a version match), so the first reply we actually get is
   // either that refusal or the answer to Authenticate — distinguished by
   // content, not by which slot it arrived in.
-  ws.send(encode({ ClientInfo: [mine, 'cli', 'pre-flight'] }))
+  ws.send(encode({ ClientInfo: [mine, 'cli', stampLayoutVersion('pre-flight')] }))
   ws.send(encode({ Authenticate: [idToken] }))
 
   const [name, body] = (await nextMessage(ws, REPLY_TIMEOUT_MS)) || []

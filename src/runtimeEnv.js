@@ -114,6 +114,33 @@ function protocolVersion() {
   return protocolVersionInCheckout(repoRoot()) ?? FALLBACK_PROTOCOL_VERSION
 }
 
+/// The dungeon layout fingerprint this build's OpenMMO sources carry — the
+/// second thing the server gates a handshake on since agent-client v0.32.0
+/// (`LAYOUT_VERSION` in shared/src/lib.rs; see scripts/layout-version.js).
+/// Same two sources as protocolVersion(): the package stamp, then the
+/// checkout. Null when neither knows, e.g. a checkout predating the stamp.
+function layoutVersion() {
+  const stamped = buildInfo()
+  if (stamped && typeof stamped.layoutVersion === 'string' && stamped.layoutVersion) {
+    return stamped.layoutVersion
+  }
+  try {
+    return require('../scripts/layout-version.js').layoutVersion(repoRoot())
+  } catch {
+    return null
+  }
+}
+
+/// A ClientInfo version string with the layout fingerprint appended the way
+/// onlinerpg_shared::stamp_layout_version does (`pre-flight+layout.1f3c…`).
+/// The server refuses an unstamped string outright, so an unknown fingerprint
+/// is left bare on purpose: that refusal names the real problem (a stale
+/// desktop build), where a made-up stamp would only move it.
+function stampLayoutVersion(version) {
+  const layout = layoutVersion()
+  return layout ? `${version}+layout.${layout}` : version
+}
+
 module.exports = {
   repoRoot,
   packagedSeedDir,
@@ -121,4 +148,6 @@ module.exports = {
   seedRuntimeData,
   buildInfo,
   protocolVersion,
+  layoutVersion,
+  stampLayoutVersion,
 }

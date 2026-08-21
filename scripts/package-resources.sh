@@ -153,12 +153,21 @@ if [[ -n ${OPENMMO_PROTOCOL_VERSION:-} && $OPENMMO_PROTOCOL_VERSION != "$checkou
     exit 1
 fi
 protocol="${OPENMMO_PROTOCOL_VERSION:-$checkout_protocol}"
+# The dungeon layout fingerprint the server gates on since agent-client
+# v0.32.0 (shared/build.rs -> LAYOUT_VERSION). Recomputed from the same
+# checkout by scripts/layout-version.js so the desktop app's own handshakes
+# carry exactly what the agent-client bundled beside them carries; null for
+# a checkout predating the stamp, in which case nothing is appended.
+layout="$(node "$root/scripts/layout-version.js" "$checkout" 2>/dev/null || true)"
+layout_json="${layout:+\"$layout\"}"
+layout_json="${layout_json:-null}"
 parent_commit="${DESKTOP_BUILD_SHA:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}"
 cat > "$out/agent-client/build-info.json" <<JSON
 {
   "parentCommit": "$parent_commit",
   "openmmoCommit": "$commit",
-  "protocolVersion": $protocol
+  "protocolVersion": $protocol,
+  "layoutVersion": $layout_json
 }
 JSON
 
@@ -166,4 +175,4 @@ JSON
 # packaging. Staging remains usable with an explicit development checkout, but
 # the stamp above always records exactly what that checkout speaks.
 
-echo "staged $out from $checkout (commit $commit, protocol v$protocol)"
+echo "staged $out from $checkout (commit $commit, protocol v$protocol, layout ${layout:-unstamped})"
