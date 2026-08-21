@@ -146,8 +146,15 @@ jobs:
           ver="${tag#agent-client-}"
           draft="$(gh release view "$ver" --json isDraft --jq .isDraft 2>/dev/null || echo missing)"
           echo "release=$tag pin-contains-it=$status client-release-$ver=$draft"
+          # release.yml publishes on its own once the tag is built, so a pin
+          # that already carries the release plus a release build in flight
+          # is "shipping", not a failure — the agent cannot sit through a
+          # 20-minute CI build to say so itself.
+          building="$(gh run list --workflow=release.yml --branch "$ver" --limit 1 --json status --jq '.[0].status // "none"' 2>/dev/null || echo none)"
           if [[ ("$status" == "identical" || "$status" == "ahead") && "$draft" == "false" ]]; then
             echo "shipped."
+          elif [[ ("$status" == "identical" || "$status" == "ahead") && ("$building" == "in_progress" || "$building" == "queued") ]]; then
+            echo "shipping: pin carries $tag and release.yml is $building for $ver."
           else
             echo "::error::sync job finished but $tag did not ship (compare=$status, $ver draft-state=$draft) — read the agent summary above" >&2
             exit 1
