@@ -79,6 +79,12 @@ jobs:
           node-version: 22
       - uses: dtolnay/rust-toolchain@stable
         with:
+          # Pinned, not floating: the Step 3 gate runs clippy -D warnings
+          # over UPSTREAM code too, so a fresh stable that ships a new lint
+          # (1.98.0 -> chunks_exact_to_as_chunks, 2026-08-21) blocks every
+          # sync until Julian adapts. Bump deliberately once upstream is clean
+          # on the new stable.
+          toolchain: 1.97.1
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
