@@ -287,6 +287,7 @@
   "Saved to {file} — restart failed": "{file}에 저장했지만 재시작하지 못했습니다",
   "Saved — applying…": "저장했습니다 — 적용하는 중…",
   "Say \"{message}\"": "말하기 “{message}”",
+  "Scrolls to stock": "귀환 두루마리 보유 수",
   "Sell": "판매",
   "Sell→{item}": "판매→{item}",
   "Send": "보내기",

@@ -106,6 +106,7 @@ function renderConfigToml(s) {
     `low_health_pct = ${clampPercent(s.workerLowHealthPct, 70)}`,
     `food_stock = ${Math.max(0, Math.round(Number(s.workerFoodStock)) || 0)}`,
     `potion_stock = ${Math.max(0, Math.round(Number(s.workerPotionStock)) || 0)}`,
+    `scroll_stock = ${Math.max(0, Math.round(Number(s.workerScrollStock)) || 0)}`,
     `bag_full_pct = ${clampPercent(s.workerBagFullPct, 90)}`,
   )
   lines.push('')

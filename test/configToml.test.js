@@ -114,6 +114,7 @@ test('the engine picker and its knobs reach the generated config', () => {
       workerLowHealthPct: 55,
       workerFoodStock: 4,
       workerPotionStock: 6,
+      workerScrollStock: 3,
       workerBagFullPct: 70,
     }),
   )
@@ -124,6 +125,7 @@ test('the engine picker and its knobs reach the generated config', () => {
   assert.match(table, /^low_health_pct = 55$/m)
   assert.match(table, /^food_stock = 4$/m)
   assert.match(table, /^potion_stock = 6$/m)
+  assert.match(table, /^scroll_stock = 3$/m)
   assert.match(table, /^bag_full_pct = 70$/m)
 })
 

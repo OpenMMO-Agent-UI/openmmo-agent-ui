@@ -61,6 +61,7 @@ const DEFAULTS = {
   workerLowHealthPct: 70,
   workerFoodStock: 10,
   workerPotionStock: 10,
+  workerScrollStock: 5,
   workerBagFullPct: 90,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
@@ -238,6 +239,7 @@ function importExistingConfig(settings) {
   take('workerLowHealthPct', worker.low_health_pct)
   take('workerFoodStock', worker.food_stock)
   take('workerPotionStock', worker.potion_stock)
+  take('workerScrollStock', worker.scroll_stock)
   take('workerBagFullPct', worker.bag_full_pct)
   take('minIntervalSecs', npc.min_interval_secs)
   take('idleIntervalSecs', npc.idle_interval_secs)

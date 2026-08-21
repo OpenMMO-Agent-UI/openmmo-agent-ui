@@ -95,6 +95,7 @@ const FIELDS = {
   workerLowHealthPct: 'int',
   workerFoodStock: 'int',
   workerPotionStock: 'int',
+  workerScrollStock: 'int',
   workerBagFullPct: 'int',
   llm: 'text',
   openaiBaseUrl: 'text',
