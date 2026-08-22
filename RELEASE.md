@@ -137,6 +137,18 @@ binary **actually sends** — then compares that against the filename, against
 
 The handshake precedes authentication, so this needs no game account.
 
+Only the Linux AppImage, though, and only the protocol number — so it is not
+cover for the other two platforms, and does not look at the dungeon layout
+fingerprint the server gates on alongside the protocol. v0.33.0 passed this
+and still shipped a Windows package refused at every handshake that mattered:
+`shared/build.rs` hashes the path bytes of its inputs, `read_dir` spells them
+`src/dungeon\gen.rs` on Windows, and the fingerprint the Windows runner
+compiled in therefore differed from the one the Linux server computed from
+byte-identical sources. `scripts/verify-staged-layout.js` covers that now — it
+reads the fingerprint back out of the staged binary and wasm during staging,
+on the machine that built them, so each platform's own `package` job fails
+instead of shipping.
+
 Reading a number out of a file cannot catch the failure documented in
 `package-resources.sh`: a binary compiled before a protocol bump, staged beside
 metadata stamped from current source, so both the filename and `build-info.json`

@@ -286,10 +286,20 @@ Use the actual default branch name if it differs from `master` (check
 `git branch --show-current` — this repo's default is `master` as of this
 writing).
 
-## Step 8: wait for release CI, then publish
+## Step 8: wait for release CI
 
 Pushing the `v*` tag triggers `.github/workflows/release.yml`, which builds
-all three platform installers and opens a **draft** GitHub release.
+all three platform installers and **publishes the release itself** — there is
+nothing left for this step to approve. Publishing is what fires
+`publish-downloads.yml`, so the wiki's download link and every installed
+client's auto-update feed move in the same run.
+
+This step used to end by promoting a draft. The draft gate is gone on
+purpose: the one time it mattered, a protocol-matching build sat unpublished
+for a day while the live link served a client the server refused. See
+RELEASE.md ("There is deliberately no human gate") for the full account. The
+checks that actually protect a release all run *before* the tag is pushed or
+inside the job itself — so treat Steps 3 and 6 as the gate, not this one.
 
 ```
 gh run list --workflow=release.yml --branch=v<version> --limit=1
@@ -298,11 +308,20 @@ gh run list --workflow=release.yml --branch=v<version> --limit=1
 Poll (e.g. `gh run watch <run-id>`, or repeat the list command with a short
 sleep) until that run completes.
 
-- **On success**: publish the draft —
-  `gh release edit v<version> --draft=false`. Send one `PushNotification`
-  reporting success (new version, protocol version, release URL).
-- **On failure**: leave the draft as-is for manual inspection. Send one
-  `PushNotification` naming which CI job failed and a link to the run.
+- **On success**: send one `PushNotification` reporting it (new version,
+  protocol version, release URL).
+- **On failure**: nothing was published — `gh release create` is the last
+  step of the job. Send one `PushNotification` naming which CI job failed and
+  a link to the run. Fix forward under a new patch version; `release-plan.js`
+  refuses to overwrite a tag that did publish.
+
+`smoke-release.yml` runs after publishing, but only against the **Linux
+AppImage**, and only reads back the protocol version. It is not cover for the
+other two platforms: v0.33.0 shipped a Windows package whose agent-client and
+wasm carried a dungeon layout fingerprint the server refused, passed this
+smoke test, and reached users through auto-update. What catches that class of
+bug now is `scripts/verify-staged-layout.js`, which runs during staging on the
+machine doing the building — i.e. inside each platform's own `package` job.
 
 ## Local environment prerequisites
 
