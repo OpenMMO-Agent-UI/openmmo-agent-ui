@@ -159,17 +159,28 @@ class ClientServer {
     this.server = null
     this.port = 0
     this.origin = null
+    this.starting = null
   }
 
   get url() {
     return this.port ? `http://127.0.0.1:${this.port}` : null
   }
 
-  /// Idempotent: a restart of the agent should not cycle the view's origin,
-  /// which would reload the whole 3D scene for nothing.
-  async start(terrain) {
+  /// Idempotent, including while a first start is still binding: a caller
+  /// that arrives mid-listen waits on the same promise instead of getting a
+  /// portless (null) URL. A restart of the agent should not cycle the view's
+  /// origin either, which would reload the whole 3D scene for nothing.
+  start(terrain) {
     this.origin = apiOrigin(terrain)
-    if (this.server) return this.url
+    if (this.starting) return this.starting
+    this.starting = this.#listen().catch((err) => {
+      this.stop()
+      throw err
+    })
+    return this.starting
+  }
+
+  async #listen() {
     if (!distReady()) {
       throw new Error(
         `The web client has not been built yet. Run "npm install && npm run build" in ${path.join(repoRoot(), 'client')}.`,
@@ -242,6 +253,7 @@ class ClientServer {
     if (this.server) this.server.close()
     this.server = null
     this.port = 0
+    this.starting = null
   }
 }
 
