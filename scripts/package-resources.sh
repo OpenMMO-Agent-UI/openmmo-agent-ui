@@ -161,6 +161,15 @@ protocol="${OPENMMO_PROTOCOL_VERSION:-$checkout_protocol}"
 layout="$(node "$root/scripts/layout-version.js" "$checkout" 2>/dev/null || true)"
 layout_json="${layout:+\"$layout\"}"
 layout_json="${layout_json:-null}"
+
+# Read the fingerprint back out of what was just copied. layout-version.js and
+# the checkout's shared/build.rs are two implementations of one hash, and this
+# is the only check that runs on the machine that did the building — which is
+# how v0.33.0 shipped a Windows package stamped with a fingerprint its own
+# binary and wasm disagreed with, and that nobody could log in with.
+if [[ -n $layout ]]; then
+    node "$root/scripts/verify-staged-layout.js" "$out" "$layout"
+fi
 parent_commit="${DESKTOP_BUILD_SHA:-$(git -C "$root" rev-parse HEAD 2>/dev/null || echo unknown)}"
 cat > "$out/agent-client/build-info.json" <<JSON
 {

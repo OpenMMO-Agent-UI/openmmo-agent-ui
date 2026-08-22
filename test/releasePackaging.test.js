@@ -109,3 +109,72 @@ test('the update channel file yields the version, artifact, and checksum it name
     sha512: 'top-level-checksum',
   })
 })
+
+// A packaged build carries the dungeon layout fingerprint in three places
+// filled from two implementations of one hash: build-info.json from
+// scripts/layout-version.js, the agent-client binary and the shared wasm from
+// the checkout's shared/build.rs. v0.33.0's Windows package had them disagree
+// (build.rs hashed `src/dungeon\gen.rs`, path separator and all), so its own
+// pre-flight passed while the agent and the web client were both refused.
+function stagedTree(fingerprint, { binaryName = 'agent-client', stamped = true } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openmmo-staged-'))
+  const wasmDir = path.join(dir, 'client', 'assets')
+  fs.mkdirSync(path.join(dir, 'agent-client'), { recursive: true })
+  fs.mkdirSync(wasmDir, { recursive: true })
+  // `+layout.` and the fingerprint are separate constants in the real binary —
+  // stamp_layout_version only joins them at run time — so they are apart here.
+  const rodata = (hex) => `${stamped ? 'boss\0\0+layout.\0' : 'boss\0\0'}pad\0${hex}id,name,model\0`
+  fs.writeFileSync(path.join(dir, 'agent-client', binaryName), rodata(fingerprint))
+  fs.writeFileSync(path.join(wasmDir, 'onlinerpg_shared_bg-yNGynPUN.wasm'), rodata(fingerprint))
+  // Rides along in dist/ with no fingerprint to disagree about.
+  fs.writeFileSync(path.join(wasmDir, 'draco_decoder-Z1_iN-Ht.wasm'), 'no stamp here\0')
+  return dir
+}
+
+test('staged layout check passes when the binary and wasm carry the stamped fingerprint', () => {
+  const dir = stagedTree('42152d4091619267')
+  try {
+    const { check } = require('../scripts/verify-staged-layout.js')
+    assert.deepEqual(check(dir, '42152d4091619267'), [])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('staged layout check catches a Windows build fingerprinted off its own paths', () => {
+  const dir = stagedTree('a40deade30f81320', { binaryName: 'agent-client.exe' })
+  try {
+    const { check } = require('../scripts/verify-staged-layout.js')
+    const problems = check(dir, '42152d4091619267')
+
+    assert.equal(problems.length, 3)
+    assert.match(problems[0], /agent-client\.exe does not carry layout 42152d4091619267$/)
+    assert.match(problems[1], /onlinerpg_shared_bg-.*\.wasm does not carry layout 42152d4091619267$/)
+    // Names what it was really built with, so the failure reads as a bug
+    // rather than as a missing rebuild.
+    assert.match(problems[2], /built stamped with: .*a40deade30f81320/)
+    // draco has no fingerprint and must not be dragged into the complaint.
+    assert.ok(!problems.some((problem) => problem.includes('draco')))
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('staged layout check rejects a binary from a checkout predating the stamp', () => {
+  const dir = stagedTree('42152d4091619267', { stamped: false })
+  try {
+    const { check } = require('../scripts/verify-staged-layout.js')
+    assert.deepEqual(check(dir, '42152d4091619267'), [
+      `${path.join(dir, 'agent-client', 'agent-client')} carries no +layout stamp, ` +
+        'but this build claims 42152d4091619267',
+    ])
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('staging runs the layout check on whatever it just copied', () => {
+  const script = fs.readFileSync(path.join(ROOT, 'scripts', 'package-resources.sh'), 'utf8')
+
+  assert.match(script, /verify-staged-layout\.js" "\$out" "\$layout"/)
+})
