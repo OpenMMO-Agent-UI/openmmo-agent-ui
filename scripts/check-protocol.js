@@ -18,6 +18,7 @@ const path = require('node:path')
 const { WebSocket } = require('ws')
 
 const { encode, decode, variantOf } = require('./../src/msgpack')
+const { layoutVersion, fnv1a64, FNV_OFFSET } = require('./layout-version.js')
 
 // `../..` from this script only finds the OpenMMO checkout when
 // this repo is cloned *inside* it (the README's documented layout) —
@@ -50,6 +51,13 @@ const SEARCH_REFS = ['upstream/master', 'origin/master', 'master']
 /// past this script's own output, right before it reports success.
 function git(...args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+}
+
+/// The same, without the utf8 round-trip: layout inputs are hashed byte for
+/// byte, and decoding them to a string would mangle anything non-ASCII and
+/// eat the trailing newline that is part of the file.
+function gitBytes(...args) {
+  return execFileSync('git', args, { cwd: ROOT, maxBuffer: 1 << 28, stdio: ['ignore', 'pipe', 'pipe'] })
 }
 
 function localVersion() {
@@ -92,8 +100,60 @@ function newestCommitSpeaking(wanted, commits) {
   return found
 }
 
-/// Resolves to the version the server demands, or null when it accepts ours.
-function probe(url, version) {
+/// The fingerprint a commit would compile, read straight out of git rather
+/// than through a checkout. Mirrors shared/build.rs the same way
+/// layout-version.js does, over blobs instead of files; null for a commit
+/// that predates the generator.
+function layoutVersionAt(sha) {
+  let names
+  try {
+    names = git('ls-tree', '--name-only', `${sha}:shared/src/dungeon`).split('\n').filter(Boolean)
+  } catch {
+    return null
+  }
+  const inputs = ['../data-src/dungeons.csv']
+  for (const name of names) {
+    if (name.endsWith('.rs') && name !== 'tests.rs') inputs.push(`src/dungeon/${name}`)
+  }
+  inputs.sort()
+  let hash = FNV_OFFSET
+  for (const rel of inputs) {
+    // Paths are as the shared/ crate sees them; git wants them from the root.
+    const blob = rel.startsWith('../') ? rel.slice(3) : `shared/${rel}`
+    const bytes = gitBytes('show', `${sha}:${blob}`)
+    hash = fnv1a64(hash, Buffer.from(rel, 'utf8'))
+    hash = fnv1a64(hash, bytes.filter((b) => b !== 0x0d))
+  }
+  return hash.toString(16).padStart(16, '0')
+}
+
+/// Which gate an `AuthError` came from.
+///
+/// Every branch here is a refusal. The bug this replaced only recognised the
+/// protocol message and returned "no version demanded" for anything else,
+/// which main() then printed as **accepted** — so a fleet locked out by the
+/// layout gate was reported as healthy, by the one tool whose whole job is
+/// to ask.
+function classifyRefusal(text) {
+  const wanted = text.match(/Protocol v(\d+) required/)
+  if (wanted) return { protocol: Number(wanted[1]) }
+  if (/dungeon layouts? differ/i.test(text)) return { layout: true }
+  return { refused: text }
+}
+
+/// The server gates on two things and reports them separately, so this
+/// answers with which one it was:
+///   { ok: true }       let in
+///   { protocol: n }    wrong protocol number; the server speaks vn
+///   { layout: true }   right number, different dungeon generator
+///   { refused: text }  refused for some other reason
+///
+/// The version string carries the layout stamp the way
+/// onlinerpg_shared::stamp_layout_version does. Sending it bare — which this
+/// did until the server started gating on it — means every probe trips the
+/// layout gate, and the answer to "which protocol do you speak" comes back
+/// as a refusal that has nothing to do with the protocol.
+function probe(url, version, layout) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url)
     let settled = false
@@ -108,40 +168,81 @@ function probe(url, version) {
       fn(value)
     }
 
-    ws.on('open', () => ws.send(encode({ ClientInfo: [version, 'cli', 'check-protocol'] })))
+    const stamped = layout ? `check-protocol+layout.${layout}` : 'check-protocol'
+    ws.on('open', () => ws.send(encode({ ClientInfo: [version, 'cli', stamped] })))
     ws.on('message', (data) => {
       const [name, body] = variantOf(decode(Buffer.from(data)))
       if (name !== 'AuthError') return
-      const required = String(body?.[0] ?? '').match(/Protocol v(\d+) required/)
-      finish(resolve, required ? Number(required[1]) : null)
+      finish(resolve, classifyRefusal(String(body?.[0] ?? '')))
     })
     // Silence past the handshake means it was accepted.
-    ws.on('close', () => finish(resolve, null))
+    ws.on('close', () => finish(resolve, { ok: true }))
     ws.on('error', (err) => finish(reject, err))
-    setTimeout(() => finish(resolve, null), 8000)
+    setTimeout(() => finish(resolve, { ok: true }), 8000)
   })
+}
+
+/// Which commit to move to when the server refuses our dungeon generator.
+///
+/// Unlike the protocol number, a fingerprint is not ordered — a generator
+/// change moves it anywhere — so this cannot bisect. It walks the commits
+/// that actually touched the generator, newest first, and asks the server
+/// about each one's fingerprint. Between two such commits the fingerprint
+/// never moves, so the newest commit carrying an accepted one is the commit
+/// just below the next boundary up.
+async function newestCommitWithAcceptedLayout(url, ref, limit = 25) {
+  const boundaries = git(
+    'log',
+    '--format=%H',
+    ref,
+    '--',
+    'shared/src/dungeon',
+    'data-src/dungeons.csv',
+  )
+    .split('\n')
+    .filter(Boolean)
+    .slice(0, limit)
+
+  // Nothing has changed the generator above the newest boundary, so the tip
+  // still carries its fingerprint.
+  let newestCarryingIt = git('rev-parse', ref)
+  for (const boundary of boundaries) {
+    const fingerprint = layoutVersionAt(boundary)
+    if (!fingerprint) break
+    const verdict = await probe(url, versionAt(boundary), fingerprint)
+    if (verdict.ok) return { sha: git('rev-parse', newestCarryingIt), fingerprint }
+    newestCarryingIt = `${boundary}~1`
+  }
+  return null
 }
 
 async function main() {
   const url = process.argv[2] || DEFAULT_URL
   const mine = localVersion()
-  process.stdout.write(`checkout speaks v${mine}; asking ${url} ... `)
+  const layout = layoutVersion(ROOT)
+  process.stdout.write(
+    `checkout speaks v${mine}${layout ? `, layout ${layout}` : ' (unstamped)'}; asking ${url} ... `,
+  )
 
-  let required
+  let verdict
   try {
-    required = await probe(url, mine)
+    verdict = await probe(url, mine, layout)
   } catch (err) {
     console.log('unreachable')
     console.error(`\n${url} did not answer: ${err.message}`)
     process.exit(2)
   }
 
-  if (required === null) {
-    console.log(`accepted`)
+  if (verdict.ok) {
+    console.log('accepted')
     return
   }
 
-  console.log(`refused, it wants v${required}`)
+  if (verdict.refused) {
+    console.log('refused')
+    console.error(`\n${url} said: ${verdict.refused}`)
+    process.exit(1)
+  }
 
   let commits
   let searched
@@ -160,20 +261,44 @@ async function main() {
     process.exit(1)
   }
 
-  const target = newestCommitSpeaking(required, commits)
-  if (!target) {
+  if (verdict.protocol) {
+    console.log(`refused, it wants v${verdict.protocol}`)
+    const target = newestCommitSpeaking(verdict.protocol, commits)
+    if (!target) {
+      console.error(
+        `\nNothing on ${searched} speaks v${verdict.protocol}. If the server is ahead, ` +
+          `fetch and try again; the commit may not have been pushed yet.`,
+      )
+      process.exit(1)
+    }
+    reportTarget(target, searched)
+  }
+
+  // Right protocol, wrong dungeon generator. This is the refusal a redeploy
+  // off upstream master produces without touching the protocol number at
+  // all — no release is cut, nothing else notices, and every shipped client
+  // is locked out until the pin follows.
+  console.log('refused: it runs a different dungeon generator')
+  const found = await newestCommitWithAcceptedLayout(url, searched)
+  if (!found) {
     console.error(
-      `\nNothing on ${searched} speaks v${required}. If the server is ahead, ` +
-        `fetch and try again; the commit may not have been pushed yet.`,
+      `\nNothing in the last generator changes on ${searched} carries a layout ` +
+        `${url} accepts. Fetch and try again; the server may be ahead of what has been pushed.`,
     )
     process.exit(1)
   }
+  console.error(`\nIt accepts layout ${found.fingerprint}.`)
+  reportTarget(found.sha, searched)
+}
 
+/// Say which commit to land on, and how. Shared by both refusals — the fix
+/// is the same shape either way: move the checkout, rebuild, repackage.
+function reportTarget(target, searched) {
   const subject = git('log', '--format=%h %s', '-1', target)
   console.error(
     [
       '',
-      `The newest commit that speaks v${required} is:`,
+      `The commit to move to is:`,
       `  ${subject}`,
       '',
       'The spectator work is a branch, so rebase it onto that rather than moving',
@@ -182,12 +307,20 @@ async function main() {
       '',
       'Then rebuild and package in one step:',
       `  OPENMMO_CHECKOUT=${ROOT} npm run dist:mac`,
+      '',
+      `(searched ${searched})`,
     ].join('\n'),
   )
   process.exit(1)
 }
 
-main().catch((err) => {
-  console.error(err.message)
-  process.exit(2)
-})
+module.exports = { classifyRefusal, layoutVersionAt }
+
+// Only when run, not when required: the tests import classifyRefusal, and a
+// bare main() at import time would have every one of them dial the server.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.message)
+    process.exit(2)
+  })
+}
