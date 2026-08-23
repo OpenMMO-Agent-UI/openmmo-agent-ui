@@ -31,7 +31,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Cheap gate: only wake the agent when Julian has a release our pin lacks.
+  # Cheap gate: wake the agent when Julian has a release our pin lacks, or
+  # when the live server has stopped accepting the build we ship.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -39,9 +40,24 @@ jobs:
       needs-sync: ${{ steps.cmp.outputs.needs-sync }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # "Has Julian released something we lack?" and "can our users log in?"
+      # are different questions, and only the first used to be asked. A
+      # redeploy off upstream master moved the dungeon generator without a
+      # release or a protocol bump on 2026-08-23; every shipped client was
+      # refused and this gate saw nothing to do for hours. No `npm ci`: the
+      # probe is dependency-free on purpose.
+      - id: server
+        run: |
+          node scripts/server-accepts-pin.js | tee gate.json
+          accepted="$(node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync("gate.json","utf8")).accepted))')"
+          echo "accepted=$accepted" >> "$GITHUB_OUTPUT"
       - id: cmp
         env:
           GH_TOKEN: ${{ github.token }}
+          SERVER_ACCEPTS_PIN: ${{ steps.server.outputs.accepted }}
         run: |
           # scripts/release-sync-check.js needs the submodule's object graph,
           # which this job deliberately doesn't clone. Same ancestry question
@@ -56,8 +72,13 @@ jobs:
           [[ -n "$relsha" ]] || relsha="$(git ls-remote https://github.com/Julian-adv/OpenMMO.git "refs/tags/${tag}" | cut -f1)"
           pin="$(git ls-tree HEAD deps/OpenMMO | awk '{print $3}')"
           status="$(gh api "repos/OpenMMO-Agent-UI/OpenMMO/compare/${relsha}...${pin}" --jq .status 2>/dev/null || echo unknown)"
-          echo "release=$tag ($relsha) pin=$pin compare=$status"
-          if [[ "$status" == "identical" || "$status" == "ahead" ]]; then
+          echo "release=$tag ($relsha) pin=$pin compare=$status server-accepts-pin=$SERVER_ACCEPTS_PIN"
+          # `null` is "could not ask" — a network blip must not fire a
+          # two-hour sync, so only an outright refusal counts.
+          if [[ "$SERVER_ACCEPTS_PIN" == "false" ]]; then
+            echo "the live server refuses the build we ship — syncing regardless of releases"
+            echo "needs-sync=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$status" == "identical" || "$status" == "ahead" ]]; then
             echo "needs-sync=false" >> "$GITHUB_OUTPUT"
           else
             echo "needs-sync=true" >> "$GITHUB_OUTPUT"

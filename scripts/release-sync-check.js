@@ -29,6 +29,8 @@
 const { execFileSync, spawnSync } = require('node:child_process')
 const path = require('node:path')
 
+const { ask } = require('./server-accepts-pin.js')
+
 // Not `git rev-parse --show-toplevel` — deps/OpenMMO is itself a git repo, so
 // running this from inside it would resolve to the *submodule's* root
 // instead of the superproject's. This script always lives at
@@ -37,6 +39,7 @@ const REPO_ROOT = path.resolve(__dirname, '..')
 const SUBMODULE = path.join(REPO_ROOT, 'deps', 'OpenMMO')
 const UPSTREAM_REPO = 'Julian-adv/OpenMMO'
 const UPSTREAM_URL = `https://github.com/${UPSTREAM_REPO}.git`
+const SERVER_URL = 'wss://openmmo.to.nexus/ws'
 
 function git(cwd, ...args) {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
@@ -83,7 +86,16 @@ function hasNewRelease({ alreadyPinned, releaseTag, repoRoot = REPO_ROOT }) {
   return packageVersion(repoRoot) !== versionFromAgentClientTag(releaseTag)
 }
 
-function main() {
+/// Whether there is work to do at all. A new release is one reason; the other
+/// is that the server stopped accepting what we already shipped, which is not
+/// the same thing and has no release attached to it — see
+/// scripts/server-accepts-pin.js. `null` means the server could not be asked,
+/// which is not a reason to sync.
+function needsSync({ hasNewRelease: released, serverAcceptsPin }) {
+  return released || serverAcceptsPin === false
+}
+
+async function main() {
   git(SUBMODULE, 'fetch', 'origin', '--quiet')
 
   const release = latestUpstreamRelease()
@@ -107,8 +119,25 @@ function main() {
 
   const protocolVersion = protocolVersionAt(releaseSha)
 
+  const config = JSON.parse(
+    require('node:fs').readFileSync(path.join(REPO_ROOT, 'config', 'release.json'), 'utf8'),
+  )
+  let serverAcceptsPin = null
+  let serverMessage = null
+  try {
+    const verdict = await ask(SERVER_URL, config.pinnedProtocol, config.pinnedLayout)
+    serverAcceptsPin = verdict.accepted
+    serverMessage = verdict.message
+  } catch {
+    // Unreachable stays null: a blip must not trigger a two-hour sync.
+  }
+
+  const released = hasNewRelease({ alreadyPinned, releaseTag: tagName })
   const result = {
-    hasNewRelease: hasNewRelease({ alreadyPinned, releaseTag: tagName }),
+    needsSync: needsSync({ hasNewRelease: released, serverAcceptsPin }),
+    hasNewRelease: released,
+    serverAcceptsPin,
+    serverMessage,
     releaseTag: tagName,
     releaseSha,
     releasePublishedAt: release.published_at,
@@ -119,9 +148,10 @@ function main() {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
 
-if (require.main === module) main()
+if (require.main === module) void main()
 
 module.exports = {
   hasNewRelease,
+  needsSync,
   versionFromAgentClientTag,
 }

@@ -30,8 +30,9 @@ cd <repo root>
 node scripts/release-sync-check.js
 ```
 
-This prints JSON: `hasNewRelease`, `releaseTag`, `releaseSha`,
-`protocolVersion`, `forkHead`, `pinnedSha`. It compares Julian's latest
+This prints JSON: `needsSync`, `hasNewRelease`, `serverAcceptsPin`,
+`serverMessage`, `releaseTag`, `releaseSha`, `protocolVersion`, `forkHead`,
+`pinnedSha`. It compares Julian's latest
 non-draft release against **this repo's current submodule pin**, not
 against the fork's master — so a prior run that pushed the fork/branch side
 but failed before the main-repo commit still shows `hasNewRelease: true`,
@@ -40,10 +41,37 @@ re-run: pushing an already-pushed ref is a no-op, rebasing an
 already-rebased branch is a no-op, and the tag script only bumps `r` when
 there's something new to mark.
 
-If `hasNewRelease` is `false`, stop here. No notification.
+If `needsSync` is `false`, stop here. No notification.
 
-If it's `true`, keep the JSON output around — `releaseTag`, `releaseSha`,
-and `protocolVersion` are used throughout the rest of this flow.
+`needsSync` has two independent reasons, and they need different work:
+
+- **`hasNewRelease: true`** — the normal case. Keep the JSON output around;
+  `releaseTag`, `releaseSha` and `protocolVersion` are used throughout the
+  rest of this flow, and the steps below run as written.
+- **`serverAcceptsPin: false`** — the live server has stopped accepting the
+  build we ship, with no release attached to it. This happens when Julian
+  redeploys off master: the dungeon layout fingerprint moves without the
+  protocol number changing and without a tag, so there is no `releaseTag` to
+  sync to and `hasNewRelease` can be `false`. `serverMessage` carries the
+  server's own refusal text. Ask which commit to land on instead of guessing:
+
+  ```
+  npm run check                 # scripts/check-protocol.js
+  ```
+
+  It stamps the layout, classifies the refusal, and names the newest commit
+  the server accepts. **Use that commit as `releaseSha` for Steps 1-5** —
+  everything else in this flow is unchanged, except that there is no release
+  tag, so Step 5's version comes from a patch bump of the current
+  `package.json` rather than from `releaseTag`.
+
+  (`serverAcceptsPin: null` means the server could not be reached. That is
+  not a reason to sync; if `hasNewRelease` is also false, stop.)
+
+After bumping the pin in Step 5, run `node scripts/record-pin-gate.js` so
+`config/release.json` records what the new pin presents at the handshake —
+`test/pinGate.test.js` fails the Step 6 gate if you forget, because that
+recorded pair is what this five-minute check reads without a submodule.
 
 ## Step 1: align the fork's master with the release lineage
 

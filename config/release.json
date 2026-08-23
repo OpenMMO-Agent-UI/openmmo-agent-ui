@@ -16,5 +16,7 @@
     34,
     36
   ],
-  "fallbackProtocol": 34
+  "fallbackProtocol": 34,
+  "pinnedProtocol": 36,
+  "pinnedLayout": "f75cb8dd7825d3a6"
 }
