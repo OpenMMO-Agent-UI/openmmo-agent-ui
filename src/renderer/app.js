@@ -1,7 +1,7 @@
 'use strict'
 
 import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswered } from './dom.js'
-import { attributeCells, dutyState, hungerReading, xpProgressPct } from './duty.js'
+import { attributeCells, dutyState, hungerReading } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
@@ -411,25 +411,23 @@ function showViewProblem(message) {
 /// `self.position`, it just wasn't kept around anywhere before now.
 let lastSelf = null
 
-/// The header's duty card. World coordinates used to ride along in this line
-/// too — they belong to the Coordinates panel, which is where you actually do
-/// something with them, and they are still cached on `lastSelf` for it.
+/// The header's duty card: who is on the desk, not how they are doing. The
+/// HP/XP/food meters that used to sit here are the game view's own top-left
+/// HUD now, fed by the same mirror. World coordinates left earlier for the
+/// Coordinates panel, and are still cached on `lastSelf` for it.
 function setVitals(v) {
   if (!v || !v.self) {
     lastSelf = null
     $('coordUseCurrent').disabled = true
-    $('dutyVitals').hidden = true
     $('dutyLevel').hidden = true
     $('dutyName').textContent = settings?.characterName || '—'
-    // The clock stands outside the vitals block that hiding covers, so a
-    // dropped session would otherwise leave it stopped at the last time seen.
+    // Nothing else clears the clock, so a dropped session would otherwise
+    // leave it stopped at the last time seen.
     $('dutyClock').textContent = ''
     actionToasts.clear()
     bagWorn.renderBag([], null, null)
     bagWorn.renderWorn({})
     bagWorn.renderSkills({})
-    setXp(null)
-    setFood(null)
     setStatSheet(null, null)
     return
   }
@@ -439,30 +437,13 @@ function setVitals(v) {
   $('dutyName').textContent = s.name
   $('dutyLevel').textContent = `LV ${s.level}`
   $('dutyLevel').hidden = false
-  $('dutyVitals').hidden = false
-  const pct = s.max_health ? Math.max(0, Math.min(100, (s.health / s.max_health) * 100)) : 0
-  $('hpFill').style.width = `${pct}%`
-  $('hpText').textContent = `${s.health}/${s.max_health}`
-  $('hp').classList.toggle('low', pct <= 33)
   $('dutyClock').textContent =
     v.time && v.time.hour != null
       ? `${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
       : ''
   actionToasts.push(settings, v.actions, monsterNames)
   bagWorn.renderBag(v.bag, v.weight, v.gold)
-  setFood(v.hunger)
   setStatSheet(v.attributes, v.hunger)
-}
-
-/// Food, beside HP and XP. Official NPCs are exempt from hunger, so the bar
-/// stays out of the header rather than reading as a starving character.
-function setFood(hunger) {
-  const reading = hungerReading(hunger)
-  $('food').hidden = !reading
-  if (!reading) return
-  $('foodFill').style.width = `${reading.pct}%`
-  $('foodText').textContent = reading.text
-  $('food').dataset.tone = reading.tone
 }
 
 /// The character sheet behind the level chip: what was rolled once, and the
@@ -489,16 +470,6 @@ function setStatSheet(attributes, hunger) {
   $('sheetHunger').textContent = reading ? reading.label : t('Exempt')
   $('sheetGuard').textContent = Number.isFinite(attributes?.guard) ? attributes.guard : '—'
   $('dutyLevel').disabled = cells.length === 0
-}
-
-/// Progress towards the next level. Its own channel because the totals are
-/// owner-private and reach us from the relay, not the agent's vitals.
-function setXp(p) {
-  $('xp').hidden = !p
-  if (!p) return
-  const pct = xpProgressPct(p)
-  $('xpFill').style.width = `${pct}%`
-  $('xpText').textContent = `${Math.round(pct)}%`
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -1115,7 +1086,6 @@ async function init() {
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
   api.onSkills(bagWorn.renderSkills)
-  api.onXp(setXp)
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
     if (urls && urls.mode) {
