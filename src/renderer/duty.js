@@ -25,19 +25,6 @@ const PHASE_TONES = {
   retrying: 'bad',
 }
 
-/// The character XP curve, ported from shared/src/xp.rs: cumulative XP for a
-/// level is `20 · 2^(n-2)`, and level 1 starts at 0.
-function xpForLevel(level) {
-  return level <= 1 ? 0 : 20 * 2 ** (level - 2)
-}
-
-/// How far into the current level the character is, 0–100.
-export function xpProgressPct({ level, xp }) {
-  const start = xpForLevel(level)
-  const next = xpForLevel(level + 1)
-  return Math.max(0, Math.min(100, ((xp - start) / (next - start)) * 100))
-}
-
 /// The hunger bands the server judges (shared/src/hunger.rs), in the words a
 /// player acts on: what the character can still do is the news, not the band's
 /// internal name. `warn` is the band that has already cost the sprint; `bad`
