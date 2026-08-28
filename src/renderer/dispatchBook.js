@@ -62,6 +62,12 @@ export async function loadCoords(characterId) {
   renderCoords()
 }
 
+/// The same list the drawer shows, for the settings panel's Home dropdown:
+/// the four built-ins plus whatever this character has saved.
+export function savedCoords() {
+  return [...BUILTIN_COORDS, ...customCoords]
+}
+
 function coordRow(coord, removable) {
   const row = document.createElement('div')
   row.className = 'coord-row'

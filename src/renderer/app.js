@@ -97,6 +97,7 @@ const FIELDS = {
   workerPotionStock: 'int',
   workerScrollStock: 'int',
   workerBagFullPct: 'int',
+  workerPatrolRadius: 'int',
   llm: 'text',
   openaiBaseUrl: 'text',
   maxTokens: 'int',
@@ -165,12 +166,35 @@ const WORKER_HINTS = {
   fisher: 'Finds water, casts, and turns the catch into gold in town. No LLM, no API key.',
 }
 
+/// What the Anchor dropdown is offering, by option index — read back when one
+/// is picked. The list itself is settingsPanel's decision.
+let anchorOptions = [null]
+
+/// A coordinate name is player-written, so the options are built as nodes
+/// rather than markup.
+function renderAnchorOptions() {
+  const select = $('workerAnchor')
+  const { choices, selected } = settingsPanel.anchorChoices(settings, dispatchBook.savedCoords())
+  anchorOptions = choices
+  select.innerHTML = ''
+  for (const [i, choice] of choices.entries()) {
+    const option = document.createElement('option')
+    option.value = String(i)
+    option.textContent = choice
+      ? `${choice.name || t('Custom')} (${Math.round(choice.x)}, ${Math.round(choice.z)})`
+      : t('Spawn point')
+    select.appendChild(option)
+  }
+  select.value = String(selected)
+}
+
 /// The knobs are the fighter's — a fisher never picks a fight. Pace and
 /// LLM-scheduler knobs only throttle the LLM driver, hidden for rule workers.
 function renderWorker() {
   const kind = settings.workerKind || 'none'
   $('workerHint').textContent = WORKER_HINTS[kind] ? t(WORKER_HINTS[kind]) : ''
   $('workerKnobs').hidden = kind !== 'fighter'
+  renderAnchorOptions()
   const llmDriven = kind === 'none'
   $('paceSettings').hidden = !llmDriven
   $('advancedLlmOnly').hidden = !llmDriven
@@ -569,6 +593,9 @@ function openSettings() {
   $('settingsModal').hidden = false
   settingsDirty = false
   settingsPanel.syncAll(settings)
+  // The saved coordinates only arrive when a character is entered, which is
+  // after init's first render.
+  renderWorker()
   $('telemetryEnabled').checked = settings.telemetry !== false
   updateSettingsFooter()
   $('settingsTabs').querySelector('.tab.on').focus()
@@ -741,6 +768,14 @@ function bindFields() {
       if (id === 'minIntervalSecs' || id === 'idleIntervalSecs') settingsPanel.syncCadence(settings)
     })
   }
+
+  $('workerAnchor').addEventListener('change', () => {
+    const choice = anchorOptions[Number($('workerAnchor').value)] || null
+    settings.workerAnchorName = choice ? choice.name || '' : ''
+    settings.workerAnchorX = choice ? choice.x : null
+    settings.workerAnchorZ = choice ? choice.z : null
+    markSettingsDirty()
+  })
 
   $('model').addEventListener('change', () => {
     settings.models[settings.llm] = $('model').value

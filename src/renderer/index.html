@@ -469,6 +469,11 @@
                 <label data-i18n>Potions to stock<input type="number" id="workerPotionStock" min="0" max="99" /></label>
                 <label data-i18n>Scrolls to stock<input type="number" id="workerScrollStock" min="0" max="99" /></label>
               </div>
+              <div class="row">
+                <label data-i18n>Anchor<select id="workerAnchor"></select></label>
+                <label data-i18n>Patrol radius (m)<input type="number" id="workerPatrolRadius" min="20" max="500" /></label>
+              </div>
+              <p class="hint" data-i18n>Saved coordinates from the Coordinates drawer. The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
             </div>
 
             <div id="paceSettings">

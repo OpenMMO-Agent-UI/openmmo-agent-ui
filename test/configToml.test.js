@@ -148,6 +148,31 @@ test('worker knobs are written as integers agent-client can deserialize', () => 
   assert.match(table, /^bag_full_pct = 100$/m, 'a percentage over 100 is nonsense, not a threshold')
 })
 
+test('the anchor is written only once it is picked, so an unset one stays the spawn point', () => {
+  const unset = workerTable(renderConfigToml(settings({ workerKind: 'fighter' })))
+  assert.doesNotMatch(unset, /^anchor_/m, 'agent-client reads a missing anchor as the spawn point')
+  assert.match(unset, new RegExp(`^patrol_radius = ${DEFAULTS.workerPatrolRadius}$`, 'm'))
+
+  const picked = workerTable(
+    renderConfigToml(
+      settings({ workerKind: 'fighter', workerAnchorName: 'Orc Warrens', workerAnchorX: -1616, workerAnchorZ: 4918, workerPatrolRadius: 250 }),
+    ),
+  )
+  assert.match(picked, /^anchor_x = -1616$/m)
+  assert.match(picked, /^anchor_z = 4918$/m)
+  assert.match(picked, /^patrol_radius = 250$/m)
+  assert.doesNotMatch(picked, /Orc Warrens/, 'the name is the panel\'s label, not the worker\'s business')
+})
+
+test('half an anchor is no anchor, and the radius is held to the range the panel offers', () => {
+  const half = workerTable(renderConfigToml(settings({ workerAnchorX: -1616, workerAnchorZ: null })))
+  assert.doesNotMatch(half, /^anchor_/m)
+
+  assert.match(workerTable(renderConfigToml(settings({ workerPatrolRadius: 5 }))), /^patrol_radius = 20$/m)
+  assert.match(workerTable(renderConfigToml(settings({ workerPatrolRadius: 9000 }))), /^patrol_radius = 500$/m)
+  assert.match(workerTable(renderConfigToml(settings({ workerPatrolRadius: '120.6' }))), /^patrol_radius = 121$/m)
+})
+
 test('a worker run tells agent-client there is no LLM at all', () => {
   const toml = renderConfigToml(settings({ llm: 'openai', workerKind: 'fisher' }))
 
