@@ -19,8 +19,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          submodules: recursive
+          submodules: false
           lfs: false
+      - name: Checkout OpenMMO submodule
+        run: |
+          set -euo pipefail
+          openmmo_sha="$(git rev-parse HEAD:deps/OpenMMO)"
+          openmmo_url="$(git config -f .gitmodules submodule.deps/OpenMMO.url)"
+          openmmo_branch="tweak-agent-client"
+          git clone --depth=1 --branch "$openmmo_branch" "$openmmo_url" deps/OpenMMO
+          git -C deps/OpenMMO checkout --detach "$openmmo_sha"
+          git -C deps/OpenMMO submodule update --init --force --depth=1 --recursive
       - uses: actions/setup-node@v5
         with:
           node-version: 24
