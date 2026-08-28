@@ -148,25 +148,6 @@
             </p>
             <p class="duty-state" id="status" data-i18n>Off duty</p>
           </div>
-          <div class="duty-vitals" id="dutyVitals" hidden>
-            <div class="hp" id="hp">
-              <span class="hp-label">HP</span>
-              <span class="hp-track"><span class="hp-fill" id="hpFill"></span></span>
-              <span class="hp-text" id="hpText"></span>
-            </div>
-            <div class="hp xp" id="xp" hidden>
-              <span class="hp-label">XP</span>
-              <span class="hp-track"><span class="hp-fill" id="xpFill"></span></span>
-              <span class="hp-text" id="xpText"></span>
-            </div>
-            <!-- Third bar, same shape as HP and XP: food is the other reading
-                 that drains and that a person acts on. -->
-            <div class="hp food" id="food" hidden>
-              <span class="hp-label" data-i18n>FOOD</span>
-              <span class="hp-track"><span class="hp-fill" id="foodFill"></span></span>
-              <span class="hp-text" id="foodText"></span>
-            </div>
-          </div>
         </div>
 
         <!-- The world clock reads as the room's clock, not as one of the
@@ -488,6 +469,11 @@
                 <label data-i18n>Potions to stock<input type="number" id="workerPotionStock" min="0" max="99" /></label>
                 <label data-i18n>Scrolls to stock<input type="number" id="workerScrollStock" min="0" max="99" /></label>
               </div>
+              <div class="row">
+                <label data-i18n>Anchor<select id="workerAnchor"></select></label>
+                <label data-i18n>Patrol radius (m)<input type="number" id="workerPatrolRadius" min="20" max="500" /></label>
+              </div>
+              <p class="hint" data-i18n>Saved coordinates from the Coordinates drawer. The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
             </div>
 
             <div id="paceSettings">

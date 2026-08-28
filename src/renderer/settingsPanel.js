@@ -131,6 +131,30 @@ export function sendAudioToView(settings) {
   )
 }
 
+function sameSpot(a, b) {
+  return Math.abs(a.x - b.x) < 0.05 && Math.abs(a.z - b.z) < 0.05
+}
+
+/// The fighter's Anchor dropdown: index 0 is always "no anchor picked" (the
+/// world's spawn point), then the coordinates this character has saved, and
+/// last the stored anchor when the list no longer holds it — a coordinate
+/// deleted, or a character that never saved it, must not silently reset an
+/// anchor the player picked.
+///
+/// What settings hold is a snapshot; the name is only what this shows.
+export function anchorChoices(settings, saved) {
+  // `Number(null)` is 0, so an unset anchor would read as a real spot at the
+  // world's origin — and show as one, picked, in place of the spawn point.
+  const coord = (value) => (value === '' || value == null ? null : Number(value))
+  const [x, z] = [coord(settings.workerAnchorX), coord(settings.workerAnchorZ)]
+  const anchor =
+    Number.isFinite(x) && Number.isFinite(z) ? { name: settings.workerAnchorName || '', x, z } : null
+  const choices = [null, ...saved]
+  if (anchor && !choices.some((c) => c && sameSpot(c, anchor))) choices.push(anchor)
+  const at = choices.findIndex((c) => (anchor ? c && sameSpot(c, anchor) : !c))
+  return { choices, selected: at < 0 ? 0 : at }
+}
+
 /// Called when the Settings modal opens: mirrors current settings onto the
 /// cadence/toast/audio controls. Unlike syncCadence, toast/audio never need
 /// a revert path — they're saved on every change, so there's nothing to

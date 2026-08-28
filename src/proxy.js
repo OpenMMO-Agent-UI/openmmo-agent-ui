@@ -101,25 +101,6 @@ function skillFromXpGained(body) {
   return { id: skill, progress: { level: newLevel ?? 0, xp: totalXp ?? 0 } }
 }
 
-/// `XpGained` is `[player_id, xp_amount, xp_lost, total_xp, new_level, ...]`.
-function xpFromGained(body) {
-  const [, , , totalXp, newLevel] = body || []
-  if (typeof totalXp !== 'number') return null
-  return { level: newLevel ?? 1, xp: totalXp }
-}
-
-/// `AuthSuccess` is `[account_name, [Character]]`, `Character` is
-/// `[id, name, created_at, level, xp, ...]`. Nothing restates the XP total on
-/// join, so this list is the only source for it until the first `XpGained`.
-function charactersFromAuth(body) {
-  const list = Array.isArray(body && body[1]) ? body[1] : []
-  const byName = new Map()
-  for (const c of list) {
-    if (Array.isArray(c) && typeof c[1] === 'string') byName.set(c[1], { level: c[3] ?? 1, xp: c[4] ?? 0 })
-  }
-  return byName
-}
-
 function wornFromInventory(body) {
   const inventory = body && body[0]
   const equipped = Array.isArray(inventory) ? inventory[1] : null
@@ -394,7 +375,7 @@ function apiBaseUrl(wsUrl) {
 }
 
 class AgentProxy {
-  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}, onXp = () => {}) {
+  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}) {
     this.onError = onError
     /// Called with `{ slot: { itemDefId, quantity, enchant } }` whenever the
     /// server restates the agent's inventory. Decoded here rather than in the
@@ -404,13 +385,9 @@ class AgentProxy {
     /// trained-skill frames are owner-private, so agent-client's panel API
     /// never republishes them and the relay is the only place they are seen.
     this.onSkills = onSkills
-    /// Called with `{ level, xp }`, or null when there is no character. Owner-
-    /// private like the skills above, so the relay is again the only witness.
-    this.onXp = onXp
     /// Accumulated so a single-skill `SkillXpGained` can be pushed as a whole
     /// map, the way the join-time `SkillsUpdate` arrives.
     this.skills = {}
-    this.characterXp = new Map()
     this.server = null
     this.apiServer = null
     this.wss = null
@@ -489,8 +466,6 @@ class AgentProxy {
     this.onWorn({})
     this.skills = {}
     this.onSkills({})
-    this.characterXp = new Map()
-    this.onXp(null)
 
     const upstream = new WebSocket(this.upstreamUrl)
     const pending = []
@@ -587,15 +562,6 @@ class AgentProxy {
         this.skills = { ...this.skills, [gain.id]: gain.progress }
         this.onSkills(this.skills)
       }
-    }
-    if (name === 'AuthSuccess') this.characterXp = charactersFromAuth(body)
-    if (name === 'JoinSuccess') {
-      const start = this.characterXp.get(Array.isArray(body && body[0]) ? body[0][1] : null)
-      if (start) this.onXp(start)
-    }
-    if (name === 'XpGained' && body[0] === this.snapshot.selfPlayerId) {
-      const gain = xpFromGained(body)
-      if (gain) this.onXp(gain)
     }
     if (!OWNER_ONLY.has(name)) this.broadcast(frame)
   }
@@ -730,6 +696,4 @@ module.exports = {
   wornFromInventory,
   skillsFromUpdate,
   skillFromXpGained,
-  xpFromGained,
-  charactersFromAuth,
 }

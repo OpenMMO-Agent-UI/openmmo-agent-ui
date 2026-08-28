@@ -18,6 +18,12 @@ function clampPercent(value, fallback) {
   return Math.min(100, Math.max(0, Math.round(Number(value))))
 }
 
+/// A whole-number setting held to the same bounds the panel's field shows.
+function clampRange(value, fallback, min, max) {
+  if (!isNumber(value)) return fallback
+  return Math.min(max, Math.max(min, Math.round(Number(value))))
+}
+
 /// Rendered fresh on every start. Keys never land here — they go to the child
 /// process as environment variables instead, so a config file someone pastes
 /// into an issue carries no credential.
@@ -108,7 +114,15 @@ function renderConfigToml(s) {
     `potion_stock = ${Math.max(0, Math.round(Number(s.workerPotionStock)) || 0)}`,
     `scroll_stock = ${Math.max(0, Math.round(Number(s.workerScrollStock)) || 0)}`,
     `bag_full_pct = ${clampPercent(s.workerBagFullPct, 90)}`,
+    `patrol_radius = ${clampRange(s.workerPatrolRadius, 100, 20, 500)}`,
   )
+  // Left out entirely when unset: agent-client reads a missing anchor as the
+  // world's spawn point, and writing a placeholder here would pin the fighter
+  // to wherever the placeholder landed.
+  const anchor = [s.workerAnchorX, s.workerAnchorZ]
+  if (anchor.every(isNumber)) {
+    lines.push(`anchor_x = ${Number(anchor[0])}`, `anchor_z = ${Number(anchor[1])}`)
+  }
   lines.push('')
   return lines.join('\n')
 }

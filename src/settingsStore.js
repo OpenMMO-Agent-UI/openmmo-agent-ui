@@ -63,6 +63,14 @@ const DEFAULTS = {
   workerPotionStock: 10,
   workerScrollStock: 5,
   workerBagFullPct: 90,
+  /// Where the fighter works. The name is only what the settings panel shows;
+  /// the coordinates are a snapshot, so deleting the saved coordinate it came
+  /// from — or switching to a character that never had it — leaves the worker
+  /// with its anchor. Both null means the world's spawn point.
+  workerAnchorName: '',
+  workerAnchorX: null,
+  workerAnchorZ: null,
+  workerPatrolRadius: 100,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
   rustLog: 'info',
@@ -241,6 +249,9 @@ function importExistingConfig(settings) {
   take('workerPotionStock', worker.potion_stock)
   take('workerScrollStock', worker.scroll_stock)
   take('workerBagFullPct', worker.bag_full_pct)
+  take('workerAnchorX', worker.anchor_x)
+  take('workerAnchorZ', worker.anchor_z)
+  take('workerPatrolRadius', worker.patrol_radius)
   take('minIntervalSecs', npc.min_interval_secs)
   take('idleIntervalSecs', npc.idle_interval_secs)
   if (typeof npc.always_active === 'boolean') merged.alwaysActive = npc.always_active

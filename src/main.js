@@ -45,9 +45,7 @@ const proxy = new AgentProxy(
   (worn) => send('agent:worn', worn),
   // Trained skills, which the panel API does not publish either — same
   // push-as-it-changes path as the gear above.
-  (skills) => send('agent:skills', skills),
-  // Character XP, likewise private to its owner and never in the panel API.
-  (xp) => send('agent:xp', xp)
+  (skills) => send('agent:skills', skills)
 )
 let feedTimer = null
 let feedSeq = null
