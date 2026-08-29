@@ -1010,30 +1010,16 @@ body[data-mode='manual'] .gamesurface {
   text-overflow: ellipsis;
 }
 
-/* The chip is also the handle on the character sheet, so it takes a button's
-   affordances while keeping the badge's proportions. */
 .duty-level {
   flex: none;
   padding: 1px 5px;
   border: 1px solid rgba(201, 162, 74, 0.3);
   border-radius: 3px;
-  background: none;
   color: var(--accent);
   font-family: var(--mono-font);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
-  cursor: pointer;
-}
-
-.duty-level:hover:not(:disabled),
-.duty-level:focus-visible {
-  border-color: var(--accent);
-  background: rgba(201, 162, 74, 0.12);
-}
-
-.duty-level:disabled {
-  cursor: default;
 }
 
 /* Same eyebrow idiom as .wordmark and .settings-section: small, letterspaced,
@@ -1059,9 +1045,7 @@ body[data-mode='manual'] .gamesurface {
 /* The bar is a drag handle, so the clock must not swallow a click meant for
    it. */
 .world-clock {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: none;
   margin: 0;
   white-space: nowrap;
   color: var(--text);
@@ -1181,31 +1165,25 @@ body[data-mode='manual'] .gamesurface {
   display: none;
 }
 
-/* The character sheet hangs under the duty card at the other end of the bar
-   from the session menu, since its handle is the level chip. */
-.sheet {
-  right: auto;
-  left: 12px;
-  width: 208px;
-}
-
-/* A ledger, ruled the way the app rules everything else — but with one hairline
-   grid instead of a border per cell: the 1px gap over the rule colour is the
-   rule, so no two cells can double it up. */
+/* The rolled attributes, read as one strip beside the duty card: six cells on
+   one hairline grid rather than a border per cell — the 1px gap over the rule
+   colour is the rule, so no two cells can double it up. Six columns, since the
+   bar has width to spare and a second row would out-tall the card. */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(6, auto);
   gap: 1px;
-  margin: 0 8px;
+  flex: none;
+  margin-left: 4px;
   border: 1px solid var(--line);
   background: var(--line);
 }
 
 .stat-cell {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 7px;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 7px;
   background: var(--panel-2);
 }
 
@@ -1219,24 +1197,34 @@ body[data-mode='manual'] .gamesurface {
 .stat-value {
   color: var(--text);
   font-family: var(--mono-font);
-  font-size: 15px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
 
-.sheet-line {
+/* The window's own readings — memory and the agent's pid — sit quiet at the
+   right of the bar, left of the mode switch: facts to glance at, not controls.
+   One under the other and right-aligned, so neither has to be read out of the
+   other's tail. */
+.bar-notes {
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 8px 5px;
-  color: var(--muted);
-  font-size: 11px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
 }
 
-.sheet-line > span:last-child {
-  color: var(--text);
+.bar-note {
+  margin: 0;
+  color: var(--muted);
   font-family: var(--mono-font);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bar-note:empty {
+  display: none;
 }
 
 .gameshell {
@@ -1246,10 +1234,10 @@ body[data-mode='manual'] .gamesurface {
 }
 
 /* ---------- the rail ----------
-   A cabinet face: six pulls in three ruled groups, and the group rule is what
-   states the grouping the panels already have — what the character holds,
-   what it has been told, what it has done. Settings sits below the spacer,
-   apart from the drawers because it is not one. */
+   A cabinet face: two pulls in two ruled groups, and the group rule is what
+   states the grouping the panels already have — what the character is and
+   holds, what it has done. Settings sits below the spacer, apart from the
+   drawers because it is not one. */
 
 .rail {
   width: 48px;
@@ -1511,29 +1499,11 @@ iframe {
   background: rgba(193, 85, 59, 0.1);
 }
 
-.directive-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.directive-preset-chip {
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  opacity: 1;
-}
-
-.directive-preset-chip:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
 /* ---------- the drawers ----------
-   Fixed at 340px before, which is narrow for a prompt being written and
-   needlessly narrow on a large display; it takes a share of the window now,
-   between a floor that keeps the forms usable and a ceiling that keeps the
-   spectator view the largest thing on screen. */
+   Fixed at 340px before, which is needlessly narrow on a large display; it
+   takes a share of the window now, between a floor that keeps the lists
+   readable and a ceiling that keeps the spectator view the largest thing on
+   screen. */
 
 .drawer {
   width: clamp(320px, 27vw, 420px);
@@ -1630,8 +1600,7 @@ button.icon-quiet:hover {
 .drawer-body #feed,
 .drawer-body .bag-list,
 .drawer-body .worn-list,
-.drawer-body .coords-list,
-.drawer-body .presets-list {
+.drawer-body .skills-list {
   flex: 1;
   min-height: 0;
 }
@@ -1657,73 +1626,14 @@ button.icon-quiet:hover {
   margin-bottom: 7px;
 }
 
-/* ---------- add a spot, write a preset ----------
-   Both panels are a list you pick from, with a form for adding to it. The form
-   used to be open always, taking half the drawer to sit unused. Native
-   disclosure, same idiom as Settings' Advanced. */
-
-.add {
-  flex: none;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-
-.add > summary {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  list-style: none;
-  cursor: pointer;
-}
-
-.add > summary::-webkit-details-marker {
-  display: none;
-}
-
-.add > summary::before {
-  content: '+ ';
-  color: var(--accent);
-}
-
-.add[open] > summary {
-  margin-bottom: 10px;
-}
-
-.add[open] > summary::before {
-  content: '− ';
-}
-
-.add > summary:hover {
-  color: var(--accent);
-}
-
-/* Thoughts/Log tabs inside the Activity drawer panel, same treatment as the
-   Personality/Memory sub-tabs. */
-[data-drawer-panel='activity'] > [data-activity-panel] {
+/* Tabs inside a drawer panel: the pane under them takes the rest of the
+   drawer, so its list scrolls instead of the drawer body. */
+[data-drawer-panel='activity'] > [data-activity-panel],
+[data-drawer-panel='worn'] > [data-character-panel] {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-}
-
-/* The personality prompt is prose being written, not a field being filled:
-   give it the whole drawer the way the feed and log panes get it, instead of
-   the 220px every other textarea gets. Floor it so a short window still
-   leaves something writable. */
-#instanceText {
-  flex: 1;
-  height: auto;
-  min-height: 320px;
-}
-
-/* The prompt takes all the height it can, which left Save touching the bottom
-   edge of the field it saves. */
-#saveInstance {
-  flex: none;
-  margin-top: 10px;
 }
 
 /* Sub-tabs inside a drawer panel — smaller and tighter than the top-level
@@ -1735,19 +1645,6 @@ button.icon-quiet:hover {
   flex: none;
   margin: -2px 0 12px;
   border-bottom: none;
-}
-
-[data-drawer-panel='prompt'] > [data-subtab-panel] {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.memory-view {
-  flex: 1;
-  min-height: 0;
-  white-space: pre-wrap;
 }
 
 #feed {
@@ -1830,7 +1727,7 @@ button.icon-quiet:hover {
 /* A 3D client left running all night grows; when it has grown enough to be
    worth reloading, the note says so in the same warm tone the combat lines
    use rather than staying quiet. */
-.menu-note.high {
+.bar-note.high {
   color: #f0b48a;
 }
 
@@ -1998,134 +1895,6 @@ button.icon-quiet:hover {
   display: block;
   height: 100%;
   background: var(--accent);
-}
-
-/* ---------- coordinates ---------- */
-
-.coords-list {
-  overflow-y: auto;
-}
-
-.coord-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-/* Left padding matched to the 2px the bag and equipment rows use, so a spot's
-   name starts on the same left edge as the panel's own copy instead of eight
-   pixels in from it. */
-.coord-go {
-  flex: 1;
-  text-align: left;
-  padding: 7px 2px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.coord-go:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--accent);
-}
-
-.coord-delete {
-  flex: none;
-}
-
-.coords-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: none;
-  padding-top: 10px;
-}
-
-.coords-form .row {
-  display: flex;
-  gap: 6px;
-}
-
-.coords-form input {
-  margin-top: 0;
-}
-
-.presets-list {
-  overflow-y: auto;
-}
-
-.preset-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.preset-go {
-  flex: 1;
-  text-align: left;
-  padding: 7px 2px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.preset-go:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--accent);
-}
-
-.preset-edit,
-.preset-delete {
-  flex: none;
-}
-
-/* Removing one row of a list is not a boxed action button — it recedes until
-   it is reached for, and then it is ember, the way the roster's delete is. */
-.coord-delete,
-.preset-delete {
-  border-color: transparent;
-  color: var(--muted);
-}
-
-.coord-delete:hover,
-.preset-delete:hover {
-  border-color: rgba(193, 85, 59, 0.5);
-  background: rgba(193, 85, 59, 0.12);
-  color: var(--ember);
-}
-
-.presets-form {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: none;
-  padding-top: 10px;
-}
-
-.presets-form .row {
-  display: flex;
-  gap: 6px;
-}
-
-.presets-form input {
-  margin-top: 0;
-}
-
-#presetPrompt {
-  height: 60px;
-  margin-top: 0;
 }
 
 .worn-slot {

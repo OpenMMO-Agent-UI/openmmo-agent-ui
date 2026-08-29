@@ -3,9 +3,8 @@
 const fs = require('node:fs')
 const path = require('node:path')
 
-// Player-saved data scoped by connection profile and stable character ID —
-// labels, coordinates, and dispatch presets all share this shape. The
-// personality/instance-prompt file is deliberately not a kind here: it's
+// Player-saved data scoped by connection profile and stable character ID.
+// The personality/instance-prompt file is deliberately not a kind here: it's
 // text, not JSON, and its writes carry extra composition logic (see
 // config.composeInstanceText) that belongs to the caller, not the store.
 const KINDS = {
@@ -15,14 +14,6 @@ const KINDS = {
       sellable: Array.isArray(parsed?.sellable) ? parsed.sellable : [],
       dropable: Array.isArray(parsed?.dropable) ? parsed.dropable : [],
     }),
-  },
-  coordinates: {
-    default: () => [],
-    normalize: (parsed) => (Array.isArray(parsed) ? parsed : []),
-  },
-  presets: {
-    default: () => [],
-    normalize: (parsed) => (Array.isArray(parsed) ? parsed : []),
   },
 }
 

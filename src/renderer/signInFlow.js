@@ -4,7 +4,6 @@ import { AppWorkflow } from '../workflow.js'
 import { $, showErrors, setScreen, confirmAction } from './dom.js'
 import { t, language } from './i18n.js'
 import * as bagWorn from './bagWorn.js'
-import * as dispatchBook from './dispatchBook.js'
 
 const api = window.agentApp
 
@@ -367,16 +366,13 @@ async function enterCharacter(character) {
   renderCharacterList()
   try {
     await deps.persist({ characterName: character.name })
-    await loadInstancePrompt()
-    await dispatchBook.loadCoords(selectedCharacterId)
-    await dispatchBook.loadPresets(selectedCharacterId)
     await bagWorn.loadBagLabels(selectedCharacterId)
     lastPlayedId = character.id
     await workflow.chooseCharacter(character.id)
   } catch (err) {
-    // The pre-flight loads (personality, coords, presets, bag labels) are all
-    // disk reads that can fail. Without this the slot just quietly came back to
-    // life, as if the click had never happened.
+    // The pre-flight bag-label load is a disk read that can fail. Without this
+    // the slot just quietly came back to life, as if the click had never
+    // happened.
     showErrors([t('Could not enter as {name}: {reason}', { name: character.name, reason: err.message })])
   } finally {
     // Cleared whether the join succeeded (the screen has moved on and this
@@ -384,24 +380,6 @@ async function enterCharacter(character) {
     enteringId = null
     renderCharacterList()
   }
-}
-
-/// Individual personality for whichever character is selected — reloaded on
-/// every switch, since it's per-character rather than shared like
-/// user_prompt.txt.
-async function loadInstancePrompt() {
-  const name = deps.getSettings().characterName
-  $('instanceHint').textContent = t(
-    'How {name} plays — its own personality, on top of the shared rules.',
-    { name: name || t('this character') },
-  )
-  if (!name) {
-    $('instanceText').value = ''
-    $('instanceFile').textContent = ''
-    return
-  }
-  $('instanceText').value = await api.getInstancePrompt(selectedCharacterId, name)
-  $('instanceFile').textContent = t('Personality for this server and character')
 }
 
 async function deleteCharacterSlot(id, name) {

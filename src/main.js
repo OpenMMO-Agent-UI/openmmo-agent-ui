@@ -695,52 +695,9 @@ function materializePersonality(profileId, characterId, characterName) {
   }
 }
 
-/// Personality is isolated by connection profile and stable character ID.
-/// The name-based agent path is only a materialized compatibility copy. The
-/// file on disk also carries an app-managed sellable/dropable block (see
-/// personalityText.composeInstanceText) that the textarea must never show or let the
-/// player accidentally overwrite — stripped here before it reaches the
-/// renderer.
-ipcMain.handle('instance:get', (_e, { characterId, characterName }) => {
-  if (!characterId) return ''
-  const file = personalityPath(profileStore.selected().id, characterId)
-  try {
-    if (!fs.existsSync(file)) materializePersonality(profileStore.selected().id, characterId, characterName)
-    return personalityText.splitInstanceText(fs.readFileSync(file, 'utf8')).prose
-  } catch {
-    return ''
-  }
-})
-
-ipcMain.handle('instance:save', (_e, { characterId, characterName, text }) => {
-  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
-  const profileId = profileStore.selected().id
-  const file = personalityPath(profileId, characterId)
-  fs.mkdirSync(path.dirname(file), { recursive: true })
-  fs.writeFileSync(
-    file,
-    personalityText.composeInstanceText(text, characterStore.open('labels', profileId, characterId).read())
-  )
-  if (characterName) materializePersonality(profileId, characterId, characterName)
-  return { ok: true, file }
-})
-
-/// Read-only view of what the agent itself has written to memory.txt (its
-/// own `memory_update` output, never edited by the player) — see
-/// personalityText.memoryPath. Missing file (nothing remembered yet, or the agent has
-/// never run) just reads as empty.
-ipcMain.handle('memory:get', (_e, { characterName }) => {
-  if (!characterName) return ''
-  try {
-    return fs.readFileSync(personalityText.memoryPath(characterName), 'utf8')
-  } catch {
-    return ''
-  }
-})
-
 /// Sellable/dropable marks on bag items — the source of truth for the bag
-/// drawer's checkboxes; instance.txt's own copy (below) is just a rendering
-/// of this for agent-client to read.
+/// panel's checkboxes; instance.txt's own copy is just a rendering of this
+/// for agent-client to read.
 ipcMain.handle('labels:get', (_e, { characterId }) => {
   if (!characterId) return { sellable: [], dropable: [] }
   return characterStore.open('labels', profileStore.selected().id, characterId).read()
@@ -754,9 +711,8 @@ ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
     dropable: Array.isArray(labels?.dropable) ? [...new Set(labels.dropable)] : [],
   }
   characterStore.open('labels', profileId, characterId).write(clean)
-  // Re-render instance.txt's labels block from the character's existing
-  // prose plus these new marks — mirrors instance:save, just triggered by a
-  // label change instead of a personality edit.
+  // Re-render instance.txt's labels block from the character's existing prose
+  // plus these new marks.
   const file = personalityPath(profileId, characterId)
   let prose = ''
   try {
@@ -768,64 +724,6 @@ ipcMain.handle('labels:save', (_e, { characterId, characterName, labels }) => {
   fs.writeFileSync(file, personalityText.composeInstanceText(prose, clean))
   if (characterName) materializePersonality(profileId, characterId, characterName)
   return { ok: true, labels: clean }
-})
-
-/// Player-saved coordinates, isolated by connection profile and character.
-ipcMain.handle('coordinates:list', (_e, { characterId }) => {
-  if (!characterId) return []
-  return characterStore.open('coordinates', profileStore.selected().id, characterId).read()
-})
-
-ipcMain.handle('coordinates:add', (_e, { characterId, name, x, y, z }) => {
-  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
-  const { read, write } = characterStore.open('coordinates', profileStore.selected().id, characterId)
-  const list = read()
-  list.push({ id: crypto.randomUUID(), name, x, y, z })
-  write(list)
-  return { ok: true, list }
-})
-
-ipcMain.handle('coordinates:delete', (_e, { characterId, id }) => {
-  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
-  const { read, write } = characterStore.open('coordinates', profileStore.selected().id, characterId)
-  const list = read().filter((c) => c.id !== id)
-  write(list)
-  return { ok: true, list }
-})
-
-/// Player-saved dispatch presets, same scoping/shape as coordinates.
-ipcMain.handle('presets:list', (_e, { characterId }) => {
-  if (!characterId) return []
-  return characterStore.open('presets', profileStore.selected().id, characterId).read()
-})
-
-ipcMain.handle('presets:add', (_e, { characterId, name, prompt }) => {
-  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
-  const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
-  const list = read()
-  list.push({ id: crypto.randomUUID(), name, prompt })
-  write(list)
-  return { ok: true, list }
-})
-
-ipcMain.handle('presets:update', (_e, { characterId, id, name, prompt }) => {
-  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
-  const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
-  const list = read()
-  const preset = list.find((p) => p.id === id)
-  if (!preset) return { ok: false, error: i18n.t('Preset not found') }
-  preset.name = name
-  preset.prompt = prompt
-  write(list)
-  return { ok: true, list }
-})
-
-ipcMain.handle('presets:delete', (_e, { characterId, id }) => {
-  if (!characterId) return { ok: false, error: i18n.t('No character selected') }
-  const { read, write } = characterStore.open('presets', profileStore.selected().id, characterId)
-  const list = read().filter((p) => p.id !== id)
-  write(list)
-  return { ok: true, list }
 })
 
 /// Signing out has to take the agent with it: it holds a live session on the

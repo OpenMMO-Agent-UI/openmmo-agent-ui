@@ -1,7 +1,7 @@
 'use strict'
 
 import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswered } from './dom.js'
-import { attributeCells, dutyState, hungerReading } from './duty.js'
+import { attributeCells, dutyState } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
 import * as dispatchBook from './dispatchBook.js'
@@ -174,7 +174,7 @@ let anchorOptions = [null]
 /// rather than markup.
 function renderAnchorOptions() {
   const select = $('workerAnchor')
-  const { choices, selected } = settingsPanel.anchorChoices(settings, dispatchBook.savedCoords())
+  const { choices, selected } = settingsPanel.anchorChoices(settings)
   anchorOptions = choices
   select.innerHTML = ''
   for (const [i, choice] of choices.entries()) {
@@ -317,61 +317,6 @@ function appendLog(item) {
   if ($('autoscroll').checked) pre.scrollTop = pre.scrollHeight
 }
 
-let memoryPollTimer = null
-
-/// Read-only view of the agent's own memory.txt — reloaded on every switch,
-/// same per-character scoping as the personality prompt.
-async function loadMemory() {
-  const name = settings.characterName
-  $('memoryHint').textContent = t(
-    'What {name} remembers — written by the agent itself, read-only.',
-    { name: name || t('this character') },
-  )
-  if (!name) {
-    $('memoryText').textContent = ''
-    $('memoryEmpty').hidden = true
-    return
-  }
-  const text = await api.getMemory(name)
-  $('memoryText').textContent = text
-  $('memoryEmpty').hidden = Boolean(text && text.trim())
-}
-
-/// The agent can append to memory.txt mid-session, so the tab polls while
-/// it's the one actually showing — stopped the moment it isn't (see
-/// setPersonalitySubtab/bindRail) to avoid needless file reads otherwise.
-function startMemoryPolling() {
-  void loadMemory()
-  stopMemoryPolling()
-  memoryPollTimer = setInterval(loadMemory, 3000)
-}
-
-function stopMemoryPolling() {
-  if (memoryPollTimer) clearInterval(memoryPollTimer)
-  memoryPollTimer = null
-}
-
-function setPersonalitySubtab(name) {
-  for (const btn of document.querySelectorAll('#personalityTabs .tab')) {
-    btn.classList.toggle('on', btn.dataset.subtab === name)
-  }
-  for (const panel of document.querySelectorAll('[data-subtab-panel]')) {
-    panel.hidden = panel.dataset.subtabPanel !== name
-  }
-  if (name === 'memory') startMemoryPolling()
-  else stopMemoryPolling()
-}
-
-function bindPersonalityTabs() {
-  for (const btn of document.querySelectorAll('#personalityTabs .tab')) {
-    btn.addEventListener('click', () => setPersonalitySubtab(btn.dataset.subtab))
-  }
-}
-
-/// Its own attribute names rather than the `data-subtab` the Personality
-/// drawer uses: that handler hides every `[data-subtab-panel]` in the
-/// document, so sharing the names would make one drawer's tabs blank the
-/// other's panels.
 function setCharacterTab(name) {
   for (const btn of document.querySelectorAll('#characterTabs .tab')) {
     btn.classList.toggle('on', btn.dataset.characterTab === name)
@@ -429,20 +374,16 @@ function showViewProblem(message) {
   settingsPanel.updateAudioAvailability()
 }
 
-/// Cached off the last vitals push so the Coordinates drawer's "Use current
-/// position" button (bound in dispatchBook.bind) has something to read on
-/// click — the agent-client's /api/state already carries this in
-/// `self.position`, it just wasn't kept around anywhere before now.
+/// Cached off the last vitals push — the agent-client's /api/state carries
+/// the character's own position in `self.position`.
 let lastSelf = null
 
 /// The header's duty card: who is on the desk, not how they are doing. The
 /// HP/XP/food meters that used to sit here are the game view's own top-left
-/// HUD now, fed by the same mirror. World coordinates left earlier for the
-/// Coordinates panel, and are still cached on `lastSelf` for it.
+/// HUD now, fed by the same mirror.
 function setVitals(v) {
   if (!v || !v.self) {
     lastSelf = null
-    $('coordUseCurrent').disabled = true
     $('dutyLevel').hidden = true
     $('dutyName').textContent = settings?.characterName || '—'
     // Nothing else clears the clock, so a dropped session would otherwise
@@ -452,12 +393,11 @@ function setVitals(v) {
     bagWorn.renderBag([], null, null)
     bagWorn.renderWorn({})
     bagWorn.renderSkills({})
-    setStatSheet(null, null)
+    renderAttributes(null)
     return
   }
   const s = v.self
   lastSelf = s
-  $('coordUseCurrent').disabled = !s.position
   $('dutyName').textContent = s.name
   $('dutyLevel').textContent = `LV ${s.level}`
   $('dutyLevel').hidden = false
@@ -467,13 +407,11 @@ function setVitals(v) {
       : ''
   actionToasts.push(settings, v.actions, monsterNames)
   bagWorn.renderBag(v.bag, v.weight, v.gold)
-  setStatSheet(v.attributes, v.hunger)
+  renderAttributes(v.attributes)
 }
 
-/// The character sheet behind the level chip: what was rolled once, and the
-/// conditions that move. The chip stops offering a sheet when there is nothing
-/// in it to read.
-function setStatSheet(attributes, hunger) {
+/// What the character rolled, beside the duty card.
+function renderAttributes(attributes) {
   const cells = attributeCells(attributes)
   const grid = $('statGrid')
   grid.innerHTML = ''
@@ -489,11 +427,7 @@ function setStatSheet(attributes, hunger) {
     el.append(label, value)
     grid.appendChild(el)
   }
-  // The bar already carries the number; the sheet says what the band costs.
-  const reading = hungerReading(hunger)
-  $('sheetHunger').textContent = reading ? reading.label : t('Exempt')
-  $('sheetGuard').textContent = Number.isFinite(attributes?.guard) ? attributes.guard : '—'
-  $('dutyLevel').disabled = cells.length === 0
+  grid.hidden = cells.length === 0
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -663,11 +597,7 @@ function applyPlayState(state) {
 
 const DRAWER_TITLES = {
   worn: 'Character',
-  bag: 'Bag',
-  prompt: 'Personality & memory',
   activity: 'Activity',
-  presets: 'Dispatch presets',
-  coords: 'Coordinates',
 }
 
 function railButtons() {
@@ -675,13 +605,12 @@ function railButtons() {
 }
 
 /// Both ways out of a drawer — the rail button that opened it, the × in its
-/// head, Escape — end here, so the rail's lit state and the memory poll can
-/// only ever be cleaned up one way.
+/// head, Escape — end here, so the rail's lit state can only ever be cleaned
+/// up one way.
 function closeDrawer() {
   const drawer = $('drawer')
   drawer.hidden = true
   drawer.dataset.kind = ''
-  stopMemoryPolling()
   for (const btn of railButtons()) {
     btn.classList.remove('on')
     btn.setAttribute('aria-expanded', 'false')
@@ -701,11 +630,7 @@ function openDrawer(kind) {
   for (const panel of document.querySelectorAll('[data-drawer-panel]')) {
     panel.hidden = panel.dataset.drawerPanel !== kind
   }
-  // Always land on Personality, not wherever Memory's polling was left
-  // off — simpler than tracking whether it's safe to resume polling.
-  if (kind === 'prompt') setPersonalitySubtab('personality')
-  else stopMemoryPolling()
-  // Same reasoning as Personality/Memory: always land on Thoughts.
+  // Always land on the first tab, wherever the panel was left.
   if (kind === 'activity') setActivityTab('thoughts')
   if (kind === 'worn') setCharacterTab('worn')
   // Reading the panel is what clears the mark that said to read it.
@@ -793,36 +718,6 @@ function bindFields() {
 }
 
 function bindActions() {
-  $('saveInstance').addEventListener('click', async () => {
-    if (!settings.characterName) return
-    showErrors([])
-    const res = await api.saveInstancePrompt(
-      signInFlow.getSelectedCharacterId(),
-      settings.characterName,
-      $('instanceText').value,
-    )
-    if (!res.ok) {
-      $('instanceFile').textContent = res.error || t('Save failed')
-      return
-    }
-    if (!running) {
-      $('instanceFile').textContent = t('Saved to {file}', { file: res.file })
-      return
-    }
-    // Only prompt customization here — restarting takes agent-client with
-    // it, same as clicking Apply & restart, just without the extra click.
-    $('instanceFile').textContent = t('Saved — applying…')
-    const restarted = await api.restart()
-    if (!restarted.ok) {
-      showErrors(restarted.errors)
-      $('instanceFile').textContent = t('Saved to {file} — restart failed', { file: res.file })
-      return
-    }
-    dirtyWhileRunning = false
-    setStatus(restarted.status)
-    $('instanceFile').textContent = t('Saved to {file} — applied', { file: res.file })
-  })
-
   $('bagLabelsSubmit').addEventListener('click', () =>
     void bagWorn.submitBagLabels(signInFlow.getSelectedCharacterId(), settings.characterName),
   )
@@ -837,10 +732,9 @@ function bindActions() {
     }
   })
 
-  // Pause stops agent-client outright (not a mode switch) so personality,
-  // bag labels, and dispatch presets can be edited without it racing a save.
-  // Resuming reuses the same start path as Apply & restart — any personality
-  // edit made while paused just applies on the way back up.
+  // Pause stops agent-client outright (not a mode switch) so bag labels can be
+  // edited without it racing a save. Resuming reuses the same start path as
+  // Apply & restart.
   $('pauseAgent').addEventListener('click', async () => {
     showErrors([])
     $('pauseAgent').disabled = true
@@ -1086,10 +980,9 @@ async function init() {
   bindFields()
   bindActions()
   bindRail()
-  bindPersonalityTabs()
   bindActivityTabs()
   bindCharacterTabs()
-  dispatchBook.bind({ getLastSelf: () => lastSelf })
+  dispatchBook.bind()
   signInFlow.init({
     getSettings: () => settings,
     persist,
@@ -1114,8 +1007,6 @@ async function init() {
   renderFeedFilters()
   bagWorn.renderWorn({})
   bagWorn.renderSkills({})
-  dispatchBook.renderCoords()
-  dispatchBook.renderPresets()
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
