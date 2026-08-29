@@ -101,6 +101,16 @@ function skillFromXpGained(body) {
   return { id: skill, progress: { level: newLevel ?? 0, xp: totalXp ?? 0 } }
 }
 
+/// `EffectiveStatsUpdated` is `[guard, cha]`: what combat and haggling
+/// actually use, base attribute plus the bonuses the worn gear adds (the
+/// server's effective_stats). The roster's rolled attributes never move, so
+/// this frame is the only place a worn gold ring's +1 CHA is visible.
+function statsFromEffective(body) {
+  const [guard, cha] = body || []
+  if (!Number.isFinite(guard) || !Number.isFinite(cha)) return null
+  return { guard, cha }
+}
+
 function wornFromInventory(body) {
   const inventory = body && body[0]
   const equipped = Array.isArray(inventory) ? inventory[1] : null
@@ -375,7 +385,7 @@ function apiBaseUrl(wsUrl) {
 }
 
 class AgentProxy {
-  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}) {
+  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}, onStats = () => {}) {
     this.onError = onError
     /// Called with `{ slot: { itemDefId, quantity, enchant } }` whenever the
     /// server restates the agent's inventory. Decoded here rather than in the
@@ -385,6 +395,10 @@ class AgentProxy {
     /// trained-skill frames are owner-private, so agent-client's panel API
     /// never republishes them and the relay is the only place they are seen.
     this.onSkills = onSkills
+    /// Called with `{ guard, cha }`, or null when there is no session to read
+    /// them from. Same reason as `onWorn`: the frame is owner-private, and
+    /// agent-client names it without keeping it.
+    this.onStats = onStats
     /// Accumulated so a single-skill `SkillXpGained` can be pushed as a whole
     /// map, the way the join-time `SkillsUpdate` arrives.
     this.skills = {}
@@ -461,11 +475,12 @@ class AgentProxy {
     this.agentSocket = downstream
     this.snapshot.reset()
     // A fresh session wears nothing and has trained nothing until the server
-    // says otherwise; leaving the last session's gear or skills on screen
-    // would outlive the character.
+    // says otherwise; leaving the last session's gear, skills or gear-fed
+    // stats on screen would outlive the character.
     this.onWorn({})
     this.skills = {}
     this.onSkills({})
+    this.onStats(null)
 
     const upstream = new WebSocket(this.upstreamUrl)
     const pending = []
@@ -555,6 +570,10 @@ class AgentProxy {
         this.skills = skills
         this.onSkills(skills)
       }
+    }
+    if (name === 'EffectiveStatsUpdated') {
+      const stats = statsFromEffective(body)
+      if (stats) this.onStats(stats)
     }
     if (name === 'SkillXpGained') {
       const gain = skillFromXpGained(body)
@@ -695,5 +714,6 @@ module.exports = {
   apiBaseUrl,
   wornFromInventory,
   skillsFromUpdate,
+  statsFromEffective,
   skillFromXpGained,
 }

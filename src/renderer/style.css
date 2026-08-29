@@ -1165,53 +1165,16 @@ body[data-mode='manual'] .gamesurface {
   display: none;
 }
 
-/* The rolled attributes, read as one strip beside the duty card: six cells on
-   one hairline grid rather than a border per cell — the 1px gap over the rule
-   colour is the rule, so no two cells can double it up. Six columns, since the
-   bar has width to spare and a second row would out-tall the card. */
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(6, auto);
-  gap: 1px;
-  flex: none;
-  margin-left: 4px;
-  border: 1px solid var(--line);
-  background: var(--line);
-}
-
-.stat-cell {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 3px 7px;
-  background: var(--panel-2);
-}
-
-.stat-key {
-  color: var(--accent);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-}
-
-.stat-value {
-  color: var(--text);
-  font-family: var(--mono-font);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
 /* The window's own readings — memory and the agent's pid — sit quiet at the
    right of the bar, left of the mode switch: facts to glance at, not controls.
    One under the other and right-aligned, so neither has to be read out of the
    other's tail. */
 .bar-notes {
   display: flex;
+  flex: none;
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-  min-width: 0;
 }
 
 .bar-note {
@@ -1731,6 +1694,49 @@ button.icon-quiet:hover {
   color: #f0b48a;
 }
 
+/* ---------- attributes ----------
+   Same column track as the equipment and skills sheets, so switching tabs does
+   not move where the left column starts. What the gear is providing reads as a
+   note in the third column rather than as part of the number: the value is
+   already the whole of it. */
+
+/* The two sheets in the Stats pane are read one after the other, so the pane
+   scrolls as a whole rather than each list scrolling in its own box — an empty
+   one would otherwise stretch and strand its note in the middle of nothing. */
+[data-character-panel='stats'] > .attr-list,
+[data-character-panel='stats'] > .skills-list {
+  flex: none;
+  overflow: visible;
+}
+
+.attr-row {
+  display: grid;
+  grid-template-columns: 88px 42px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.attr-key {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.attr-value {
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.attr-bonus {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 /* ---------- bag ---------- */
 
 .bag-list {
@@ -1988,7 +1994,8 @@ button.icon-quiet:hover {
 
 /* Same letterhead idiom as .wordmark and .editor-title, with the rule running
    out to the panel edge so a heading divides the tab rather than floating in
-   it. */
+   it. Used by the Settings tabs and by the Stats pane, which stacks two
+   sheets in one pane. */
 .settings-section {
   display: flex;
   align-items: center;
@@ -2010,6 +2017,21 @@ button.icon-quiet:hover {
 
 .settings-section:not(:first-child) {
   margin-top: 24px;
+}
+
+/* In a drawer the heading sits tighter than in the settings card, and it must
+   not be squeezed by the lists it divides. */
+[data-character-panel='stats'] > .settings-section {
+  flex: none;
+  margin-bottom: 8px;
+}
+
+[data-character-panel='stats'] > .settings-section:not(:first-child) {
+  margin-top: 16px;
+}
+
+[data-character-panel='stats'] > .empty {
+  flex: none;
 }
 
 /* Port, log level, timeouts: real controls, but nothing anyone opens Settings

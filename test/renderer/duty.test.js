@@ -34,13 +34,47 @@ test('a dropped connection is named, not left as a phase id', async () => {
   assert.deepEqual(dutyState(true, 'switching', 0), { label: 'Switching', tone: 'live' })
 })
 
-test('attributes read in the order the game rolls them, guard excluded', async () => {
+test('attributes read in the order the game rolls them, guard last', async () => {
   const { attributeCells } = await dutyPromise
   const cells = attributeCells({ str: 14, dex: 12, con: 13, int: 10, wis: 11, cha: 9, guard: 12 })
   assert.deepEqual(
     cells.map((c) => c.label),
-    ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+    ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'GUARD']
   )
   assert.equal(cells[0].value, 14)
   assert.deepEqual(attributeCells(null), [])
+})
+
+// A worn gold ring adds +1 CHA and a breastplate adds to guard, and the
+// server reports the sums rather than letting a client redo the formula.
+test('gear-fed attributes read at the value the server acts on, with the bonus named', async () => {
+  const { attributeCells } = await dutyPromise
+  const rolled = { str: 14, dex: 12, con: 13, int: 10, wis: 11, cha: 9, guard: 10 }
+  const cells = attributeCells(rolled, { guard: 14, cha: 10 })
+  const by = Object.fromEntries(cells.map((c) => [c.key, c]))
+  assert.deepEqual(by.cha, { key: 'cha', label: 'CHA', value: 10, bonus: 1 })
+  assert.deepEqual(by.guard, { key: 'guard', label: 'GUARD', value: 14, bonus: 4 })
+  // Nothing else the gear does not move reports a bonus.
+  assert.equal(by.str.value, 14)
+  assert.equal(by.str.bonus, 0)
+})
+
+test('without a stats push the rolled attributes stand on their own', async () => {
+  const { attributeCells } = await dutyPromise
+  const cells = attributeCells({ str: 14, cha: 9, guard: 10 }, null)
+  assert.deepEqual(
+    cells.map((c) => [c.label, c.value, c.bonus]),
+    [['STR', 14, 0], ['CHA', 9, 0], ['GUARD', 10, 0]]
+  )
+})
+
+// Guard reaches us only once the character is in the world; a reading without
+// it is six cells, not five and a blank.
+test('an attribute the server has not sent yet takes no cell', async () => {
+  const { attributeCells } = await dutyPromise
+  const cells = attributeCells({ str: 14, dex: 12, con: 13, int: 10, wis: 11, cha: 9 })
+  assert.deepEqual(
+    cells.map((c) => c.label),
+    ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+  )
 })

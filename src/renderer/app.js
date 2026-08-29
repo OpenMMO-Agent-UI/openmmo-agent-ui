@@ -378,6 +378,12 @@ function showViewProblem(message) {
 /// the character's own position in `self.position`.
 let lastSelf = null
 
+/// The rolled attributes, and the relay's separate reading of the two that
+/// gear moves. They arrive on different pushes, so the strip is drawn from
+/// whichever came last plus whatever is already here.
+let lastAttributes = null
+let effectiveStats = null
+
 /// The header's duty card: who is on the desk, not how they are doing. The
 /// HP/XP/food meters that used to sit here are the game view's own top-left
 /// HUD now, fed by the same mirror.
@@ -410,24 +416,32 @@ function setVitals(v) {
   renderAttributes(v.attributes)
 }
 
-/// What the character rolled, beside the duty card.
+/// What the character plays with: the rolled attributes, with guard and CHA at
+/// the values the server reads once the gear is on. The value is the whole
+/// number — the brass `+N` beside it says how much of it a worn ring or
+/// breastplate is providing.
 function renderAttributes(attributes) {
-  const cells = attributeCells(attributes)
-  const grid = $('statGrid')
-  grid.innerHTML = ''
+  lastAttributes = attributes
+  const cells = attributeCells(attributes, effectiveStats)
+  const list = $('statGrid')
+  list.innerHTML = ''
   for (const cell of cells) {
-    const el = document.createElement('div')
-    el.className = 'stat-cell'
+    const row = document.createElement('div')
+    row.className = 'attr-row'
     const label = document.createElement('span')
-    label.className = 'stat-key'
+    label.className = 'attr-key'
     label.textContent = cell.label
     const value = document.createElement('span')
-    value.className = 'stat-value'
+    value.className = 'attr-value'
     value.textContent = cell.value
-    el.append(label, value)
-    grid.appendChild(el)
+    row.append(label, value)
+    const bonus = document.createElement('span')
+    bonus.className = 'attr-bonus'
+    bonus.textContent = cell.bonus > 0 ? t('+{n} from gear', { n: cell.bonus }) : ''
+    row.appendChild(bonus)
+    list.appendChild(row)
   }
-  grid.hidden = cells.length === 0
+  $('statsEmpty').hidden = cells.length > 0
 }
 
 /// One entry per LLM turn or game event. Prompts are long, so they start
@@ -632,7 +646,7 @@ function openDrawer(kind) {
   }
   // Always land on the first tab, wherever the panel was left.
   if (kind === 'activity') setActivityTab('thoughts')
-  if (kind === 'worn') setCharacterTab('worn')
+  if (kind === 'worn') setCharacterTab('stats')
   // Reading the panel is what clears the mark that said to read it.
   if (kind === 'activity') markActivityUnread(false)
 }
@@ -1012,6 +1026,10 @@ async function init() {
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
   api.onSkills(bagWorn.renderSkills)
+  api.onStats((stats) => {
+    effectiveStats = stats
+    renderAttributes(lastAttributes)
+  })
   api.onViewReady((urls) => {
     if (urls && urls.scene) sceneUrl = urls.scene
     if (urls && urls.mode) {

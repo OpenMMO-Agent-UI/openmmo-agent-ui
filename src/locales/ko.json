@@ -203,6 +203,7 @@
   "Nothing carried yet.": "아직 아무것도 지니고 있지 않습니다.",
   "Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.": "이 컴퓨터를 벗어나는 것은 없습니다: agent가 자신의 세션을 127.0.0.1에 미러링하고, 이 창만이 그것을 읽습니다.",
   "Nothing on this machine changed. Try again, or go back and pick a different server.": "이 컴퓨터에는 아무 변경도 없었습니다. 다시 시도하거나, 돌아가서 다른 서버를 선택하세요.",
+  "Nothing rolled yet.": "아직 굴린 능력치가 없습니다.",
   "Nothing to translate": "번역할 내용이 없습니다",
   "Nothing to watch yet": "아직 볼 것이 없습니다",
   "Nothing worn yet.": "아직 착용한 것이 없습니다.",
@@ -298,6 +299,7 @@
   "Spectator view": "관전 화면",
   "Start the agent and its world appears here, rendered by the real game client from the agent's own view.": "agent를 시작하면 그 월드가 여기에 나타납니다. 실제 게임 클라이언트가 agent의 시점으로 그려 줍니다.",
   "Start the agent to control its game audio here.": "agent를 시작하면 여기에서 게임 소리를 조절할 수 있습니다.",
+  "Stats": "능력",
   "Starting": "시작 중",
   "Stays on screen": "화면에 머무는 시간",
   "Stop fishing": "낚시 중단",
@@ -375,5 +377,6 @@
   "{version} could not install automatically.": "{version}을(를) 자동으로 설치할 수 없었습니다.",
   "{version} is ready to install.": "{version}을(를) 설치할 준비가 되었습니다.",
   "{xp} XP": "{xp} XP",
-  "‹ Back to your characters": "‹ 캐릭터 목록으로"
+  "‹ Back to your characters": "‹ 캐릭터 목록으로",
+  "+{n} from gear": "장비 +{n}"
 }

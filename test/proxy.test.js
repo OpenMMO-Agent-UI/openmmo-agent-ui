@@ -419,6 +419,53 @@ test('an XP gain restates its own skill and leaves the others alone', () => {
   })
 })
 
+/// [guard, cha] — the server's own effective_stats, sent on join and after
+/// every equipment change.
+const effectiveStatsFrame = (guard, cha) => encode({ EffectiveStatsUpdated: [guard, cha] })
+
+test('the gear-fed guard and CHA are read off the effective-stats frame', () => {
+  const stats = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    (s) => stats.push(s),
+  )
+  proxy.onServerFrame(effectiveStatsFrame(14, 11))
+
+  assert.deepStrictEqual(stats.at(-1), { guard: 14, cha: 11 })
+})
+
+test('a new agent session clears the stats the previous one wore', () => {
+  const stats = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    (s) => stats.push(s),
+  )
+  proxy.onServerFrame(effectiveStatsFrame(14, 11))
+
+  proxy.upstreamUrl = 'ws://127.0.0.1:1/ws'
+  proxy.attachAgent(fakeAgentSocket())
+
+  assert.strictEqual(stats.at(-1), null, 'attaching a fresh agent should empty the strip')
+  proxy.stop()
+})
+
+test('an effective-stats frame in a shape we cannot read is ignored', () => {
+  const stats = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    (s) => stats.push(s),
+  )
+  proxy.onServerFrame(encode({ EffectiveStatsUpdated: ['fourteen', null] }))
+
+  assert.strictEqual(stats.length, 0)
+})
+
 test('a new agent session clears the skills the previous one had trained', () => {
   const skills = []
   const proxy = new AgentProxy(

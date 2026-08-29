@@ -26,17 +26,20 @@ const PHASE_TONES = {
 }
 
 /// The six rolled attributes in the order the game rolls them
-/// (shared/src/character.rs CharacterAttributes). Guard is not one of them —
-/// it is what armour adds up to.
-const ATTRIBUTE_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha']
+/// (shared/src/character.rs CharacterAttributes), then guard — not rolled but
+/// read the same way, since what the character is wearing adds to it.
+const ATTRIBUTE_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha', 'guard']
 
-export function attributeCells(attributes) {
+/// `effective` is the server's own reading of the two attributes gear moves
+/// (proxy.js statsFromEffective) — the value is what the game acts on, and
+/// `bonus` is how much of it the character is wearing rather than rolled.
+export function attributeCells(attributes, effective) {
   if (!attributes) return []
-  return ATTRIBUTE_ORDER.filter((key) => Number.isFinite(attributes[key])).map((key) => ({
-    key,
-    label: key.toUpperCase(),
-    value: attributes[key],
-  }))
+  return ATTRIBUTE_ORDER.filter((key) => Number.isFinite(attributes[key])).map((key) => {
+    const rolled = attributes[key]
+    const value = Number.isFinite(effective?.[key]) ? effective[key] : rolled
+    return { key, label: key.toUpperCase(), value, bonus: value - rolled }
+  })
 }
 
 export function dutyState(running, phase, retryMs) {

@@ -45,7 +45,10 @@ const proxy = new AgentProxy(
   (worn) => send('agent:worn', worn),
   // Trained skills, which the panel API does not publish either — same
   // push-as-it-changes path as the gear above.
-  (skills) => send('agent:skills', skills)
+  (skills) => send('agent:skills', skills),
+  // Guard and CHA as the server actually reads them: the roster's rolled
+  // attributes never move, so this is what a worn ring or a breastplate adds.
+  (stats) => send('agent:stats', stats)
 )
 let feedTimer = null
 let feedSeq = null

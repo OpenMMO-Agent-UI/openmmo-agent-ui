@@ -203,6 +203,7 @@
   "Nothing carried yet.": "背包是空的。",
   "Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.": "沒有任何東西離開這台電腦：agent 把它的連線鏡射到 127.0.0.1，而只有這個視窗在讀它。",
   "Nothing on this machine changed. Try again, or go back and pick a different server.": "這台電腦上什麼都沒改。再試一次，或退回去換一個伺服器。",
+  "Nothing rolled yet.": "還沒擲出屬性。",
   "Nothing to translate": "沒有東西可以翻譯",
   "Nothing to watch yet": "還沒有東西可看",
   "Nothing worn yet.": "還沒穿戴任何東西。",
@@ -298,6 +299,7 @@
   "Spectator view": "旁觀畫面",
   "Start the agent and its world appears here, rendered by the real game client from the agent's own view.": "啟動 agent，它的世界就會出現在這裡 —— 由真正的遊戲客戶端，從 agent 自己的視角畫出來。",
   "Start the agent to control its game audio here.": "啟動 agent 才能在這裡控制它的遊戲音量。",
+  "Stats": "數值",
   "Starting": "啟動中",
   "Stays on screen": "停留時間",
   "Stop fishing": "停止釣魚",
@@ -375,5 +377,6 @@
   "{version} could not install automatically.": "{version} 無法自動安裝。",
   "{version} is ready to install.": "{version} 已經可以安裝。",
   "{xp} XP": "{xp} XP",
-  "‹ Back to your characters": "‹ 回到角色列表"
+  "‹ Back to your characters": "‹ 回到角色列表",
+  "+{n} from gear": "裝備 +{n}"
 }

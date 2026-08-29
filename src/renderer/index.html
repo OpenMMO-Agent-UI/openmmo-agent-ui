@@ -139,16 +139,9 @@
           </div>
         </div>
 
-        <!-- The rolled attributes read beside the duty card rather than behind
-             the level chip: they say who the character is, which is what the
-             card is for. -->
-        <div class="stat-grid" id="statGrid" hidden></div>
-
         <!-- The world clock reads as the room's clock, not as one of the
              character's stats, so it takes the space between the character and
-             the session controls with a spacer either side. Centred on the bar
-             itself before, which the attribute strip now reaches into at the
-             1080px minimum window. -->
+             the session controls with a spacer either side. -->
         <span class="spacer"></span>
         <p class="world-clock" id="dutyClock"></p>
         <span class="spacer"></span>
@@ -289,17 +282,27 @@
             </div>
             <div data-drawer-panel="worn" hidden>
               <div class="tabs subtabs" id="characterTabs" role="tablist">
-                <button class="tab on" data-character-tab="worn" role="tab" data-i18n>Equipment</button>
-                <button class="tab" data-character-tab="skills" role="tab" data-i18n>Skills</button>
+                <button class="tab on" data-character-tab="stats" role="tab" data-i18n>Stats</button>
+                <button class="tab" data-character-tab="worn" role="tab" data-i18n>Equipment</button>
                 <button class="tab" data-character-tab="bag" role="tab" data-i18n>Bag</button>
               </div>
-              <div data-character-panel="worn">
-                <div id="wornList" class="worn-list"></div>
-                <p class="empty" id="wornEmpty" data-i18n>Nothing worn yet.</p>
-              </div>
-              <div data-character-panel="skills" hidden>
+              <!-- What the character is, in one pane: the numbers it was rolled
+                   with and the ones it has earned since. They are read together
+                   — a low STR is what a high one-handed skill is making up
+                   for — so they were never worth a tab each. -->
+              <div data-character-panel="stats">
+                <h3 class="settings-section" data-i18n>Attributes</h3>
+                <!-- Guard and CHA read at the value the server acts on; the
+                     +N beside them says how much of it the gear is providing. -->
+                <div id="statGrid" class="attr-list"></div>
+                <p class="empty" id="statsEmpty" data-i18n>Nothing rolled yet.</p>
+                <h3 class="settings-section" data-i18n>Skills</h3>
                 <div id="skillsList" class="skills-list"></div>
                 <p class="empty" id="skillsEmpty" data-i18n>No skills trained yet. They start at the first swing, cast, or cast line.</p>
+              </div>
+              <div data-character-panel="worn" hidden>
+                <div id="wornList" class="worn-list"></div>
+                <p class="empty" id="wornEmpty" data-i18n>Nothing worn yet.</p>
               </div>
               <div data-character-panel="bag" hidden>
                 <p class="hint" data-i18n>Mark what the agent may sell or drop, then apply.</p>
