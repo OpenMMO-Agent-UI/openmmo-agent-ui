@@ -17,10 +17,30 @@ name: Release sync from upstream
 
 on:
   schedule:
-    # Every 5 minutes (GitHub's floor), offset from the :00/:05 herd that
-    # gets delayed hardest. The check job costs seconds and the repo is
-    # public, so the minutes are free; the agent only wakes on a new release.
-    - cron: '3-58/5 * * * *'
+    # Hourly, offset off the :00 herd. It was every 5 minutes, on the
+    # reasoning that the check costs seconds and the repo is public so the
+    # minutes are free — both true, and it still did not run. GitHub drops
+    # high-frequency scheduled runs, and measured over 2026-08-27..29 this
+    # one fired roughly every ten hours: 16:29, 01:05, 12:43, 22:43. Both of
+    # the wiki repo's daily crons, meanwhile, land within minutes of their
+    # slot every day. So the frequency was buying nothing and costing the
+    # thing it was for — the server moved to v40 and then v44 with nobody
+    # noticing until a player could not log in, twice.
+    #
+    # Hourly is a guess at what GitHub will honour, not a guarantee. If it
+    # still drops runs, the fix is an event rather than a schedule: see
+    # `repository_dispatch` below.
+    - cron: '19 * * * *'
+  # For a watcher that can see the live server — the wiki repo already probes
+  # it (`scripts/server-protocol.mjs`) on a schedule that does run. Firing
+  # this needs a token with write access here, which that repo does not have
+  # yet; adding one is what turns detection from "eventually" into "within
+  # the hour of the server moving".
+  #
+  #   gh api repos/OpenMMO-Agent-UI/openmmo-agent-ui/dispatches \
+  #     -f event_type=server-protocol-changed
+  repository_dispatch:
+    types: [server-protocol-changed]
   workflow_dispatch:
 
 permissions:
