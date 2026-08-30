@@ -729,7 +729,7 @@ function bindFields() {
 
 /// Every knob in the Hunt drawer. `persist` is the same path the Character
 /// screen uses: the value is written now, and a running agent is marked for
-/// the header's Apply & restart rather than restarted under the player.
+/// the drawer's own Apply & restart rather than restarted under the player.
 function bindHuntFields() {
   for (const [id, type] of Object.entries(HUNT_FIELDS)) {
     $(id).addEventListener('change', () => {

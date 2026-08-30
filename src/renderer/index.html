@@ -146,8 +146,6 @@
         <p class="world-clock" id="dutyClock"></p>
         <span class="spacer"></span>
 
-        <button id="restart" class="primary" hidden data-i18n>Apply &amp; restart</button>
-
         <!-- What this window and the agent process are costing: readings, not
              actions, so they sit on the bar rather than in the session menu.
              Stacked, because side by side the two ran together as one line. -->
@@ -285,15 +283,16 @@
               <p class="hint" data-i18n>The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
               <h3 class="settings-section" data-i18n>Restock</h3>
               <div class="row">
-                <label data-i18n>Food<input type="number" id="workerFoodStock" min="0" max="99" /></label>
-                <label data-i18n>Potions<input type="number" id="workerPotionStock" min="0" max="99" /></label>
-                <label data-i18n>Scrolls<input type="number" id="workerScrollStock" min="0" max="99" /></label>
-              </div>
-              <div class="row">
                 <label data-i18n>Food type<select id="workerFoodItem"></select></label>
                 <label data-i18n>Potion type<select id="workerPotionItem"></select></label>
                 <label data-i18n>Scroll type<select id="workerScrollItem"></select></label>
               </div>
+              <div class="row">
+                <label data-i18n>Food<input type="number" id="workerFoodStock" min="0" max="99" /></label>
+                <label data-i18n>Potions<input type="number" id="workerPotionStock" min="0" max="99" /></label>
+                <label data-i18n>Scrolls<input type="number" id="workerScrollStock" min="0" max="99" /></label>
+              </div>
+              <button id="restart" class="primary" hidden data-i18n>Apply &amp; restart</button>
             </div>
             <div data-drawer-panel="worn" hidden>
               <div class="tabs subtabs" id="characterTabs" role="tablist">
