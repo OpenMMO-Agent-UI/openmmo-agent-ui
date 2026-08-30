@@ -19,6 +19,16 @@ only thing that can stop the run early is a failed build/test gate — those
 are real safety nets, not confirmation checkpoints, and they abort rather
 than asking.
 
+**If you cannot finish, say which step and why — never just stop.** Ending
+the turn mid-work reads as success to the job around this skill, and the
+v0.37.0 sync did exactly that: it ran out part-way through a large rebase
+conflict, its last words were "now let's look at the third movement.rs
+conflict", and the step reported success while nothing had shipped. Only the
+workflow's after-the-fact "did it actually ship" check caught it, thirteen
+minutes and no diagnosis later. Running low on room to work is a legitimate
+way to end — reporting it as though the work were done is not. Name the step,
+what was left half-done, and what state the branches are in.
+
 Every run ends with exactly one `PushNotification` — success or failure, not
 both, and not one per step. If Step 1 finds nothing to do, exit quietly with
 no notification (that is the routine case, not news).
@@ -162,8 +172,11 @@ Still inside `deps/OpenMMO`, on the rebased `tweak-agent-client`:
 
 ```
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+cargo clippy --locked --all-targets \
+  -p agent-client -p onlinerpg-shared -p onlinerpg-terrain -- -D warnings
+cargo test --locked -p agent-client -p onlinerpg-shared -p onlinerpg-terrain
+cargo clippy --workspace --all-targets --locked -- -D warnings || true
+cargo test --workspace --locked || true
 cd client
 npm ci
 bash ../tools/fetch-assets.sh client/public/
@@ -175,9 +188,24 @@ npm run format:check
 cd ..
 ```
 
-(These mirror `deps/OpenMMO/.github/workflows/ci.yml` exactly — if that
-workflow file has changed since this was written, match the current
-version of it instead of this list.)
+The Rust commands deliberately no longer mirror
+`deps/OpenMMO/.github/workflows/ci.yml`, which runs the whole workspace.
+Blocking is scoped to the three crates we actually ship: the `agent-client`
+binary `scripts/package-resources.sh` stages, plus `shared` and `terrain`,
+which are compiled into it and — for `shared` — into the wasm the web client
+loads. The whole-workspace runs stay, without `-D warnings` stopping the run,
+because their output is still worth reading.
+
+`server/` is upstream's alone: never staged, never shipped, and not ours to
+fix. Gating on it means Julian's own code can block our release, and it did —
+the v0.38.0 sync aborted on `large-enum-variant` in
+`server/src/game_state/mod.rs`, which `git blame` put entirely on upstream.
+The toolchain-pin note in `release-sync.yml` warns about the same hazard from
+the other direction: a fresh stable shipping a new lint would block every
+sync over code we do not own.
+
+If `ci.yml` grows a check for something we *do* ship, add it here scoped the
+same way rather than widening back to `--workspace`.
 
 `fetch-assets.sh` downloads the binary client assets that some tests read
 directly; they are pinned in `assets.lock` but intentionally not tracked in
@@ -382,11 +410,14 @@ treating them as a code failure:
 
 ## Notes for future edits to this skill
 
-- The three build/test command lists in Steps 3 and 6 are copied from
+- The build/test command lists in Steps 3 and 6 track
   `deps/OpenMMO/.github/workflows/ci.yml` and this repo's
-  `.github/workflows/ci.yml`. If those workflows change, update this file
-  to match — the goal is "what CI actually checks", not "what this file
-  says".
+  `.github/workflows/ci.yml`. If those workflows change, update this file to
+  match — the goal is "what CI actually checks", not "what this file says".
+  The one deliberate divergence is Step 3's Rust gate, which blocks only on
+  the crates we ship and leaves upstream's `server/` advisory; Step 3 says
+  why. Widening it back to `--workspace` hands Julian's own code a veto over
+  our releases, which is how the v0.38.0 sync stalled.
 - `config/release.json`'s `fallbackProtocol` is set by
   `release-sync-update-protocols.js` to whatever was the newest verified
   protocol before this run. That field is otherwise a human's deliberate
