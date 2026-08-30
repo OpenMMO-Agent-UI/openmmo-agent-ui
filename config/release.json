@@ -17,9 +17,10 @@
     36,
     37,
     40,
-    44
+    44,
+    46
   ],
-  "fallbackProtocol": 40,
-  "pinnedProtocol": 44,
-  "pinnedLayout": "205d02edb98d4eec"
+  "fallbackProtocol": 44,
+  "pinnedProtocol": 46,
+  "pinnedLayout": "21ee51ec96294ef3"
 }
