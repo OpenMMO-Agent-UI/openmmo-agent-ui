@@ -4,7 +4,6 @@ import { $, showErrors, setScreen, confirmAction, readField, writeField, isAnswe
 import { attributeCells, dutyState } from './duty.js'
 import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
-import * as dispatchBook from './dispatchBook.js'
 import * as settingsPanel from './settingsPanel.js'
 import * as signInFlow from './signInFlow.js'
 import * as updateBanner from './updateBanner.js'
@@ -87,17 +86,6 @@ const FEED_LABELS = {
 const FIELDS = {
   characterClass: 'text',
   gender: 'text',
-  alwaysActive: 'bool',
-  minIntervalSecs: 'int',
-  idleIntervalSecs: 'int',
-  workerKind: 'text',
-  workerLevelMargin: 'int',
-  workerLowHealthPct: 'int',
-  workerFoodStock: 'int',
-  workerPotionStock: 'int',
-  workerScrollStock: 'int',
-  workerBagFullPct: 'int',
-  workerPatrolRadius: 'int',
   llm: 'text',
   openaiBaseUrl: 'text',
   maxTokens: 'int',
@@ -106,8 +94,19 @@ const FIELDS = {
   reasoningEffort: 'text',
   watchPort: 'int',
   rustLog: 'text',
-  maxConcurrent: 'int',
-  requestTimeoutSecs: 'int',
+}
+
+/// The fighter's own knobs. Unlike FIELDS they are not staged behind the
+/// Settings modal's Apply: the drawer is open over the running session, so a
+/// change saves at once and a live agent picks it up on Apply & restart.
+const HUNT_FIELDS = {
+  workerLevelMargin: 'int',
+  workerLowHealthPct: 'int',
+  workerBagFullPct: 'int',
+  workerPatrolRadius: 'int',
+  workerFoodStock: 'int',
+  workerPotionStock: 'int',
+  workerScrollStock: 'int',
 }
 
 function backend() {
@@ -160,12 +159,6 @@ function agentEndpoint() {
   }
 }
 
-const WORKER_HINTS = {
-  none: 'A language model decides what your character does — pick the backend on the LLM tab.',
-  fighter: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.',
-  fisher: 'Finds water, casts, and turns the catch into gold in town. No LLM, no API key.',
-}
-
 /// What the Anchor dropdown is offering, by option index — read back when one
 /// is picked. The list itself is settingsPanel's decision.
 let anchorOptions = [null]
@@ -188,16 +181,10 @@ function renderAnchorOptions() {
   select.value = String(selected)
 }
 
-/// The knobs are the fighter's — a fisher never picks a fight. Pace and
-/// LLM-scheduler knobs only throttle the LLM driver, hidden for rule workers.
-function renderWorker() {
-  const kind = settings.workerKind || 'none'
-  $('workerHint').textContent = WORKER_HINTS[kind] ? t(WORKER_HINTS[kind]) : ''
-  $('workerKnobs').hidden = kind !== 'fighter'
+/// The whole Hunt drawer, off the current settings.
+function renderHunt() {
+  for (const [id, type] of Object.entries(HUNT_FIELDS)) writeField(id, type, settings[id])
   renderAnchorOptions()
-  const llmDriven = kind === 'none'
-  $('paceSettings').hidden = !llmDriven
-  $('advancedLlmOnly').hidden = !llmDriven
 }
 
 function renderBackend() {
@@ -283,9 +270,6 @@ function setStatus(state) {
   $('pauseAgent').querySelector('.i-play').toggleAttribute('hidden', running)
   $('pauseAgent').title = running ? t('Pause the agent') : t('Resume the agent')
   $('pauseAgent').setAttribute('aria-label', $('pauseAgent').title)
-  $('directiveInput').disabled = !running
-  renderDirectivePlaceholder()
-  $('directiveForm').querySelector('button[type="submit"]').disabled = !running
   if (!running) {
     const frame = $('frame')
     frame.hidden = true
@@ -299,12 +283,6 @@ function setStatus(state) {
   // The staged-changes note says whether Apply will also restart the agent,
   // so it has to follow the agent starting or stopping under an open modal.
   updateSettingsFooter()
-}
-
-function renderDirectivePlaceholder() {
-  $('directiveInput').placeholder = running
-    ? t('Send word to your character…')
-    : t('Not running — nothing to dispatch to')
 }
 
 function appendLog(item) {
@@ -476,8 +454,6 @@ function appendFeed(items) {
     el.appendChild(body)
     el.addEventListener('click', () => el.classList.toggle('open'))
     box.appendChild(el)
-
-    dispatchBook.consumeReply(item)
   }
   while (box.childElementCount > 400) box.removeChild(box.firstChild)
   // Same contract as the Log pane's Follow: while it is on, the newest turn is
@@ -541,9 +517,6 @@ function openSettings() {
   $('settingsModal').hidden = false
   settingsDirty = false
   settingsPanel.syncAll(settings)
-  // The saved coordinates only arrive when a character is entered, which is
-  // after init's first render.
-  renderWorker()
   $('telemetryEnabled').checked = settings.telemetry !== false
   updateSettingsFooter()
   $('settingsTabs').querySelector('.tab.on').focus()
@@ -558,8 +531,6 @@ async function closeSettings() {
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
     renderClassOptions()
     renderBackend()
-    renderWorker()
-    settingsPanel.syncCadence(settings)
   }
   settingsSnapshot = null
   settingsDirty = false
@@ -611,6 +582,7 @@ function applyPlayState(state) {
 
 const DRAWER_TITLES = {
   worn: 'Character',
+  hunt: 'Monster Fighter',
   activity: 'Activity',
 }
 
@@ -646,6 +618,9 @@ function openDrawer(kind) {
   }
   // Always land on the first tab, wherever the panel was left.
   if (kind === 'activity') setActivityTab('thoughts')
+  // Settings can revert a staged change under the drawer, so the knobs are
+  // written from the settings in force each time it opens.
+  if (kind === 'hunt') renderHunt()
   if (kind === 'worn') setCharacterTab('stats')
   // Reading the panel is what clears the mark that said to read it.
   if (kind === 'activity') markActivityUnread(false)
@@ -700,21 +675,8 @@ function bindFields() {
         renderGenderOptions()
       }
       if (id === 'llm') renderBackend()
-      if (id === 'workerKind') renderWorker()
-      // The Advanced seconds fields and the Pace sliders are two views of one
-      // value; typing an exact interval has to move the slider that claims to
-      // show it.
-      if (id === 'minIntervalSecs' || id === 'idleIntervalSecs') settingsPanel.syncCadence(settings)
     })
   }
-
-  $('workerAnchor').addEventListener('change', () => {
-    const choice = anchorOptions[Number($('workerAnchor').value)] || null
-    settings.workerAnchorName = choice ? choice.name || '' : ''
-    settings.workerAnchorX = choice ? choice.x : null
-    settings.workerAnchorZ = choice ? choice.z : null
-    markSettingsDirty()
-  })
 
   $('model').addEventListener('change', () => {
     settings.models[settings.llm] = $('model').value
@@ -729,6 +691,34 @@ function bindFields() {
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
     button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab))
   }
+}
+
+/// Every knob in the Hunt drawer. `persist` is the same path the Character
+/// screen uses: the value is written now, and a running agent is marked for
+/// the header's Apply & restart rather than restarted under the player.
+function bindHuntFields() {
+  for (const [id, type] of Object.entries(HUNT_FIELDS)) {
+    $(id).addEventListener('change', () => {
+      const el = $(id)
+      // Unfinished edit: keep the live value rather than let the floor win.
+      if (!isAnswered(el.value, el.min)) {
+        writeField(id, type, settings[id])
+        return
+      }
+      const value = readField(id, type)
+      writeField(id, type, value)
+      void persist({ [id]: value })
+    })
+  }
+
+  $('workerAnchor').addEventListener('change', () => {
+    const choice = anchorOptions[Number($('workerAnchor').value)] || null
+    void persist({
+      workerAnchorName: choice ? choice.name || '' : '',
+      workerAnchorX: choice ? choice.x : null,
+      workerAnchorZ: choice ? choice.z : null,
+    })
+  })
 }
 
 function bindActions() {
@@ -956,11 +946,10 @@ async function switchLanguage(language) {
   await persistImmediateSetting(patch)
   renderClassOptions()
   renderBackend()
-  renderWorker()
+  renderHunt()
   settingsPanel.syncAll(settings)
   signInFlow.rerender()
   renderDutyState()
-  renderDirectivePlaceholder()
   updateSettingsFooter()
 }
 
@@ -980,7 +969,7 @@ async function init() {
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()
   renderBackend()
-  renderWorker()
+  renderHunt()
   actionToasts.applyToastCssVars(settings)
 
   for (const item of info.log) appendLog(item)
@@ -992,11 +981,11 @@ async function init() {
   if (info.status.running) void api.openView()
 
   bindFields()
+  bindHuntFields()
   bindActions()
   bindRail()
   bindActivityTabs()
   bindCharacterTabs()
-  dispatchBook.bind()
   signInFlow.init({
     getSettings: () => settings,
     persist,
@@ -1005,10 +994,6 @@ async function init() {
   })
   settingsPanel.bind({
     getSettings: () => settings,
-    onCadenceChange: (patch) => {
-      settings = { ...settings, ...patch }
-      markSettingsDirty()
-    },
     onImmediateChange: (patch) => {
       settings = { ...settings, ...patch }
       void persistImmediateSetting(patch)

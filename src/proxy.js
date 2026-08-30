@@ -5,14 +5,6 @@ const { WebSocket, WebSocketServer } = require('ws')
 
 const { encode, decode, variantOf, Float } = require('./msgpack')
 
-/// Sender name on every relay-forged directive whisper. Fixed
-/// rather than the player's Google display name, so the shipped default
-/// prompt can name it literally. Contains `~`, which the server's
-/// character-name charset rejects (server/src/auth.rs valid_name_char) — no
-/// real player can ever register this name and have a genuine whisper
-/// impersonate a directive.
-const DIRECTIVE_SENDER = '~Director~'
-
 /// Sits between agent-client and the game server, on loopback:
 ///
 ///   agent-client <--ws--> proxy <--wss--> openmmo.to.nexus
@@ -523,20 +515,6 @@ class AgentProxy {
       this.onError(`agent socket: ${err.message}`)
       closeBoth()
     })
-  }
-
-  /// A directive: forges a `WhisperMessage` toward agent-client,
-  /// as if the game server itself had sent it, addressed to the player's own
-  /// character. Whispers already carry agent-client's highest scheduling
-  /// priority and unconditional prompt inclusion — no agent-client patch
-  /// needed, just a wire frame we're already set up to hand-encode. Returns
-  /// false (rather than throwing) when there is nowhere to deliver it, so a
-  /// directive typed before the agent connects fails visibly instead of
-  /// silently vanishing.
-  sendDirective(characterName, text) {
-    if (!this.agentSocket || this.agentSocket.readyState !== WebSocket.OPEN) return false
-    this.agentSocket.send(encode({ WhisperMessage: [DIRECTIVE_SENDER, characterName, text] }))
-    return true
   }
 
   attachSpectator(ws) {

@@ -42,7 +42,6 @@ contextBridge.exposeInMainWorld('agentApp', {
   switchMode: (mode) => ipcRenderer.invoke('play:switch', mode),
   manualReady: (error) => ipcRenderer.invoke('play:manual-ready', error),
   leavePlay: (destination) => ipcRenderer.invoke('play:leave', destination),
-  sendDirective: (text) => ipcRenderer.invoke('directive:send', text),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   openDownloadPage: () => ipcRenderer.invoke('update:download-page'),

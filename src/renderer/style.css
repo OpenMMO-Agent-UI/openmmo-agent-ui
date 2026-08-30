@@ -877,7 +877,6 @@ button.back:hover {
 }
 
 body[data-mode='manual'] .rail,
-body[data-mode='manual'] .directive-panel,
 body[data-mode='manual'] .drawer,
 body[data-mode='manual'] .action-toasts {
   display: none !important;
@@ -1369,99 +1368,6 @@ iframe {
   max-width: 46ch;
 }
 
-/* Always visible, docked below the game surface — not a rail drawer, and not
-   an overlay on top of the scene either (it used to be, and covered the
-   scene/HUD along the bottom edge). This is how a human overrides the
-   otherwise-autonomous agent, and the reply needs to be seen right next to
-   what was sent, not found later in a log — but it earns that visibility by
-   taking its own space, not by floating over the view.
-
-   This is the signature moment: a directive reads as sending word to your
-   character, not typing into a chat box. "You" sits in ember (it's the
-   outgoing dispatch); the reply sits in brass. Everywhere else in this file
-   stays quiet so this is the one place attention lands. */
-.directive-panel {
-  flex: none;
-  padding: 10px 14px;
-  background: var(--panel);
-  border-top: 1px solid rgba(201, 162, 74, 0.22);
-  transition: border-color 0.5s ease, box-shadow 0.5s ease;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  /* Toggled briefly by app.js on send — the one deliberate animation moment
-     in the whole app. */
-  .directive-panel.sent {
-    border-top-color: rgba(193, 85, 59, 0.55);
-    box-shadow: inset 0 1px 18px -6px rgba(193, 85, 59, 0.35);
-  }
-}
-
-.directive-label {
-  margin: 0 0 6px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  opacity: 0.85;
-}
-
-.directive-log {
-  margin-bottom: 8px;
-  font-size: 12px;
-}
-
-.directive-line {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-
-.directive-tag {
-  flex: none;
-  width: 42px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.directive-you .directive-tag {
-  color: var(--ember);
-}
-
-.directive-you span:last-child {
-  color: var(--text);
-}
-
-.directive-agent .directive-tag {
-  color: var(--accent);
-}
-
-.directive-agent span:last-child {
-  color: var(--text);
-}
-
-.directive-form {
-  display: flex;
-  gap: 8px;
-}
-
-.directive-form input {
-  margin-top: 0;
-}
-
-.directive-form button[type='submit'] {
-  border-color: rgba(193, 85, 59, 0.4);
-  color: var(--ember);
-}
-
-.directive-form button[type='submit']:hover {
-  border-color: var(--ember);
-  background: rgba(193, 85, 59, 0.1);
-}
-
 /* ---------- the drawers ----------
    Fixed at 340px before, which is needlessly narrow on a large display; it
    takes a share of the window now, between a floor that keeps the lists
@@ -1692,6 +1598,17 @@ button.icon-quiet:hover {
    use rather than staying quiet. */
 .bar-note.high {
   color: #f0b48a;
+}
+
+/* The fighter's knobs are a settings form in a drawer: the section rule wants
+   the drawer's tighter spacing, and the last row must not sit against the
+   bottom edge. */
+[data-drawer-panel='hunt'] > .settings-section {
+  margin: 18px 0 10px;
+}
+
+[data-drawer-panel='hunt'] > .row:last-child {
+  margin-bottom: 0;
 }
 
 /* ---------- attributes ----------

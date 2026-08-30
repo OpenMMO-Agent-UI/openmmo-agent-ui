@@ -4,74 +4,6 @@ import { $, readField } from './dom.js'
 import { applyToastCssVars } from './actionToasts.js'
 import { t } from './i18n.js'
 
-const ACTIVE_CADENCES = [
-  ['Very fast', 3],
-  ['Fast', 5],
-  ['Balanced', 10],
-  ['Relaxed', 20],
-  ['Economical', 30],
-]
-const IDLE_CADENCES = [
-  ['Frequent', 30],
-  ['Normal', 60],
-  ['Occasional', 300],
-  ['Rare', 900],
-  ['Minimum', 3600],
-]
-
-export function nearestCadenceIndex(options, seconds) {
-  let best = 0
-  for (let i = 1; i < options.length; i++) {
-    if (Math.abs(options[i][1] - seconds) < Math.abs(options[best][1] - seconds)) best = i
-  }
-  return best
-}
-
-export function humanInterval(secs) {
-  if (secs >= 3600 && secs % 3600 === 0) {
-    const hours = secs / 3600
-    return t(secs === 3600 ? '{n} hour' : '{n} hours', { n: hours })
-  }
-  if (secs >= 60) {
-    const minutes = +(secs / 60).toFixed(1)
-    return t(secs === 60 ? '{n} minute' : '{n} minutes', { n: minutes })
-  }
-  return t(secs === 1 ? '{n} second' : '{n} seconds', { n: secs })
-}
-
-/// Reads the stored seconds, not the slider's preset: the Advanced fields can
-/// set an exact interval between two steps, and the label used to report the
-/// nearest step as though that were the value in force.
-function renderCadenceLabels(settings) {
-  const activeName = ACTIVE_CADENCES[Number($('activeCadence').value)][0]
-  const idleName = IDLE_CADENCES[Number($('idleCadence').value)][0]
-  // The Advanced fields take a raw number, and an empty or 0 one reaches here
-  // before Apply ever gets to reject it — a floor keeps the label from
-  // reporting "Infinity calls a minute" in the meantime.
-  const active = Math.max(1, settings.minIntervalSecs || 1)
-  const idle = Math.max(1, settings.idleIntervalSecs || 1)
-  $('activeCadenceLabel').textContent = `${t(activeName)} · ${humanInterval(active)}`
-  $('activeCadenceHint').textContent = t(
-    'Up to about {calls} calls a minute while something is happening.',
-    { calls: (60 / active).toFixed(1) },
-  )
-  $('idleCadenceLabel').textContent = `${t(idleName)} · ${humanInterval(idle)}`
-  $('idleCadenceHint').textContent = t('One call every {interval} when the world is quiet.', {
-    interval: humanInterval(idle),
-  })
-}
-
-/// Cadence sliders persist through the Apply-gated flow (like the rest of
-/// the Agent tab's FIELDS), unlike toast/audio below — so this is exported
-/// separately for closeSettings' snapshot revert, which must not touch the
-/// immediate-persist controls. Also re-run when the Advanced seconds fields
-/// change, so the slider and its label follow a hand-typed interval.
-export function syncCadence(settings) {
-  $('activeCadence').value = nearestCadenceIndex(ACTIVE_CADENCES, settings.minIntervalSecs)
-  $('idleCadence').value = nearestCadenceIndex(IDLE_CADENCES, settings.idleIntervalSecs)
-  renderCadenceLabels(settings)
-}
-
 function renderToastLabels(settings) {
   $('toastFontSizeLabel').textContent = `${settings.toastFontSize}px`
   $('toastOpacityLabel').textContent = `${settings.toastOpacity}%`
@@ -164,34 +96,18 @@ export function anchorChoices(settings, saved = ANCHOR_SPOTS) {
 }
 
 /// Called when the Settings modal opens: mirrors current settings onto the
-/// cadence/toast/audio controls. Unlike syncCadence, toast/audio never need
-/// a revert path — they're saved on every change, so there's nothing to
-/// snap back to.
+/// toast/audio controls. They need no revert path — every one of them saves on
+/// change, so there is nothing to snap back to.
 export function syncAll(settings) {
-  syncCadence(settings)
   syncToast(settings)
   syncAudio(settings)
 }
 
-/// Wires every cadence/toast/audio control. `getSettings` is read fresh on
-/// every event rather than captured once, since app.js may reassign
-/// `settings` wholesale (a save round-trip, or a snapshot revert) between
-/// bind() and any later interaction. `onCadenceChange` routes through the
-/// Apply-gated dirty flow; `onImmediateChange` saves on every change.
-export function bind({ getSettings, onCadenceChange, onImmediateChange }) {
-  $('activeCadence').addEventListener('input', () => {
-    const value = ACTIVE_CADENCES[Number($('activeCadence').value)][1]
-    $('minIntervalSecs').value = value
-    onCadenceChange({ minIntervalSecs: value })
-    renderCadenceLabels(getSettings())
-  })
-  $('idleCadence').addEventListener('input', () => {
-    const value = IDLE_CADENCES[Number($('idleCadence').value)][1]
-    $('idleIntervalSecs').value = value
-    onCadenceChange({ idleIntervalSecs: value })
-    renderCadenceLabels(getSettings())
-  })
-
+/// Wires every toast/audio control. `getSettings` is read fresh on every event
+/// rather than captured once, since app.js may reassign `settings` wholesale
+/// (a save round-trip, or a snapshot revert) between bind() and any later
+/// interaction. Everything here saves on change.
+export function bind({ getSettings, onImmediateChange }) {
   const toastFields = {
     toastFontSize: 'int',
     toastOpacity: 'int',

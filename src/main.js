@@ -932,15 +932,6 @@ ipcMain.handle('play:leave', async (_e, destination) => {
   return { ok: true, destination }
 })
 
-/// A directive: best-effort, delivered as a relay-forged whisper.
-/// Only meaningful once agent-client is actually running and connected.
-ipcMain.handle('directive:send', (_e, text) => {
-  if (!agent.running) return { ok: false, error: i18n.t('Not running') }
-  const delivered = proxy.sendDirective(settings.characterName, text)
-  if (!delivered) return { ok: false, error: i18n.t('Not connected yet — try again in a moment') }
-  return { ok: true }
-})
-
 /// Re-hand the renderer the scene URL. `view:ready` is pushed once, when the
 /// agent's watch server comes up — but a window closed and reopened on macOS
 /// boots a fresh renderer with nothing to show, and the session it belongs to

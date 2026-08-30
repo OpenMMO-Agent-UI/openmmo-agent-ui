@@ -54,9 +54,10 @@ const DEFAULTS = {
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
   alwaysActive: true,
-  /// What drives Automatic play: 'none' is the LLM agent, anything else is a
-  /// rule-based worker inside agent-client (no LLM, no API key).
-  workerKind: 'none',
+  /// What drives Automatic play. The rule-based fighter inside agent-client
+  /// (no LLM, no API key) is the only driver with a panel: the LLM agent and
+  /// the fisher are off for now, so nothing here can select them.
+  workerKind: 'fighter',
   workerLevelMargin: 0,
   workerLowHealthPct: 70,
   workerFoodStock: 10,
@@ -184,10 +185,7 @@ function load() {
     settings.language = resolveLocale(app.getLocale())
   }
   setLanguage(settings.language)
-  // A worker that no longer exists (one retired between versions) would fail
-  // validation on every Play with nothing to point at — fall back to the LLM
-  // agent instead of stranding the session.
-  if (!WORKERS.includes(settings.workerKind)) settings.workerKind = 'none'
+  settings.workerKind = supportedWorker(settings.workerKind)
   for (const key of SECRET_KEYS) {
     settings[key] = Object.hasOwn(secrets, key) ? secrets[key] : DEFAULTS[key] || ''
   }
@@ -271,7 +269,16 @@ function importExistingConfig(settings) {
   take('maxTokens', openai.max_tokens || openrouter.max_tokens)
   take('temperature', openai.temperature || openrouter.temperature)
 
+  merged.workerKind = supportedWorker(merged.workerKind)
   return merged
+}
+
+/// A driver with no panel — an older build's `none`/`fisher`, a hand-written
+/// config's, or one retired between versions — would fail validation on every
+/// Play with nothing to point at. Read it as the fighter instead of stranding
+/// the session.
+function supportedWorker(kind) {
+  return WORKERS.includes(kind) ? kind : 'fighter'
 }
 
 /// Whether Automatic play runs a rule-based worker instead of the LLM agent.
@@ -280,7 +287,8 @@ function usesWorker(s) {
   return Boolean(s.workerKind) && s.workerKind !== 'none'
 }
 
-const WORKERS = ['none', 'fighter', 'fisher']
+/// Only the fighter for now — see DEFAULTS.workerKind.
+const WORKERS = ['fighter']
 
 /// Refuse to start on the mistakes agent-client would only report after the
 /// window has already switched to the spectator view.
