@@ -109,6 +109,26 @@ const HUNT_FIELDS = {
   workerScrollStock: 'int',
 }
 
+/// What a town trip may restock, by category — the game's fixed item list
+/// (deps/OpenMMO/data/items.json), not something a server varies. The first
+/// entry of each is what an unset (`''`, "Auto") config falls back to.
+const RESTOCK_ITEMS = {
+  workerFoodItem: [
+    'apple',
+    'bread',
+    'cheese',
+    'jerky',
+    'lembas_wafer',
+    'grilled_minnow',
+    'grilled_perch',
+    'grilled_trout',
+    'grilled_salmon',
+    'grilled_sturgeon',
+  ],
+  workerPotionItem: ['healing_potion', 'greater_healing_potion'],
+  workerScrollItem: ['scroll_of_return'],
+}
+
 function backend() {
   return backends.find((b) => b.id === settings.llm) || { kind: 'none', models: [] }
 }
@@ -181,10 +201,24 @@ function renderAnchorOptions() {
   select.value = String(selected)
 }
 
+/// One restock picker: "Auto" (the id agent-client falls back to on an empty
+/// config) plus every item that category can hold, named the way the bag
+/// already names items rather than a second translation of the same word.
+function renderRestockOptions() {
+  for (const [id, items] of Object.entries(RESTOCK_ITEMS)) {
+    const select = $(id)
+    select.innerHTML =
+      `<option value="">${t('Auto')}</option>` +
+      items.map((item) => `<option value="${item}">${bagWorn.itemLabel(item)}</option>`).join('')
+    select.value = settings[id] || ''
+  }
+}
+
 /// The whole Hunt drawer, off the current settings.
 function renderHunt() {
   for (const [id, type] of Object.entries(HUNT_FIELDS)) writeField(id, type, settings[id])
   renderAnchorOptions()
+  renderRestockOptions()
 }
 
 function renderBackend() {
@@ -719,6 +753,10 @@ function bindHuntFields() {
       workerAnchorZ: choice ? choice.z : null,
     })
   })
+
+  for (const id of Object.keys(RESTOCK_ITEMS)) {
+    $(id).addEventListener('change', () => void persist({ [id]: $(id).value }))
+  }
 }
 
 function bindActions() {

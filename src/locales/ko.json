@@ -340,5 +340,9 @@
   "+{n} from gear": "장비 +{n}",
   "Food": "음식",
   "Potions": "물약",
-  "Scrolls": "두루마리"
+  "Scrolls": "두루마리",
+  "Auto": "자동",
+  "Food type": "음식 종류",
+  "Potion type": "물약 종류",
+  "Scroll type": "두루마리 종류"
 }

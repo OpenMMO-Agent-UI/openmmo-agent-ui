@@ -116,6 +116,12 @@ function renderConfigToml(s) {
     `bag_full_pct = ${clampPercent(s.workerBagFullPct, 90)}`,
     `patrol_radius = ${clampRange(s.workerPatrolRadius, 100, 20, 500)}`,
   )
+  // Left out entirely when unset ("Auto" in the picker): agent-client falls
+  // back to its own default (or the merchant's first stocked meal, for food)
+  // rather than pinning to an empty id.
+  if (s.workerFoodItem) lines.push(`food_item = ${tomlString(s.workerFoodItem)}`)
+  if (s.workerPotionItem) lines.push(`potion_item = ${tomlString(s.workerPotionItem)}`)
+  if (s.workerScrollItem) lines.push(`scroll_item = ${tomlString(s.workerScrollItem)}`)
   // Left out entirely when unset: agent-client reads a missing anchor as the
   // world's spawn point, and writing a placeholder here would pin the fighter
   // to wherever the placeholder landed.

@@ -173,6 +173,25 @@ test('half an anchor is no anchor, and the radius is held to the range the panel
   assert.match(workerTable(renderConfigToml(settings({ workerPatrolRadius: '120.6' }))), /^patrol_radius = 121$/m)
 })
 
+test('restock item picks are written only once chosen, so an unset one stays agent-client\'s default', () => {
+  const unset = workerTable(renderConfigToml(settings({ workerKind: 'fighter' })))
+  assert.doesNotMatch(unset, /^(food|potion|scroll)_item/m, 'Auto leaves agent-client to fall back on its own')
+
+  const picked = workerTable(
+    renderConfigToml(
+      settings({
+        workerKind: 'fighter',
+        workerFoodItem: 'jerky',
+        workerPotionItem: 'greater_healing_potion',
+        workerScrollItem: 'scroll_of_return',
+      }),
+    ),
+  )
+  assert.match(picked, /^food_item = "jerky"$/m)
+  assert.match(picked, /^potion_item = "greater_healing_potion"$/m)
+  assert.match(picked, /^scroll_item = "scroll_of_return"$/m)
+})
+
 test('a worker run tells agent-client there is no LLM at all', () => {
   const toml = renderConfigToml(settings({ llm: 'openai', workerKind: 'fisher' }))
 

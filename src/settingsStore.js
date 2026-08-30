@@ -61,8 +61,14 @@ const DEFAULTS = {
   workerLevelMargin: 0,
   workerLowHealthPct: 70,
   workerFoodStock: 10,
+  /// The item ids a town trip restocks. Empty keeps agent-client's own
+  /// default: whatever the nearby merchant's catalog offers first for food,
+  /// or the long-standing healing_potion / scroll_of_return for the others.
+  workerFoodItem: '',
   workerPotionStock: 10,
+  workerPotionItem: '',
   workerScrollStock: 5,
+  workerScrollItem: '',
   workerBagFullPct: 90,
   /// Where the fighter works. The name is only what the settings panel shows;
   /// the coordinates are a snapshot, so deleting the saved coordinate it came
@@ -244,8 +250,11 @@ function importExistingConfig(settings) {
   take('workerLevelMargin', worker.level_margin)
   take('workerLowHealthPct', worker.low_health_pct)
   take('workerFoodStock', worker.food_stock)
+  take('workerFoodItem', worker.food_item)
   take('workerPotionStock', worker.potion_stock)
+  take('workerPotionItem', worker.potion_item)
   take('workerScrollStock', worker.scroll_stock)
+  take('workerScrollItem', worker.scroll_item)
   take('workerBagFullPct', worker.bag_full_pct)
   take('workerAnchorX', worker.anchor_x)
   take('workerAnchorZ', worker.anchor_z)

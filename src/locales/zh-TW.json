@@ -340,5 +340,9 @@
   "+{n} from gear": "裝備 +{n}",
   "Food": "食物",
   "Potions": "藥水",
-  "Scrolls": "卷軸"
+  "Scrolls": "卷軸",
+  "Auto": "自動",
+  "Food type": "食物種類",
+  "Potion type": "藥水種類",
+  "Scroll type": "卷軸種類"
 }
