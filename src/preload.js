@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   start: () => ipcRenderer.invoke('agent:start'),
   stop: () => ipcRenderer.invoke('agent:stop'),
   restart: () => ipcRenderer.invoke('agent:restart'),
+  setActiveTitle: (title) => ipcRenderer.invoke('agent:set-title', title),
   getBagLabels: (characterId) => ipcRenderer.invoke('labels:get', { characterId }),
   saveBagLabels: (characterId, characterName, labels) =>
     ipcRenderer.invoke('labels:save', { characterId, characterName, labels }),
@@ -57,6 +58,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   onWorn: on('agent:worn'),
   onSkills: on('agent:skills'),
   onStats: on('agent:stats'),
+  onTitles: on('agent:titles'),
   onViewReady: on('view:ready'),
   onViewError: on('view:error'),
   onViewMemory: on('view:memory'),
