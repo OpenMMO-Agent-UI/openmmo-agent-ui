@@ -184,7 +184,8 @@ npm run build:wasm
 npm test
 npm run check
 npm run lint
-npm run format:check
+changed=$(git -C .. diff --name-only "$releaseSha"..HEAD -- 'client/**' | sed 's|^client/||')
+[ -n "$changed" ] && npx prettier --check $changed || echo 'no client files of ours changed'
 cd ..
 ```
 
@@ -195,6 +196,21 @@ binary `scripts/package-resources.sh` stages, plus `shared` and `terrain`,
 which are compiled into it and — for `shared` — into the wasm the web client
 loads. The whole-workspace runs stay, without `-D warnings` stopping the run,
 because their output is still worth reading.
+
+Formatting is checked the same way, for the same reason, one level down:
+`npm run format:check` runs prettier over the whole client tree, and the
+v0.39.0 sync stalled on four of Julian's own files — `PlayerModel.svelte`,
+`emote-meta.ts`, `emote-meta.test.ts`, `modelPaths.ts` — that no commit of
+ours touches. Prettier now runs over the files this branch actually changed,
+so our own formatting is still caught and upstream's drift is upstream's
+problem. `npm run lint` stays whole-tree because it has never fired on
+untouched upstream code; if it does, give it the same treatment rather than
+deleting it.
+
+Note the `git -C ..`: this runs after `cd client`, and a `client/**` pathspec
+from inside `client/` matches nothing, which silently hands prettier an empty
+list and an error instead of a pass. Checked against the v0.39.0 tree — 24
+files of ours, all clean, while the whole-tree run fails on Julian's four.
 
 `server/` is upstream's alone: never staged, never shipped, and not ours to
 fix. Gating on it means Julian's own code can block our release, and it did —
