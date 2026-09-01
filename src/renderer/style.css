@@ -208,6 +208,44 @@ input[type='checkbox']:checked::before {
   opacity: 1;
 }
 
+/* The title picker's radios, same plate idiom as the checkboxes above: a dark
+   disc on the ruled line, brass only once it is the chosen title. */
+input[type='radio'] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: #0d0f14;
+}
+
+input[type='radio']:hover:not(:disabled) {
+  border-color: rgba(201, 162, 74, 0.5);
+}
+
+input[type='radio']::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+}
+
+input[type='radio']:checked {
+  border-color: rgba(201, 162, 74, 0.55);
+  background: rgba(201, 162, 74, 0.1);
+}
+
+input[type='radio']:checked::before {
+  opacity: 1;
+}
+
 textarea {
   height: 220px;
   resize: vertical;
@@ -1617,9 +1655,10 @@ button.icon-quiet:hover {
    note in the third column rather than as part of the number: the value is
    already the whole of it. */
 
-/* The two sheets in the Stats pane are read one after the other, so the pane
+/* The three sheets in the Stats pane are read one after the other, so the pane
    scrolls as a whole rather than each list scrolling in its own box — an empty
    one would otherwise stretch and strand its note in the middle of nothing. */
+[data-character-panel='stats'] > .title-list,
 [data-character-panel='stats'] > .attr-list,
 [data-character-panel='stats'] > .skills-list {
   flex: none;
@@ -1652,6 +1691,30 @@ button.icon-quiet:hover {
 .attr-bonus {
   color: var(--muted);
   font-size: 11px;
+}
+
+/* ---------- titles ----------
+   The pick reads down like the attributes sheet, one radio per earned title
+   with a none row on top — the same shape as the game's own panel. The whole
+   row is the hit target. */
+.title-list {
+  display: grid;
+  gap: 2px;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.title-none {
+  color: var(--muted);
 }
 
 /* ---------- bag ---------- */

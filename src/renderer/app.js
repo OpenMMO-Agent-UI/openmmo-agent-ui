@@ -456,6 +456,63 @@ function renderAttributes(attributes) {
   $('statsEmpty').hidden = cells.length > 0
 }
 
+/// Player-facing title names (doc/TITLES.md, data/titles.json). Anything the
+/// server awards that isn't listed falls back to itemLabel's words reading,
+/// the same safety net trained skills use.
+const TITLE_NAMES = {
+  goblin_slayer: 'Slayer of the Goblin Chief',
+  goblin_slayer_solo: 'Who Slew the Goblin Chief Alone',
+  orc_slayer: 'Slayer of the Orc Warlord',
+  orc_slayer_solo: 'Who Slew the Orc Warlord Alone',
+  ogre_slayer: 'Slayer of the Ogre Warlord',
+  ogre_slayer_solo: 'Who Slew the Ogre Warlord Alone',
+}
+
+/// One option in the title picker: the radio itself is the whole row, and the
+/// group name keeps the earned list mutually exclusive with the none row.
+function titleRow(id, label, checked, onChange) {
+  const row = document.createElement('label')
+  row.className = 'title-row'
+  const input = document.createElement('input')
+  input.type = 'radio'
+  input.name = 'active-title'
+  input.checked = checked
+  input.addEventListener('change', onChange)
+  const text = document.createElement('span')
+  text.textContent = label
+  if (!id) text.className = 'title-none'
+  row.append(input, text)
+  return row
+}
+
+/// Earned titles and the one shown, from the relay's view of the server's
+/// PlayerTitles frames (src/proxy.js) — the agent's own panel API never
+/// republishes them. Picking one sends SetActiveTitle back through the same
+/// relay, and the server's answering PlayerTitles re-renders this.
+function renderTitles(data) {
+  const box = $('titleList')
+  box.innerHTML = ''
+  const earned = data && Array.isArray(data.titles) ? data.titles : []
+  const active = data && data.active ? data.active : null
+  $('titlesEmpty').hidden = earned.length > 0
+  box.hidden = earned.length === 0
+  if (earned.length === 0) return
+  box.appendChild(titleRow(null, t('None'), active === null, () => setActiveTitle(null)))
+  for (const id of earned) {
+    const name = TITLE_NAMES[id] ? t(TITLE_NAMES[id]) : bagWorn.itemLabel(id)
+    box.appendChild(titleRow(id, name, active === id, () => setActiveTitle(id)))
+  }
+}
+
+async function setActiveTitle(title) {
+  $('titlesStatus').hidden = true
+  const res = await api.setActiveTitle(title)
+  if (!res || !res.ok) {
+    $('titlesStatus').textContent = t("The title can't reach the server right now.")
+    $('titlesStatus').hidden = false
+  }
+}
+
 /// One entry per LLM turn or game event. Prompts are long, so they start
 /// clipped and open on click — except the agent's own replies, which are the
 /// reason the panel exists and are short enough to read in full. Click still
@@ -1044,11 +1101,13 @@ async function init() {
   renderFeedFilters()
   bagWorn.renderWorn({})
   bagWorn.renderSkills({})
+  renderTitles(null)
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
   api.onSkills(bagWorn.renderSkills)
+  api.onTitles(renderTitles)
   api.onStats((stats) => {
     effectiveStats = stats
     renderAttributes(lastAttributes)
