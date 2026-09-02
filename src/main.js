@@ -186,7 +186,6 @@ async function pollFeed(port) {
     connected: body.connected === true,
     self: body.self || null,
     gold: body.gold ?? null,
-    time: body.time || null,
     bag: body.bag || [],
     weight: body.weight || null,
     attributes: body.attributes || null,

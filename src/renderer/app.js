@@ -404,9 +404,6 @@ function setVitals(v) {
     lastSelf = null
     $('dutyLevel').hidden = true
     $('dutyName').textContent = settings?.characterName || '—'
-    // Nothing else clears the clock, so a dropped session would otherwise
-    // leave it stopped at the last time seen.
-    $('dutyClock').textContent = ''
     actionToasts.clear()
     bagWorn.renderBag([], null, null)
     bagWorn.renderWorn({})
@@ -419,10 +416,6 @@ function setVitals(v) {
   $('dutyName').textContent = s.name
   $('dutyLevel').textContent = `LV ${s.level}`
   $('dutyLevel').hidden = false
-  $('dutyClock').textContent =
-    v.time && v.time.hour != null
-      ? `${String(v.time.hour).padStart(2, '0')}:${String(v.time.minute ?? 0).padStart(2, '0')}`
-      : ''
   actionToasts.push(settings, v.actions, monsterNames)
   bagWorn.renderBag(v.bag, v.weight, v.gold)
   renderAttributes(v.attributes)

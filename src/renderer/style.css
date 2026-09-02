@@ -1079,21 +1079,6 @@ body[data-mode='manual'] .gamesurface {
   color: var(--ember);
 }
 
-/* The bar is a drag handle, so the clock must not swallow a click meant for
-   it. */
-.world-clock {
-  flex: none;
-  margin: 0;
-  white-space: nowrap;
-  color: var(--text);
-  font-family: var(--mono-font);
-  font-size: 21px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  pointer-events: none;
-}
-
-
 /* ---------- header icon buttons ---------- */
 
 .gamebar button.icon {
