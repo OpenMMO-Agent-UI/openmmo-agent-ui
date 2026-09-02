@@ -852,13 +852,25 @@ function bindActions() {
 
   // A 3D client left running all night grows; dropping the frame frees it
   // without disturbing the agent, which lives in another process entirely.
-  $('reloadView').addEventListener('click', () => {
+  const reloadViewFrame = () => {
     const frame = $('frame')
     const url = frame.dataset.url
     if (!url) return
     frame.removeAttribute('src')
     delete frame.dataset.url
     requestAnimationFrame(() => applyView())
+  }
+  $('reloadView').addEventListener('click', reloadViewFrame)
+  // The spectator proxies the game's texture/model assets into a local cache
+  // (server.js). Clearing it forces the next load to fetch fresh ones — the
+  // point is usually a newer build of the game's assets, so reload after.
+  $('clearCache').addEventListener('click', async () => {
+    const res = await api.clearAssetCache()
+    if (!res?.ok) {
+      showErrors([res?.error || t('Could not clear the asset cache.')])
+      return
+    }
+    reloadViewFrame()
   })
 
   $('modeManual').addEventListener('click', async () => {
