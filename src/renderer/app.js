@@ -1053,6 +1053,105 @@ async function switchLanguage(language) {
   updateSettingsFooter()
 }
 
+/// The updater's latest state, kept here (not in updateBanner) so the
+/// outdated dialog can drive an install from any screen. `outdatedHandling`
+/// is true while the dialog's own update is in flight; `outdatedInstalling`
+/// stops the click handler and the updater-state watcher from both calling
+/// quitAndInstall for the same ready download.
+let updateState = null
+let outdatedHandling = false
+let outdatedInstalling = false
+
+function setOutdatedStatus(text) {
+  $('outdatedStatus').textContent = text
+  $('outdatedStatus').hidden = !text
+}
+
+/// A protocol mismatch: the server refused the build outright, so the only
+/// fix is a newer one. The dialog appears above whatever screen is showing —
+/// the server list, character select, or the running game — because the
+/// refusal can happen on any of them.
+function showOutdated(info) {
+  const server = info && info.server
+  const build = info && info.build
+  $('outdatedMessage').textContent =
+    server != null && build != null
+      ? t('The server speaks protocol v{server}, but this build speaks v{build}.', { server, build })
+      : t('This app is outdated. Update to the newest release to keep playing.')
+  setOutdatedStatus('')
+  outdatedHandling = false
+  outdatedInstalling = false
+  $('outdatedUpdate').disabled = false
+  $('outdatedDownload').hidden = true
+  $('outdatedModal').hidden = false
+  $('outdatedUpdate').focus()
+}
+
+async function outdatedInstall() {
+  if (outdatedInstalling) return
+  outdatedInstalling = true
+  setOutdatedStatus(t('Restarting to install…'))
+  const res = await api.installUpdate()
+  if (!res?.ok) {
+    outdatedHandling = false
+    outdatedInstalling = false
+    $('outdatedUpdate').disabled = false
+    setOutdatedStatus(res?.error || t('The update could not be installed.'))
+  }
+}
+
+/// The Update button: install right away when the feed already downloaded a
+/// build, otherwise kick the check and let the updater-state watcher install
+/// the moment the download lands.
+async function startOutdatedUpdate() {
+  if (outdatedHandling) return
+  outdatedHandling = true
+  $('outdatedUpdate').disabled = true
+  $('outdatedDownload').hidden = true
+  setOutdatedStatus(t('Checking for updates…'))
+  if (updateState?.status === 'ready') {
+    await outdatedInstall()
+    return
+  }
+  await api.checkUpdate()
+  if (updateState?.status === 'ready') await outdatedInstall()
+}
+
+/// While the outdated dialog's update is in flight, watch the updater to the
+/// end: a ready download installs itself, a downloading/checking one keeps the
+/// status honest, and anything else means the feed had no newer build — offer
+/// the manual download page instead of leaving the button spinning.
+function outdatedUpdateState(state) {
+  updateState = state
+  if (!outdatedHandling) return
+  switch (state?.status) {
+    case 'ready':
+      void outdatedInstall()
+      break
+    case 'downloading':
+      setOutdatedStatus(t('Downloading v{version}…', { version: state.version ?? '…' }))
+      break
+    case 'checking':
+      break
+    default:
+      outdatedHandling = false
+      $('outdatedUpdate').disabled = false
+      $('outdatedDownload').hidden = false
+      setOutdatedStatus(t('The updater found no newer build here. Download it manually.'))
+      break
+  }
+}
+
+function bindOutdatedDialog() {
+  $('outdatedUpdate').addEventListener('click', () => void startOutdatedUpdate())
+  $('outdatedDismiss').addEventListener('click', () => {
+    $('outdatedModal').hidden = true
+  })
+  $('outdatedDownload').addEventListener('click', () => void api.openDownloadPage())
+  api.onOutdated(showOutdated)
+  api.onUpdateState(outdatedUpdateState)
+}
+
 async function init() {
   const info = await api.info()
   settings = info.settings
@@ -1141,7 +1240,13 @@ async function init() {
   api.onViewError(showViewProblem)
   api.onState(setStatus)
   api.onDeviceCode(signInFlow.showDeviceCode)
-  api.onFatal((message) => showErrors([message]))
+  // Protocol mismatches are the outdated dialog's job, not a dismissible
+  // toast — the message they carry is the dev-facing "run check-protocol.js".
+  api.onFatal((message) => {
+    if (typeof message === 'string' && message.startsWith('The server speaks protocol')) return
+    showErrors([message])
+  })
+  bindOutdatedDialog()
   api.onPlayState(applyPlayState)
   // The watch server coming up is what says the session is live; main.js sends
   // the scene URL off the same event.

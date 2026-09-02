@@ -468,6 +468,27 @@
       </div>
     </div>
 
+    <!-- A protocol mismatch means the shipped build cannot talk to the server
+         at all; the only fix is a newer build, so the dialog offers the
+         updater. Global, like the confirm dialog: the mismatch can land on any
+         screen, from server selection to mid-game. -->
+    <div id="outdatedModal" class="modal" hidden>
+      <div class="modal-card">
+        <div class="modal-head">
+          <span data-i18n>Outdated client</span>
+        </div>
+        <div class="modal-body">
+          <p id="outdatedMessage"></p>
+          <p class="hint" id="outdatedStatus" hidden></p>
+          <div class="row confirm-actions">
+            <button id="outdatedDismiss" class="ghost" data-i18n>Dismiss</button>
+            <button id="outdatedDownload" class="ghost" hidden data-i18n>Download the new version</button>
+            <button id="outdatedUpdate" class="primary" data-i18n>Update now</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Reusable confirm dialog — a destructive action (character delete)
          should never go through on one click alone. -->
     <div id="confirmModal" class="modal" hidden>
