@@ -106,10 +106,17 @@ The workflow validates the pinned protocol and source commits, reruns both
 repositories' tests, and builds:
 
 ```text
+openmmo-agent-v0.15.0-p11-macos-arm64.dmg
 openmmo-agent-v0.15.0-p11-macos-arm64.zip
 openmmo-agent-v0.15.0-p11-windows-x64.exe
 openmmo-agent-v0.15.0-p11-linux-x64.AppImage
 ```
+
+macOS ships two installers. The DMG is what the download page hands players:
+its drag-to-Applications step is what puts the app where Squirrel.Mac can
+replace it, which is what makes future auto-updates actually apply. The zip
+beside it is never shown to users — it is the artifact `electron-updater`
+reads (`latest-mac.yml` names it), so both have to ship.
 
 It **publishes immediately** with SHA-256 checksums and, in the notes, the
 full parent and OpenMMO commit SHAs plus the commit messages since the
@@ -178,11 +185,13 @@ It fires on `release: published` rather than the tag push, so it only ever
 mirrors artifacts that finished building, signing and notarizing. Manual reruns
 go through `workflow_dispatch` with a tag.
 
-The mirror strips the version and protocol out of the filenames, so the wiki's
-buttons can point at a URL that never changes:
+The mirror keeps the versioned filenames, so a downloaded file says which build
+it is, and rewrites the wiki's `release.json` and README to point at this
+release. The macOS download button serves the DMG (the drag-to-Applications
+installer); the zip rides along for Squirrel.Mac, and `latest-mac.yml` names it.
 
 ```
-https://github.com/OpenMMO-Agent-UI/openmmo-agent-wiki/releases/latest/download/openmmo-agent-macos-arm64.zip
+https://github.com/OpenMMO-Agent-UI/openmmo-agent-wiki/releases/latest/download/openmmo-agent-v0.15.0-p11-macos-arm64.dmg
 ```
 
 Version and protocol move into the release title and notes. Checksums are

@@ -103,6 +103,7 @@ test('plans a reproducible draft release from a tag and pinned checkout', () => 
       artifacts: {
         linux: 'openmmo-agent-v1.2.3-p10-linux-x64.AppImage',
         macos: 'openmmo-agent-v1.2.3-p10-macos-arm64.zip',
+        macosDmg: 'openmmo-agent-v1.2.3-p10-macos-arm64.dmg',
         windows: 'openmmo-agent-v1.2.3-p10-windows-x64.exe',
       },
       releaseAction: 'create',

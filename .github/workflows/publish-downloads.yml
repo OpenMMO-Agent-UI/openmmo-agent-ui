@@ -158,7 +158,7 @@ jobs:
             "version": "${VERSION}",
             "protocol": ${PROTOCOL},
             "files": {
-              "mac": "openmmo-agent-v${VERSION}-p${PROTOCOL}-macos-arm64.zip",
+              "mac": "openmmo-agent-v${VERSION}-p${PROTOCOL}-macos-arm64.dmg",
               "win": "openmmo-agent-v${VERSION}-p${PROTOCOL}-windows-x64.exe",
               "linux": "openmmo-agent-v${VERSION}-p${PROTOCOL}-linux-x64.AppImage"
             }
@@ -167,7 +167,7 @@ jobs:
           # Rewrite whatever filename the README carries (stable-era or an
           # older versioned one) to this release's.
           sed -E -i \
-            -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?macos-arm64\.zip/openmmo-agent-v${VERSION}-p${PROTOCOL}-macos-arm64.zip/g" \
+            -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?macos-arm64\.dmg/openmmo-agent-v${VERSION}-p${PROTOCOL}-macos-arm64.dmg/g" \
             -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?windows-x64\.exe/openmmo-agent-v${VERSION}-p${PROTOCOL}-windows-x64.exe/g" \
             -e "s/openmmo-agent-(v[0-9.]+-p[0-9]+-)?linux-x64\.AppImage/openmmo-agent-v${VERSION}-p${PROTOCOL}-linux-x64.AppImage/g" \
             README.md

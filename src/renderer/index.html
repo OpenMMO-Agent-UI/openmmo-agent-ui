@@ -139,11 +139,6 @@
           </div>
         </div>
 
-        <!-- The world clock reads as the room's clock, not as one of the
-             character's stats, so it takes the space between the character and
-             the session controls with a spacer either side. -->
-        <span class="spacer"></span>
-        <p class="world-clock" id="dutyClock"></p>
         <span class="spacer"></span>
 
         <!-- What this window and the agent process are costing: readings, not
@@ -313,6 +308,13 @@
                 <h3 class="settings-section" data-i18n>Skills</h3>
                 <div id="skillsList" class="skills-list"></div>
                 <p class="empty" id="skillsEmpty" data-i18n>No skills trained yet. They start at the first swing, cast, or cast line.</p>
+                <!-- The title is the character's nameplate, set by whoever
+                     earned it — the drawer offers every earned one, and the
+                     pick goes back to the server through the relay. -->
+                <h3 class="settings-section" data-i18n>Title</h3>
+                <div id="titleList" class="title-list" role="radiogroup" aria-label="Title" data-i18n-attr="aria-label"></div>
+                <p class="empty" id="titlesEmpty" data-i18n>No titles earned yet. They come from boss kills.</p>
+                <p class="hint" id="titlesStatus" hidden></p>
               </div>
               <div data-character-panel="worn" hidden>
                 <div id="wornList" class="worn-list"></div>

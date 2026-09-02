@@ -48,7 +48,10 @@ const proxy = new AgentProxy(
   (skills) => send('agent:skills', skills),
   // Guard and CHA as the server actually reads them: the roster's rolled
   // attributes never move, so this is what a worn ring or a breastplate adds.
-  (stats) => send('agent:stats', stats)
+  (stats) => send('agent:stats', stats),
+  // Earned titles and the shown one — owner-private, so the relay is the
+  // only place they are seen, same as gear and skills.
+  (titles) => send('agent:titles', titles)
 )
 let feedTimer = null
 let feedSeq = null
@@ -183,7 +186,6 @@ async function pollFeed(port) {
     connected: body.connected === true,
     self: body.self || null,
     gold: body.gold ?? null,
-    time: body.time || null,
     bag: body.bag || [],
     weight: body.weight || null,
     attributes: body.attributes || null,
@@ -678,6 +680,13 @@ ipcMain.handle('agent:restart', async () => {
   if (agent.running) await agent.stopAndWait()
   return startAgent()
 })
+
+/// The player's pick of which earned title is shown above the character's
+/// name. The relay injects it as if the agent asked, so no agent-client API
+/// has to exist for it; `null` clears the title.
+ipcMain.handle('agent:set-title', (_e, title) => ({
+  ok: proxy.setActiveTitle(typeof title === 'string' && title ? title : null),
+}))
 
 function personalityPath(profileId, characterId) {
   const safe = (value) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_')

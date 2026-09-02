@@ -115,6 +115,16 @@ function wornFromInventory(body) {
   return worn
 }
 
+/// `PlayerTitles` is `[titles, active]` — the earned title ids in definition
+/// order and the one shown above the name, sent to the owner on entry and
+/// after every change (doc/TITLES.md). Owner-private like skills, so the
+/// relay is the only place the UI sees it.
+function titlesFromUpdate(body) {
+  const [titles, active] = body || []
+  if (!Array.isArray(titles)) return null
+  return { titles, active: active || null }
+}
+
 /// `PlayerRespawned` carries a whole `Player` (so the id is nested at [0][0]);
 /// every other per-entity state message carries the id directly at [0].
 function entityStateId(name, body) {
@@ -377,7 +387,7 @@ function apiBaseUrl(wsUrl) {
 }
 
 class AgentProxy {
-  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}, onStats = () => {}) {
+  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}, onStats = () => {}, onTitles = () => {}) {
     this.onError = onError
     /// Called with `{ slot: { itemDefId, quantity, enchant } }` whenever the
     /// server restates the agent's inventory. Decoded here rather than in the
@@ -391,6 +401,10 @@ class AgentProxy {
     /// them from. Same reason as `onWorn`: the frame is owner-private, and
     /// agent-client names it without keeping it.
     this.onStats = onStats
+    /// Called with `{ titles, active }` whenever the server restates the
+    /// agent's earned titles and its shown pick. Same reason as `onWorn`: the
+    /// frame is owner-private, so only the relay sees it.
+    this.onTitles = onTitles
     /// Accumulated so a single-skill `SkillXpGained` can be pushed as a whole
     /// map, the way the join-time `SkillsUpdate` arrives.
     this.skills = {}
@@ -402,6 +416,7 @@ class AgentProxy {
     this.snapshot = new WorldSnapshot()
     this.spectators = new Set()
     this.agentSocket = null
+    this.agentUpstream = null
   }
 
   get agentUrl() {
@@ -473,8 +488,10 @@ class AgentProxy {
     this.skills = {}
     this.onSkills({})
     this.onStats(null)
+    this.onTitles({ titles: [], active: null })
 
     const upstream = new WebSocket(this.upstreamUrl)
+    this.agentUpstream = upstream
     const pending = []
 
     upstream.on('open', () => {
@@ -500,6 +517,7 @@ class AgentProxy {
     // session replacement reads as an unexplained drop without it.
     const closeBoth = (code, reason) => {
       if (this.agentSocket === downstream) this.agentSocket = null
+      if (this.agentUpstream === upstream) this.agentUpstream = null
       const [safeCode, safeReason] = relayableClose(code, reason)
       for (const sock of [upstream, downstream]) {
         if (sock.readyState <= WebSocket.OPEN) sock.close(safeCode, safeReason)
@@ -552,6 +570,10 @@ class AgentProxy {
     if (name === 'EffectiveStatsUpdated') {
       const stats = statsFromEffective(body)
       if (stats) this.onStats(stats)
+    }
+    if (name === 'PlayerTitles') {
+      const titles = titlesFromUpdate(body)
+      if (titles) this.onTitles(titles)
     }
     if (name === 'SkillXpGained') {
       const gain = skillFromXpGained(body)
@@ -618,11 +640,27 @@ class AgentProxy {
     if (this.spectators.size > 0) this.broadcast(moved)
   }
 
+  /// Hand the player's pick of earned title to the server on the agent's own
+  /// connection: the renderer has no route to the server but the relay, and
+  /// agent-client publishes nothing the player could drive. The frame is the
+  /// same `ClientMessage` agent-client itself would send — struct fields in
+  /// order, so `SetActiveTitle`'s single Option becomes a one-element array —
+  /// and the server answers with a fresh `PlayerTitles`. Returns whether the
+  /// frame actually went out; a dead session refuses rather than queuing an
+  /// order nobody is there to act on.
+  setActiveTitle(title) {
+    const socket = this.agentUpstream
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false
+    socket.send(encode({ SetActiveTitle: [title || null] }))
+    return true
+  }
+
   stop() {
     for (const ws of this.spectators) ws.close()
     this.spectators.clear()
     if (this.agentSocket) this.agentSocket.close()
     this.agentSocket = null
+    this.agentUpstream = null
     if (this.wss) this.wss.close()
     if (this.server) this.server.close()
     if (this.apiServer) this.apiServer.close()
@@ -694,4 +732,5 @@ module.exports = {
   skillsFromUpdate,
   statsFromEffective,
   skillFromXpGained,
+  titlesFromUpdate,
 }

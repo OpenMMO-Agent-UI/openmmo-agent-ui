@@ -173,6 +173,39 @@ test('staged layout check rejects a binary from a checkout predating the stamp',
   }
 })
 
+test('macOS builds ship the DMG installer and keep the zip Squirrel.Mac updates from', () => {
+  const manifest = require('../package.json')
+
+  const targets = manifest.build.mac.target.map((t) => t.target)
+  assert.ok(targets.includes('dmg'), 'a DMG installer must be built for manual installs')
+  assert.ok(
+    targets.includes('zip'),
+    'the zip must stay: electron-updater on macOS updates from it, never from the DMG',
+  )
+})
+
+test('the release workflow uploads the DMG alongside the zip', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'release.yml'),
+    'utf8',
+  )
+
+  assert.match(workflow, /macos-dmg-artifact/)
+  assert.match(workflow, /artifact-dmg/)
+  assert.match(workflow, /if: matrix\.os == 'macos-14'/)
+  assert.match(workflow, /out\/\$\{\{ matrix\.artifact-dmg \}\}/)
+})
+
+test('the wiki mirrors the DMG as the macOS download and names it in the feed', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'publish-downloads.yml'),
+    'utf8',
+  )
+
+  assert.match(workflow, /macos-arm64\.dmg/)
+  assert.doesNotMatch(workflow, /"mac": ".*macos-arm64\.zip"/)
+})
+
 test('staging runs the layout check on whatever it just copied', () => {
   const script = fs.readFileSync(path.join(ROOT, 'scripts', 'package-resources.sh'), 'utf8')
 

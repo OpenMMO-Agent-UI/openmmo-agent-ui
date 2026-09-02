@@ -497,3 +497,94 @@ test('a skills frame in a shape we cannot read is ignored, not reported as untra
 
   assert.strictEqual(skills.length, 0)
 })
+
+// ---------- titles ----------
+
+/// `PlayerTitles` is `[titles, active]` — earned title ids in definition
+/// order, plus the one shown above the name, sent to the owner on entry and
+/// after every change.
+const playerTitlesFrame = (titles, active) => encode({ PlayerTitles: [titles, active] })
+
+test('earned titles and the shown pick are read off the PlayerTitles frame', () => {
+  const titles = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    (t) => titles.push(t),
+  )
+  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer', 'orc_slayer'], 'orc_slayer'))
+
+  assert.deepStrictEqual(titles.at(-1), {
+    titles: ['goblin_slayer', 'orc_slayer'],
+    active: 'orc_slayer',
+  })
+})
+
+test('a title cleared back to none reads active as null', () => {
+  const titles = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    (t) => titles.push(t),
+  )
+  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer'], null))
+
+  assert.deepStrictEqual(titles.at(-1), { titles: ['goblin_slayer'], active: null })
+})
+
+test('a new agent session clears the titles the previous one earned', () => {
+  const titles = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    (t) => titles.push(t),
+  )
+  proxy.onServerFrame(playerTitlesFrame(['orc_slayer'], 'orc_slayer'))
+
+  proxy.upstreamUrl = 'ws://127.0.0.1:1/ws'
+  proxy.attachAgent(fakeAgentSocket())
+
+  assert.deepStrictEqual(titles.at(-1), { titles: [], active: null })
+  proxy.stop()
+})
+
+test('a PlayerTitles frame in a shape we cannot read is ignored', () => {
+  const titles = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    (t) => titles.push(t),
+  )
+  proxy.onServerFrame(encode({ PlayerTitles: ['not-a-title-list', 'orc_slayer'] }))
+
+  assert.strictEqual(titles.length, 0)
+})
+
+test("setActiveTitle hands the pick to the server on the agent's own connection", () => {
+  const sent = []
+  const proxy = new AgentProxy()
+  proxy.agentUpstream = { readyState: 1, send: (f) => sent.push(f) }
+
+  assert.strictEqual(proxy.setActiveTitle('orc_slayer'), true)
+  assert.strictEqual(proxy.setActiveTitle(null), true)
+  assert.deepStrictEqual(decodedOf(sent), [
+    ['SetActiveTitle', ['orc_slayer']],
+    ['SetActiveTitle', [null]],
+  ])
+})
+
+test('setActiveTitle refuses when there is no live session to reach the server', () => {
+  const proxy = new AgentProxy()
+  assert.strictEqual(proxy.setActiveTitle('orc_slayer'), false)
+
+  proxy.agentUpstream = { readyState: 3, send: () => assert.fail('must not send on a dead socket') }
+  assert.strictEqual(proxy.setActiveTitle('orc_slayer'), false)
+})
