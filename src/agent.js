@@ -132,7 +132,8 @@ class AgentProcess extends EventEmitter {
   /// The one refusal that cannot be waited out: the server compares wire
   /// versions exactly, so a mismatch means moving the checkout. It otherwise
   /// scrolls past as a single line among the reconnect attempts it triggers —
-  /// lift it out once per run, as a fatal error naming the commit to move to.
+  /// lift it out once per run. `fatal` keeps the startup path aborting
+  /// cleanly; `outdated` carries the protocol pair for the update dialog.
   scanForProtocolMismatch(line) {
     if (this.protocolWarned) return
     const match = line.match(/Protocol v(\d+) required, you sent v(\d+)/)
@@ -147,6 +148,7 @@ class AgentProcess extends EventEmitter {
       `The server speaks protocol v${match[1]}, this build speaks v${match[2]}.${built} ` +
         `Run "node openmmo-agent-ui/scripts/check-protocol.js" for the commit to move to.`,
     )
+    this.emit('outdated', { server: Number(match[1]), build: Number(match[2]) })
   }
 
   async start(settings) {

@@ -17,7 +17,7 @@ const personalityText = require('./personalityText')
 const { agentDir, seedRuntimeData } = require('./runtimeEnv')
 const { renderConfigToml } = require('./configToml')
 const { AgentProcess } = require('./agent')
-const { ClientServer, distReady } = require('./server')
+const { ClientServer, distReady, assetCacheRoot } = require('./server')
 const { AgentProxy } = require('./proxy')
 const googleAuth = require('./googleAuth')
 const characterSession = require('./characterSession')
@@ -497,6 +497,7 @@ app.whenReady().then(() => {
     if (!state.running && state.exitCode != null) playSession?.controllerExited('AI disconnected')
   })
   agent.on('fatal', (message) => send('agent:fatal', message))
+  agent.on('outdated', (info) => send('agent:outdated', info))
   agent.on('watch-ready', (url) => {
     send('watch:ready', url)
     startFeedPolling(settings.watchPort)
@@ -949,6 +950,18 @@ ipcMain.handle('view:open', async () => {
   if (!agent.running) return { ok: false }
   await openSpectatorView()
   return { ok: true }
+})
+
+/// Drop the proxied asset cache the spectator view fills (server.js's
+/// assetCacheRoot). Harmless to delete mid-session: the next request for a
+/// file simply refetches and re-caches it.
+ipcMain.handle('cache:clear', () => {
+  try {
+    fs.rmSync(assetCacheRoot(), { recursive: true, force: true })
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
 })
 
 ipcMain.handle('update:check', () => updater.check())
