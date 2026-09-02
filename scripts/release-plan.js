@@ -175,6 +175,7 @@ function plan(options) {
     artifacts: {
       linux: `${artifactPrefix}-linux-x64.AppImage`,
       macos: `${artifactPrefix}-macos-arm64.zip`,
+      macosDmg: `${artifactPrefix}-macos-arm64.dmg`,
       windows: `${artifactPrefix}-windows-x64.exe`,
     },
     releaseAction: releaseAction(options.releaseState, parentSha, options.existingParentSha),

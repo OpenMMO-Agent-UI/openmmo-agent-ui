@@ -24,6 +24,7 @@ jobs:
       artifact-prefix: ${{ steps.plan.outputs.artifact-prefix }}
       linux-artifact: ${{ steps.plan.outputs.linux-artifact }}
       macos-artifact: ${{ steps.plan.outputs.macos-artifact }}
+      macos-dmg-artifact: ${{ steps.plan.outputs.macos-dmg-artifact }}
       windows-artifact: ${{ steps.plan.outputs.windows-artifact }}
       release-action: ${{ steps.plan.outputs.release-action }}
     steps:
@@ -101,6 +102,7 @@ jobs:
             `artifact-prefix=${plan.artifactPrefix}`,
             `linux-artifact=${plan.artifacts.linux}`,
             `macos-artifact=${plan.artifacts.macos}`,
+            `macos-dmg-artifact=${plan.artifacts.macosDmg}`,
             `windows-artifact=${plan.artifacts.windows}`,
             `release-action=${plan.releaseAction}`,
           ]
@@ -122,14 +124,18 @@ jobs:
             label: macOS arm64
             command: dist:mac
             artifact: ${{ needs.validate.outputs.macos-artifact }}
+            artifact-dmg: ${{ needs.validate.outputs.macos-dmg-artifact }}
+            artifact-name: openmmo-agent-v${{ needs.validate.outputs.version }}-p${{ needs.validate.outputs.protocol }}-macos-arm64.${ext}
           - os: windows-latest
             label: Windows x64
             command: dist:win
             artifact: ${{ needs.validate.outputs.windows-artifact }}
+            artifact-name: ${{ needs.validate.outputs.windows-artifact }}
           - os: ubuntu-latest
             label: Linux x64
             command: dist:linux
             artifact: ${{ needs.validate.outputs.linux-artifact }}
+            artifact-name: ${{ needs.validate.outputs.linux-artifact }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -191,7 +197,7 @@ jobs:
         shell: bash
         env:
           APP_VERSION: ${{ needs.validate.outputs.version }}
-          ARTIFACT_NAME: ${{ matrix.artifact }}
+          ARTIFACT_NAME: ${{ matrix.artifact-name }}
           DESKTOP_BUILD_SHA: ${{ needs.validate.outputs.parent-sha }}
           OPENMMO_BUILD_SHA: ${{ needs.validate.outputs.openmmo-sha }}
           OPENMMO_PROTOCOL_VERSION: ${{ needs.validate.outputs.protocol }}
@@ -221,6 +227,17 @@ jobs:
           path: |
             out/${{ matrix.artifact }}
             out/latest*.yml
+          if-no-files-found: error
+
+      # The DMG is the user-facing installer; the zip beside it is what
+      # Squirrel.Mac updates from, so both must ship. Uploaded under its own
+      # name so the draft-release download pattern picks it up alongside the
+      # zip and the other platforms' installers.
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-14'
+        with:
+          name: ${{ matrix.artifact-dmg }}
+          path: out/${{ matrix.artifact-dmg }}
           if-no-files-found: error
 
   draft-release:
