@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   installUpdate: () => ipcRenderer.invoke('update:install'),
   openDownloadPage: () => ipcRenderer.invoke('update:download-page'),
   openView: () => ipcRenderer.invoke('view:open'),
+  clearAssetCache: () => ipcRenderer.invoke('cache:clear'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),
   onState: on('agent:state'),

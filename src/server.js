@@ -257,4 +257,4 @@ class ClientServer {
   }
 }
 
-module.exports = { ClientServer, distReady, clientDist }
+module.exports = { ClientServer, distReady, clientDist, assetCacheRoot }
