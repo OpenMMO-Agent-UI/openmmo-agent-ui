@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   onState: on('agent:state'),
   onDeviceCode: on('auth:device-code'),
   onFatal: on('agent:fatal'),
+  onOutdated: on('agent:outdated'),
   onWatchReady: on('watch:ready'),
   onFeed: on('agent:feed'),
   onVitals: on('agent:vitals'),

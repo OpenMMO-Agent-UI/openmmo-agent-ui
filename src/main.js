@@ -497,6 +497,7 @@ app.whenReady().then(() => {
     if (!state.running && state.exitCode != null) playSession?.controllerExited('AI disconnected')
   })
   agent.on('fatal', (message) => send('agent:fatal', message))
+  agent.on('outdated', (info) => send('agent:outdated', info))
   agent.on('watch-ready', (url) => {
     send('watch:ready', url)
     startFeedPolling(settings.watchPort)
