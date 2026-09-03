@@ -155,6 +155,16 @@ jobs:
         uses: anthropics/claude-code-action@v1
         env:
           GH_TOKEN: ${{ secrets.WIKI_RELEASE_TOKEN }} # gh release publish etc.
+          # Step 3's `npm run build:wasm` is a multi-minute cold wasm compile.
+          # At the 2-minute default the harness auto-backgrounds it, and the
+          # agent cannot then wait on it — the v0.40.0 sync (run 33592051530)
+          # ended its turn saying it would "resume once it finishes", shipped
+          # nothing, and a human released by hand hours later. Also set in
+          # cron-settings.json, which covers the local launchd path; repeated
+          # here because the runner env is the one path guaranteed to reach
+          # the process.
+          BASH_DEFAULT_TIMEOUT_MS: '1200000'
+          BASH_MAX_TIMEOUT_MS: '1800000'
         with:
           github_token: ${{ secrets.WIKI_RELEASE_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
