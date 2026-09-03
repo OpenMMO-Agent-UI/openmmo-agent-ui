@@ -1096,6 +1096,9 @@ async function outdatedInstall() {
     outdatedHandling = false
     outdatedInstalling = false
     $('outdatedUpdate').disabled = false
+    // An install that cannot proceed (e.g. macOS app outside /Applications)
+    // should hand off to the manual download rather than dead-end the dialog.
+    $('outdatedDownload').hidden = false
     setOutdatedStatus(res?.error || t('The update could not be installed.'))
   }
 }

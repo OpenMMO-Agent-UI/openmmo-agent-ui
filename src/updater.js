@@ -1,8 +1,10 @@
 'use strict'
 
+const path = require('node:path')
 const { app, shell } = require('electron')
 
 const telemetry = require('./telemetry')
+const { t } = require('./i18n')
 
 /// The public mirror the app updates from. This repository is private, so its
 /// own release assets are not anonymously reachable; publish-downloads.yml
@@ -21,6 +23,28 @@ const DOWNLOAD_PAGE = 'https://openmmo-agent-ui.github.io/openmmo-agent-wiki/cli
 /// behind cannot play at all — and releases go out most days. Hourly keeps a
 /// machine that is left running overnight from waking up unable to connect.
 const CHECK_INTERVAL_MS = 60 * 60 * 1000
+
+/// Squirrel.Mac replaces the app bundle in place, and only when the app is
+/// running from a standard Applications folder; a copy launched from anywhere
+/// else (Downloads, an extracted zip, the DMG itself) makes the native updater
+/// fail silently — the app quits on install and nothing replaces it. These
+/// helpers exist so install() can detect that and say so instead of trusting a
+/// ghost update. Pure for tests: both take their inputs instead of reaching
+/// for app.
+function macBundlePath(exePath = app.getPath('exe')) {
+  if (process.platform !== 'darwin' || !exePath) return null
+  const parts = String(exePath).split(path.sep)
+  const appIndex = parts.findIndex((part) => part.endsWith('.app'))
+  return appIndex === -1 ? null : parts.slice(0, appIndex + 1).join(path.sep)
+}
+
+function inApplicationsFolder(exePath = app.getPath('exe'), homePath = app.getPath('home')) {
+  const bundle = macBundlePath(exePath)
+  if (!bundle) return true
+  const apps = [path.join('/', 'Applications'), path.join(homePath, 'Applications')]
+  const needle = bundle.toLowerCase()
+  return apps.some((dir) => needle === dir.toLowerCase() || needle.startsWith(dir.toLowerCase() + path.sep))
+}
 
 let updater = null
 let stopAgent = async () => {}
@@ -98,6 +122,18 @@ async function check() {
 /// user stays on the old version forever.
 async function install() {
   if (!updater || state.status !== 'ready') return { ok: false }
+  // Squirrel.Mac only replaces an app inside an Applications folder; calling
+  // quitAndInstall() from anywhere else makes the update vanish — the app
+  // quits, the bundle never changes, nothing relaunches. Refuse with a real
+  // answer and let the renderer offer the manual download instead.
+  if (process.platform === 'darwin' && !inApplicationsFolder()) {
+    return {
+      ok: false,
+      error: t(
+        'macOS can only auto-update an app inside the Applications folder. Move OpenMMO Agent UI into /Applications, then update again.',
+      ),
+    }
+  }
   await stopAgent()
   updater.quitAndInstall()
   return { ok: true }
@@ -116,4 +152,16 @@ function stop() {
   timer = null
 }
 
-module.exports = { init, check, install, openDownloadPage, current, stop, errorKind, FEED_URL, DOWNLOAD_PAGE }
+module.exports = {
+  init,
+  check,
+  install,
+  openDownloadPage,
+  current,
+  stop,
+  errorKind,
+  macBundlePath,
+  inApplicationsFolder,
+  FEED_URL,
+  DOWNLOAD_PAGE,
+}

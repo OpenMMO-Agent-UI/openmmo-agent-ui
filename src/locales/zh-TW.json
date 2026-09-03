@@ -363,5 +363,6 @@
   "Auto": "自動",
   "Food type": "食物種類",
   "Potion type": "藥水種類",
-  "Scroll type": "卷軸種類"
+  "Scroll type": "卷軸種類",
+  "macOS can only auto-update an app inside the Applications folder. Move OpenMMO Agent UI into /Applications, then update again.": "macOS 只能自動更新位於「應用程式」資料夾內的 app。請把 OpenMMO Agent UI 拖到 /Applications，然後再更新一次。"
 }

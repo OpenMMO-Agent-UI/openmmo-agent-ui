@@ -61,7 +61,14 @@ export function mount(api) {
     box.hidden = false
   }
 
-  $('updateRestart').addEventListener('click', () => void api.installUpdate())
+  $('updateRestart').addEventListener('click', async () => {
+    const res = await api.installUpdate()
+    // The install can legitimately refuse (macOS app outside /Applications):
+    // say why in the Settings line instead of pretending the click did nothing.
+    if (!res?.ok) {
+      $('updateStatus').textContent = res?.error || t('The update could not be installed.')
+    }
+  })
   $('updateDownload').addEventListener('click', () => void api.openDownloadPage())
   $('updateDismiss').addEventListener('click', () => {
     dismissed = last?.version ?? null
