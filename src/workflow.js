@@ -57,10 +57,12 @@ export class AppWorkflow {
     const tested = await this.api.testProfile(profileId)
     if (generation !== this.generation) return this.snapshot()
     if (!tested.ok) {
+      // A protocol mismatch already opened the outdated dialog; an error toast
+      // under it would just repeat the refusal.
       return this.publish({
         screen: 'server',
         busy: false,
-        errors: [tested.error || 'Connection profile validation failed'],
+        errors: tested.protocolMismatch ? [] : [tested.error || 'Connection profile validation failed'],
       })
     }
 
@@ -81,7 +83,7 @@ export class AppWorkflow {
       return this.publish({
         screen: status.signedIn ? 'server' : 'oauth',
         busy: false,
-        errors: [result.error || 'Sign-in failed'],
+        errors: result.protocolMismatch ? [] : [result.error || 'Sign-in failed'],
       })
     }
     return this.showCharacters(result)

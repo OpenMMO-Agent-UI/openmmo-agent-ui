@@ -408,7 +408,9 @@ function bind() {
     profiles = await api.listProfiles()
     renderProfiles()
     renderProfileStatus()
-    if (!result.ok) showErrors([result.error])
+    // A protocol mismatch is the outdated dialog's job, not an error toast —
+    // main already sent agent:outdated for it.
+    if (!result.ok && !result.protocolMismatch) showErrors([result.error])
   })
   $('profileNew').addEventListener('click', () => openProfileEditor())
   $('profileEdit').addEventListener('click', () => {

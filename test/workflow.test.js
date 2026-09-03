@@ -77,6 +77,39 @@ test('profile validation failure stays on server selection with an actionable er
   assert.deepEqual(state.errors, ['Protocol v10 required'])
 })
 
+test('a protocol-mismatch profile test publishes no error toast — the outdated dialog owns it', async () => {
+  const { workflow } = await fixture({
+    testProfile: async () => ({
+      ok: false,
+      protocolMismatch: true,
+      error: 'Protocol v11 required, you sent v10',
+    }),
+  })
+  await workflow.start()
+
+  const state = await workflow.continueWithProfile('official')
+
+  assert.equal(state.screen, 'server')
+  assert.deepEqual(state.errors, [])
+})
+
+test('a protocol-mismatch sign-in publishes no error toast', async () => {
+  const { workflow } = await fixture({
+    authStatus: async () => ({ signedIn: true }),
+    authContinue: async () => ({
+      ok: false,
+      protocolMismatch: true,
+      error: 'Protocol v11 required, you sent v10',
+    }),
+  })
+  await workflow.start()
+
+  const state = await workflow.continueWithProfile('official')
+
+  assert.equal(state.screen, 'server')
+  assert.deepEqual(state.errors, [])
+})
+
 test('late OAuth completion is ignored after returning to server selection', async () => {
   const login = deferred()
   const { workflow } = await fixture({

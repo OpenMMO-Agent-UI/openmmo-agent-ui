@@ -588,7 +588,12 @@ ipcMain.handle('profiles:test', async (_e, id) => {
     return { ok: true }
   } catch (err) {
     profileStore.setValidation(id, { ok: false, checkedAt: Date.now(), error: err.message })
-    return { ok: false, error: err.message }
+    // A profile test is a pre-flight for the very handshake agent-client would
+    // refuse, so a mismatch here is the same outdated build — pop the update
+    // dialog instead of leaving it to the first Play attempt.
+    const mismatch = protocolMismatchInfo(err)
+    if (mismatch) send('agent:outdated', mismatch)
+    return { ok: false, protocolMismatch: Boolean(mismatch), error: err.message }
   }
 })
 
@@ -831,9 +836,20 @@ async function ensurePreflightSession() {
   }
 }
 
+/// The server's refusal text, `Protocol vN required, you sent vM`, is the one
+/// thing every mismatch path shares — profile test, sign-in, and agent-client's
+/// own handshake (src/agent.js) — so it is parsed from the message rather than
+/// from the error's type. `{ server, build }` is what the renderer's outdated
+/// dialog reads.
+function protocolMismatchInfo(err) {
+  const match = err && err.message && err.message.match(/Protocol v(\d+) required, you sent v(\d+)/)
+  return match ? { server: Number(match[1]), build: Number(match[2]) } : null
+}
+
 function signInError(err) {
-  const isProtocolMismatch = err instanceof characterSession.ProtocolMismatchError
-  return { ok: false, protocolMismatch: isProtocolMismatch, error: err.message }
+  const mismatch = protocolMismatchInfo(err)
+  if (mismatch) send('agent:outdated', mismatch)
+  return { ok: false, protocolMismatch: Boolean(mismatch), error: err.message }
 }
 
 /// A cached credential already exists — mint a fresh id_token from it and go
