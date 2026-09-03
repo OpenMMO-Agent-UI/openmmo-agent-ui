@@ -309,6 +309,7 @@
   "The title can't reach the server right now.": "目前無法將稱號傳送到伺服器。",
   "The update could not be installed.": "無法安裝更新。",
   "The updater found no newer build here. Download it manually.": "更新器在這裡找不到更新的版本。請手動下載。",
+  "There is no downloaded update waiting yet.": "目前沒有已下載、等著安裝的更新。",
   "This app": "這個 app",
   "This app is outdated. Update to the newest release to keep playing.": "這個 app 版本過舊。更新到最新版本才能繼續遊玩。",
   "This backend": "這個 backend",

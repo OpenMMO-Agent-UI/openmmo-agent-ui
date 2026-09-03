@@ -309,6 +309,7 @@
   "The title can't reach the server right now.": "지금은 칭호를 서버에 전달할 수 없습니다.",
   "The update could not be installed.": "업데이트를 설치할 수 없습니다.",
   "The updater found no newer build here. Download it manually.": "업데이터가 더 새로운 빌드를 찾지 못했습니다. 직접 다운로드하세요.",
+  "There is no downloaded update waiting yet.": "아직 내려받아 대기 중인 업데이트가 없습니다.",
   "This app": "이 앱",
   "This app is outdated. Update to the newest release to keep playing.": "이 앱은 구버전입니다. 최신 버전으로 업데이트하면 계속 플레이할 수 있습니다.",
   "This backend": "이 backend",
