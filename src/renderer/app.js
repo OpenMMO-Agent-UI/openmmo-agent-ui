@@ -6,7 +6,7 @@ import * as actionToasts from './actionToasts.js'
 import * as bagWorn from './bagWorn.js'
 import * as settingsPanel from './settingsPanel.js'
 import * as signInFlow from './signInFlow.js'
-import * as updateBanner from './updateBanner.js'
+import * as updateStatus from './updateStatus.js'
 import { t, setDictionary, applyI18n } from './i18n.js'
 
 const api = window.agentApp
@@ -1038,6 +1038,8 @@ async function applyLanguage(language) {
 /// ponytail: the switch redraws the markup and the panels it was made from, not
 /// every rendered list — a feed line or an action caption keeps the language it
 /// was written in until its next update. Re-render the rest if that ever shows.
+/// The update line in Settings is one that showed: it is written from JS, and
+/// the panel it sits in is exactly where the switch is made.
 async function switchLanguage(language) {
   const patch = { language }
   settings = { ...settings, ...patch }
@@ -1050,21 +1052,31 @@ async function switchLanguage(language) {
   settingsPanel.syncAll(settings)
   signInFlow.rerender()
   renderDutyState()
+  renderUpdateStatus(updateState)
   updateSettingsFooter()
 }
 
-/// The updater's latest state, kept here (not in updateBanner) so the
+/// The updater's latest state, kept here (not in updateStatus) so the
 /// outdated dialog can drive an install from any screen. `outdatedHandling`
 /// is true while the dialog's own update is in flight; `outdatedInstalling`
 /// stops the click handler and the updater-state watcher from both calling
 /// quitAndInstall for the same ready download.
 let updateState = null
+let renderUpdateStatus = () => {}
 let outdatedHandling = false
 let outdatedInstalling = false
 
-function setOutdatedStatus(text) {
+/// One line and one rule, always set together: the rule is the dialog's only
+/// measure of how far the update has got, and a stale bar under a fresh
+/// sentence is worse than no bar. `progress` is a percentage, 'full',
+/// 'indeterminate', or null to draw no rule at all.
+function setOutdatedStatus(text, progress = null, tone = 'working') {
   $('outdatedStatus').textContent = text
   $('outdatedStatus').hidden = !text
+  const rule = $('outdatedProgress')
+  rule.hidden = progress == null
+  rule.dataset.tone = tone
+  if (progress != null) updateStatus.paintRule($('outdatedFill'), progress)
 }
 
 /// A protocol mismatch: the server refused the build outright, so the only
@@ -1090,7 +1102,7 @@ function showOutdated(info) {
 async function outdatedInstall() {
   if (outdatedInstalling) return
   outdatedInstalling = true
-  setOutdatedStatus(t('Restarting to install…'))
+  setOutdatedStatus(t('Stopping the agent, then restarting.'), 'indeterminate')
   const res = await api.installUpdate()
   if (!res?.ok) {
     outdatedHandling = false
@@ -1099,7 +1111,7 @@ async function outdatedInstall() {
     // An install that cannot proceed (e.g. macOS app outside /Applications)
     // should hand off to the manual download rather than dead-end the dialog.
     $('outdatedDownload').hidden = false
-    setOutdatedStatus(res?.error || t('The update could not be installed.'))
+    setOutdatedStatus(res?.error || t('The update could not be installed.'), 'full', 'failed')
   }
 }
 
@@ -1111,7 +1123,7 @@ async function startOutdatedUpdate() {
   outdatedHandling = true
   $('outdatedUpdate').disabled = true
   $('outdatedDownload').hidden = true
-  setOutdatedStatus(t('Checking for updates…'))
+  setOutdatedStatus(t('Checking for updates…'), 'indeterminate')
   if (updateState?.status === 'ready') {
     await outdatedInstall()
     return
@@ -1129,18 +1141,32 @@ function outdatedUpdateState(state) {
   if (!outdatedHandling) return
   switch (state?.status) {
     case 'ready':
-      void outdatedInstall()
+      // A refused install parks the build back at ready with its reason;
+      // reinstalling on the spot would just fail the same way.
+      if (state.message) {
+        outdatedHandling = false
+        outdatedInstalling = false
+        $('outdatedUpdate').disabled = false
+        $('outdatedDownload').hidden = false
+        setOutdatedStatus(state.message, 'full', 'failed')
+      } else void outdatedInstall()
       break
     case 'downloading':
-      setOutdatedStatus(t('Downloading v{version}…', { version: state.version ?? '…' }))
+      setOutdatedStatus(
+        state.percent == null
+          ? t('Downloading v{version}…', { version: state.version ?? '…' })
+          : t('Downloading v{version} — {percent}%', { version: state.version ?? '…', percent: state.percent }),
+        state.percent ?? 'indeterminate',
+      )
       break
+    case 'installing':
     case 'checking':
       break
     default:
       outdatedHandling = false
       $('outdatedUpdate').disabled = false
       $('outdatedDownload').hidden = false
-      setOutdatedStatus(t('The updater found no newer build here. Download it manually.'))
+      setOutdatedStatus(t('The updater found no newer build here. Download it manually.'), 'full', 'failed')
       break
   }
 }
@@ -1203,7 +1229,9 @@ async function init() {
   })
 
   $('appVersion').textContent = info.appVersion
-  updateBanner.mount(api)(info.update)
+  renderUpdateStatus = updateStatus.mount(api)
+  updateState = info.update
+  renderUpdateStatus(updateState)
 
   renderFeedFilters()
   bagWorn.renderWorn({})

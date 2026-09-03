@@ -12,16 +12,6 @@
   <body data-screen="server" data-mode="ai">
     <div id="errors" class="toast" hidden></div>
 
-    <!-- Sits above every screen: an update that finished downloading while
-         the agent was grinding must still be visible when the player comes
-         back, whichever screen they left it on. -->
-    <div id="updateBanner" class="update-banner" hidden>
-      <span id="updateBannerText"></span>
-      <button id="updateRestart" class="primary small" data-i18n>Restart to update</button>
-      <button id="updateDownload" class="ghost small" hidden data-i18n>Download</button>
-      <button id="updateDismiss" class="ghost small" aria-label="Dismiss" data-i18n-attr="aria-label">×</button>
-    </div>
-
     <!-- CONNECTION PROFILE — always the first screen on a cold launch. -->
     <section id="screen-server" class="screen screen-entry">
       <div class="glow"></div>
@@ -445,9 +435,15 @@
             <p class="hint" data-i18n>Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
             <h3 class="settings-section" data-i18n>This app</h3>
             <p class="hint" data-i18n>OpenMMO Agent UI is free and open source. It runs the agent on your own machine, under your own model quota.</p>
-            <p class="hint"><span data-i18n>Version</span> <strong id="appVersion">—</strong> · <span id="updateStatus">Updates install automatically.</span></p>
+            <p class="hint"><span data-i18n>Version</span> <strong id="appVersion">—</strong> · <span id="updateStatus" aria-live="polite">Updates install automatically.</span></p>
+            <!-- The only place an update can be acted on outside the outdated
+                 dialog. A downloaded build installs itself on the next quit,
+                 so both buttons are shortcuts rather than obligations, and
+                 each appears only in the state it belongs to. -->
             <div class="row">
               <button id="updateCheck" class="ghost small" data-i18n>Check for updates</button>
+              <button id="updateRestart" class="ghost small" hidden data-i18n>Restart to update</button>
+              <button id="updateDownload" class="ghost small" hidden data-i18n>Download</button>
             </div>
             <details class="advanced">
               <summary data-i18n>Advanced</summary>
@@ -472,14 +468,15 @@
          at all; the only fix is a newer build, so the dialog offers the
          updater. Global, like the confirm dialog: the mismatch can land on any
          screen, from server selection to mid-game. -->
-    <div id="outdatedModal" class="modal" hidden>
+    <div id="outdatedModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="outdatedTitle">
       <div class="modal-card">
         <div class="modal-head">
-          <span data-i18n>Outdated client</span>
+          <span id="outdatedTitle" data-i18n>Outdated client</span>
         </div>
         <div class="modal-body">
           <p id="outdatedMessage"></p>
-          <p class="hint" id="outdatedStatus" hidden></p>
+          <p class="hint" id="outdatedStatus" hidden aria-live="polite"></p>
+          <div class="update-rule" id="outdatedProgress" hidden><span id="outdatedFill" class="update-fill"></span></div>
           <div class="row confirm-actions">
             <button id="outdatedDismiss" class="ghost" data-i18n>Dismiss</button>
             <button id="outdatedDownload" class="ghost" hidden data-i18n>Download the new version</button>

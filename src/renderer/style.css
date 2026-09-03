@@ -323,25 +323,66 @@ pre {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.update-banner {
-  position: fixed;
-  z-index: 60;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 10px 8px 16px;
-  border-radius: 8px;
-  background: #14211a;
-  border: 1px solid #2c4a39;
-  color: #b7e6cb;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+/* ---------- the update rule ----------
+   How far the update has got, drawn once, in the outdated dialog — the only
+   screen where anyone is waiting on it. It carries the state in its colour:
+   brass while something is in motion, verdigris once the build is on the
+   desk, ember when it never arrived.
+
+   There was a banner above every screen too. It announced a download the app
+   installs by itself on the next quit, so it interrupted a running game to
+   report something nobody had to act on; the dialog handles the case that is
+   actually urgent. */
+.update-rule {
+  height: 2px;
+  background: rgba(236, 230, 214, 0.08);
+  overflow: hidden;
 }
 
-.update-banner[hidden] {
-  display: none;
+.modal-body .update-rule {
+  margin: 0 0 14px;
+  border-radius: 1px;
+}
+
+.update-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .update-fill {
+    transition: width 200ms linear;
+  }
+}
+
+/* Scoped to the rule: `data-tone` is shared vocabulary here — the sign-in
+   lamp and the session header carry their own sets of values. */
+.update-rule[data-tone='ready'] .update-fill {
+  background: var(--verdigris);
+}
+
+.update-rule[data-tone='failed'] .update-fill {
+  background: var(--ember);
+}
+
+/* Something is moving but its distance is unknown — the agent stopping, a
+   download with no content-length. Reduced motion gets a dimmed full bar
+   instead, which says "working" without claiming a position. */
+.update-fill.indeterminate {
+  width: 100%;
+  opacity: 0.4;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The travelling lamp the entering character's slot already uses. */
+  .update-fill.indeterminate {
+    width: 30%;
+    opacity: 1;
+    transition: none;
+    animation: sweep 1.5s ease-in-out infinite;
+  }
 }
 
 /* ---------- screens ---------- */
