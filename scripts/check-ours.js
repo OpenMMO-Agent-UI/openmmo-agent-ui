@@ -60,8 +60,14 @@ function ourClientFiles() {
 ///   /abs/path/client/src/lib/foo.ts:12:34
 ///   Error: Argument of type ...
 /// Only `Error:` blocks; `Warn:` never has and is not made to here.
+/// Belt and braces for the same hazard: NO_COLOR is honoured by svelte-check
+/// today, but tsc and any future tool in `npm run check` need not be, and a
+/// stray escape code must never read as "no errors found".
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-9;]*m/g
+
 function errorFiles(output) {
-  const lines = output.split('\n')
+  const lines = output.replace(ANSI, '').split('\n')
   const files = new Set()
   for (let i = 0; i < lines.length - 1; i++) {
     const loc = lines[i].match(/^(.*?):(\d+):(\d+)$/)
@@ -83,6 +89,11 @@ try {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     maxBuffer: 64 * 1024 * 1024,
+    // svelte-check colours its output when CI=true even though it is piped,
+    // and the escape codes sit *before* `Error:`, so the severity match below
+    // silently sees nothing and every run reads as unparseable. Caught in CI
+    // run 33915655533, not locally — a dev shell has neither CI nor a tty here.
+    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
   })
   console.log('npm run check: clean')
   process.exit(0)

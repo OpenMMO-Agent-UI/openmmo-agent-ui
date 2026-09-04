@@ -43,15 +43,19 @@ const INSTALL_TIMEOUT_MS = 20000
 /// helpers exist so install() can detect that and say so instead of trusting a
 /// ghost update. Pure for tests: both take their inputs instead of reaching
 /// for app.
-function macBundlePath(exePath = app.getPath('exe')) {
-  if (process.platform !== 'darwin' || !exePath) return null
+function macBundlePath(exePath = app.getPath('exe'), platform = process.platform) {
+  if (platform !== 'darwin' || !exePath) return null
   const parts = String(exePath).split(path.sep)
   const appIndex = parts.findIndex((part) => part.endsWith('.app'))
   return appIndex === -1 ? null : parts.slice(0, appIndex + 1).join(path.sep)
 }
 
-function inApplicationsFolder(exePath = app.getPath('exe'), homePath = app.getPath('home')) {
-  const bundle = macBundlePath(exePath)
+function inApplicationsFolder(
+  exePath = app.getPath('exe'),
+  homePath = app.getPath('home'),
+  platform = process.platform
+) {
+  const bundle = macBundlePath(exePath, platform)
   if (!bundle) return true
   const apps = [path.join('/', 'Applications'), path.join(homePath, 'Applications')]
   const needle = bundle.toLowerCase()

@@ -11,32 +11,38 @@ const READY = { status: 'ready', version: '0.41.0', kind: null, percent: 100, me
 const HOME = path.join('/', 'Users', 'player')
 const MAC_EXE = path.join('/', 'Applications', 'OpenMMO Agent UI.app', 'Contents', 'MacOS', 'OpenMMO Agent UI')
 const BUNDLE = path.join('/', 'Applications', 'OpenMMO Agent UI.app')
+/// These helpers branch on the platform, and CI runs Linux. Passing it in —
+/// rather than letting them read `process.platform` — is what lets the macOS
+/// paths actually be exercised anywhere. Without it the three assertions
+/// below all took the non-darwin early return, which is how they shipped
+/// red on master and aborted the protocol-52 sync at Step 6.
+const MAC = 'darwin'
 
 test('macBundlePath walks up from the executable to the .app bundle', () => {
-  assert.equal(macBundlePath(MAC_EXE), BUNDLE)
+  assert.equal(macBundlePath(MAC_EXE, MAC), BUNDLE)
 })
 
 test('a bundle inside /Applications is updatable', () => {
-  assert.equal(inApplicationsFolder(MAC_EXE, HOME), true)
+  assert.equal(inApplicationsFolder(MAC_EXE, HOME, MAC), true)
 })
 
 test('a bundle inside the per-user Applications folder is updatable', () => {
   const exe = path.join(HOME, 'Applications', 'OpenMMO Agent UI.app', 'Contents', 'MacOS', 'OpenMMO Agent UI')
-  assert.equal(inApplicationsFolder(exe, HOME), true)
+  assert.equal(inApplicationsFolder(exe, HOME, MAC), true)
 })
 
 test('a bundle running from Downloads is refused', () => {
   const exe = path.join(HOME, 'Downloads', 'OpenMMO Agent UI.app', 'Contents', 'MacOS', 'OpenMMO Agent UI')
-  assert.equal(inApplicationsFolder(exe, HOME), false)
+  assert.equal(inApplicationsFolder(exe, HOME, MAC), false)
 })
 
 test('a folder merely prefixed with Applications does not count', () => {
   const exe = path.join('/', 'Applications.app', 'Contents', 'MacOS', 'X')
-  assert.equal(inApplicationsFolder(exe, HOME), false)
+  assert.equal(inApplicationsFolder(exe, HOME, MAC), false)
 })
 
 test('no bundle path (non-mac) is never blocked', () => {
-  assert.equal(inApplicationsFolder(null, HOME), true)
+  assert.equal(inApplicationsFolder(null, HOME, MAC), true)
 })
 
 test('a downloaded build survives the hourly re-check that walks over it', () => {
