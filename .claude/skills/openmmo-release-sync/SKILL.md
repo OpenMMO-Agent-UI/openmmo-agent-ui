@@ -182,7 +182,7 @@ npm ci
 bash ../tools/fetch-assets.sh client/public/
 npm run build:wasm
 npm test
-npm run check
+node <repo root>/scripts/check-ours.js .. "$releaseSha"   # not `npm run check`
 npm run lint
 changed=$(git -C .. diff --name-only "$releaseSha"..HEAD -- 'client/**' | sed 's|^client/||')
 [ -n "$changed" ] && npx prettier --check $changed || echo 'no client files of ours changed'
@@ -227,6 +227,48 @@ same way rather than widening back to `--workspace`.
 directly; they are pinned in `assets.lock` but intentionally not tracked in
 git. Run it before `npm test`, otherwise tests that load real `.glb` rigs can
 fail with missing files even when the code is fine.
+
+We do not fix upstream's bugs to unblock our own release. `check-ours.js`
+runs the client's `npm run check` and blocks only on files this branch
+touched (`git diff <releaseSha>..HEAD -- 'client/**'`), reporting anything
+else as upstream's. Run it instead of `npm run check` — same gate, scoped by
+ownership, exactly like the clippy and prettier scoping above and for the
+same reason.
+
+The v0.41.0 sync aborted because upstream 5230934 added `eatMeal` to
+`PlayerControlEventActions` and updated one mock but not
+`fsm/events.test.ts`'s. No commit of ours has ever touched that file. Every
+player was locked out of a protocol-51 server for 5.5 hours over a missing
+`vi.fn()` in somebody else's test. Verified against that exact tree:
+upstream-only errors now exit 0, an error in a file we changed still exits 1.
+
+Ownership, not severity, is the test — and it is not a licence to ignore type
+errors. A file we patch becomes ours: if we ever carry a fix to an upstream
+file and upstream later fixes it differently, the rebase silently produces a
+duplicate key, and this gate is the only one that catches it (`npm test` and
+`npm run lint` both pass on a duplicate object key — measured). So prefer
+skipping upstream's breakage over patching it; patching is what makes it ours
+to keep gating on forever.
+
+`build:wasm` is a cold Rust compile to `wasm32-unknown-unknown` and takes
+minutes, not seconds — 4m09s measured on a Linux box with a *partly warm*
+cargo cache, so cold is worse. CI's `rust-cache` key includes `Cargo.lock`,
+which every upstream release changes, so a sync run essentially always pays
+that cost. Run it in the foreground and let it finish. Do not start it with
+`run_in_background`.
+
+This is not a style preference. The v0.40.0 sync (run 33592051530) let the
+harness auto-background it at the 2-minute default timeout, then had no way
+to wait on it — `sleep`-and-poll is blocked — and ended its turn saying
+"`build:wasm` is still compiling in the background ... I'm holding here and
+will resume with the remaining Step 3 checks". Nothing resumes a finished
+turn. That run reported no failure, shipped nothing, and only `Fail loudly`
+caught it; a human shipped v0.40.0 by hand hours later. What actually
+prevents a repeat is `cron-settings.json` setting `BASH_DEFAULT_TIMEOUT_MS`
+(20 min) and `BASH_MAX_TIMEOUT_MS` (30 min) well above the build — keep those
+in step if the build ever gets slower. Belt and braces: if some long command
+does get backgrounded anyway, block on it with an until-loop
+(`until grep -q done log; do sleep 5; done`) instead of ending the turn.
 
 `build:wasm` regenerates `data/monster_attack_clips.json` from monster
 `.glb` models — if this checkout is missing LFS model assets, the
@@ -329,11 +371,21 @@ don't paper over it by skipping ahead.
 npm test
 npm --prefix deps/OpenMMO/client run build:wasm
 npm --prefix deps/OpenMMO/client test
-npm --prefix deps/OpenMMO/client run check
+node scripts/check-ours.js deps/OpenMMO "$releaseSha"   # not `... run check`
 ```
 
-(Mirrors `.github/workflows/ci.yml`'s `test` job — match the current
-version of that file if it has diverged from this list. Same LFS caveat
+Same ownership scoping as Step 3, and for the same reason — fixing Step 3
+alone would not have helped, because this step re-runs the identical gate
+whole-tree and would have aborted the v0.41.0 sync here instead. This is a
+deliberate divergence from `.github/workflows/ci.yml`, like Step 3's Rust
+gate; `ci.yml` itself still runs the whole-tree check, so expect master's CI
+to go red on upstream type errors that this flow correctly shipped past. If
+that noise starts training people to ignore red, give `ci.yml` the same
+treatment — the base to pass is
+`git -C deps/OpenMMO merge-base HEAD origin/master`.
+
+(Otherwise mirrors `.github/workflows/ci.yml`'s `test` job — match the
+current version of that file if it has diverged from this list. Same LFS caveat
 as Step 3: revert `deps/OpenMMO/data/monster_attack_clips.json` with
 `git -C deps/OpenMMO checkout -- data/monster_attack_clips.json` if
 `build:wasm` here dirtied it again.)
