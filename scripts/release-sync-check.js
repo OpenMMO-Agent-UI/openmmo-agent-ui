@@ -81,9 +81,29 @@ function packageVersion(repoRoot) {
   return JSON.parse(require('node:fs').readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version
 }
 
+function compareSemver(a, b) {
+  const parse = (value) => {
+    const [core, prerelease] = value.split('-', 2)
+    const nums = core.split('.').map((part) => Number(part))
+    if (nums.length !== 3 || nums.some((n) => !Number.isInteger(n))) {
+      throw new Error(`unsupported semver: ${value}`)
+    }
+    return { nums, prerelease }
+  }
+  const pa = parse(a)
+  const pb = parse(b)
+  for (let i = 0; i < 3; i += 1) {
+    if (pa.nums[i] !== pb.nums[i]) return pa.nums[i] - pb.nums[i]
+  }
+  if (pa.prerelease === pb.prerelease) return 0
+  if (!pa.prerelease) return 1
+  if (!pb.prerelease) return -1
+  return pa.prerelease.localeCompare(pb.prerelease)
+}
+
 function hasNewRelease({ alreadyPinned, releaseTag, repoRoot = REPO_ROOT }) {
   if (!alreadyPinned) return true
-  return packageVersion(repoRoot) !== versionFromAgentClientTag(releaseTag)
+  return compareSemver(packageVersion(repoRoot), versionFromAgentClientTag(releaseTag)) < 0
 }
 
 /// Whether there is work to do at all. A new release is one reason; the other
@@ -152,6 +172,7 @@ if (require.main === module) void main()
 
 module.exports = {
   hasNewRelease,
+  compareSemver,
   needsSync,
   versionFromAgentClientTag,
 }

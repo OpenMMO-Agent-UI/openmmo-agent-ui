@@ -7,6 +7,7 @@ const path = require('node:path')
 const test = require('node:test')
 
 const {
+  compareSemver,
   hasNewRelease,
   versionFromAgentClientTag,
 } = require('../scripts/release-sync-check')
@@ -50,6 +51,28 @@ test('treats a pinned release as synced when package version matches the upstrea
   } finally {
     fixture.cleanup()
   }
+})
+
+test('treats a pinned release as synced when a patch fix shipped after the upstream tag', () => {
+  const fixture = makePackage('0.42.1')
+  try {
+    assert.equal(
+      hasNewRelease({
+        alreadyPinned: true,
+        releaseTag: 'agent-client-v0.42.0',
+        repoRoot: fixture.root,
+      }),
+      false,
+    )
+  } finally {
+    fixture.cleanup()
+  }
+})
+
+test('compares stable semver numerically', () => {
+  assert.equal(compareSemver('0.42.1', '0.42.0') > 0, true)
+  assert.equal(compareSemver('0.42.0', '0.42.0'), 0)
+  assert.equal(compareSemver('0.42.1', '0.43.0') < 0, true)
 })
 
 test('parses the desktop version from an agent-client release tag', () => {
