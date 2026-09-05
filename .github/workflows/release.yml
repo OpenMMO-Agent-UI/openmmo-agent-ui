@@ -111,7 +111,19 @@ jobs:
       - run: npm test
       - run: npm --prefix deps/OpenMMO/client run build:wasm
       - run: npm --prefix deps/OpenMMO/client test
-      - run: npm --prefix deps/OpenMMO/client run check
+      # Ownership-scoped, like the release-sync skill's Steps 3 and 6. The raw
+      # whole-tree `npm run check` here is the third copy of that gate and the
+      # one on the publishing path: on 2026-09-05 the protocol-52 sync passed
+      # its own scoped checks, pushed master and the v0.42.0 tag, and then this
+      # step failed on three files no commit of ours touches — PlayerModel.svelte,
+      # makeSplatStandardMaterial.ts, landGradeStore.ts, all red in Julian's own
+      # CI for that release. Nothing published; a human shipped v0.42.1 by hand.
+      - name: Client type check, scoped to files this fork changed
+        run: |
+          set -euo pipefail
+          git -C deps/OpenMMO fetch --quiet origin master
+          base="$(git -C deps/OpenMMO merge-base HEAD origin/master)"
+          node scripts/check-ours.js deps/OpenMMO "$base"
 
   package:
     needs: validate
