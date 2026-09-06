@@ -172,8 +172,7 @@ Still inside `deps/OpenMMO`, on the rebased `tweak-agent-client`:
 
 ```
 cargo fmt --all --check
-cargo clippy --locked --all-targets \
-  -p agent-client -p onlinerpg-shared -p onlinerpg-terrain -- -D warnings
+node <repo root>/scripts/clippy-ours.js . "$releaseSha"   # not a bare `cargo clippy`
 cargo test --locked -p agent-client -p onlinerpg-shared -p onlinerpg-terrain
 cargo clippy --workspace --all-targets --locked -- -D warnings || true
 cargo test --workspace --locked || true
@@ -188,6 +187,25 @@ changed=$(git -C .. diff --name-only "$releaseSha"..HEAD -- 'client/**' | sed 's
 [ -n "$changed" ] && npx prettier --check $changed || echo 'no client files of ours changed'
 cd ..
 ```
+
+`clippy-ours.js` is the Rust sibling of `check-ours.js`: it runs clippy over
+the same three shipped crates, then blocks only on lints in files this branch
+changed. Crate scoping alone was not enough, and neither was the toolchain
+pin. On 2026-09-06 upstream's new fence code (Julian's `d63f4ce0`, committed
+that day) tripped `cloned_ref_to_slice_refs` — a lint already present in the
+pinned 1.97.1 — in `shared/src/fence.rs` and
+`agent-client/src/state/tests/world_tests.rs`. Both crates are ones we ship,
+so there was nothing for crate scoping to exclude, and the lint was not new,
+so there was nothing for the pin to hold back. The protocol-57 sync aborted
+with players locked out of a v57 server. Verified on that exact tree with
+toolchain 1.97.1: upstream-owned lints exit 0, the same lints attributed to
+us exit 1.
+
+It runs clippy *without* `-D warnings` on purpose — with it, the first lint
+fails the compile and later crates are never analysed, so ownership would be
+judged from a truncated list. A `level: "error"` still blocks whoever owns
+it: a lint is a style opinion we can decline on upstream's behalf, a compile
+error means the tree does not build.
 
 The Rust commands deliberately no longer mirror
 `deps/OpenMMO/.github/workflows/ci.yml`, which runs the whole workspace.
