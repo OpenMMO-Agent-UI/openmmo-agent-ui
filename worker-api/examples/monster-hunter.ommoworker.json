@@ -1,0 +1,71 @@
+{
+  "format": "openmmo-worker",
+  "version": 1,
+  "metadata": {
+    "name": "Monster Hunter",
+    "description": "Drinks when hurt, runs when nearly dead, hunts monsters up to its own level, loots what drops, and heads home otherwise."
+  },
+  "rules": [
+    {
+      "id": "heal",
+      "priority": 100,
+      "condition": {
+        "all": [
+          { "lt": [{ "ref": "self.health_pct" }, 70] },
+          { "exists": { "select": "bag", "where": { "eq": [{ "ref": "item.name" }, "healing_potion"] } } }
+        ]
+      },
+      "actions": [
+        { "action": "use", "item": { "select": "bag", "where": { "eq": [{ "ref": "item.name" }, "healing_potion"] } } }
+      ]
+    },
+    {
+      "id": "flee",
+      "priority": 90,
+      "condition": { "lt": [{ "ref": "self.health_pct" }, 15] },
+      "actions": [{ "intent": "flee" }]
+    },
+    {
+      "id": "hunt",
+      "priority": 50,
+      "condition": {
+        "exists": {
+          "select": "monsters",
+          "where": {
+            "all": [
+              { "lte": [{ "ref": "monster.level" }, { "ref": "self.level" }] },
+              { "gt": [{ "ref": "monster.health_pct" }, 0] }
+            ]
+          }
+        }
+      },
+      "actions": [
+        {
+          "action": "attack",
+          "target": {
+            "select": "monsters",
+            "where": {
+              "all": [
+                { "lte": [{ "ref": "monster.level" }, { "ref": "self.level" }] },
+                { "gt": [{ "ref": "monster.health_pct" }, 0] }
+              ]
+            },
+            "order": "nearest"
+          }
+        }
+      ]
+    },
+    {
+      "id": "loot",
+      "priority": 40,
+      "condition": { "exists": { "select": "ground_items" } },
+      "actions": [{ "action": "pickup", "item": { "select": "ground_items", "order": "nearest" } }]
+    },
+    {
+      "id": "patrol",
+      "priority": 0,
+      "condition": { "eq": [true, true] },
+      "actions": [{ "intent": "patrol" }]
+    }
+  ]
+}
