@@ -2211,3 +2211,314 @@ textarea:disabled {
   justify-content: flex-end;
   margin-bottom: 0;
 }
+
+/* Worker Studio: wider than the settings modal because the JSON a rule is
+   written in and the cards it renders as have to be legible side by side —
+   editing one while reading the other is the whole point of the panel. */
+.worker-studio-card {
+  max-width: 1040px;
+  max-height: 90vh;
+}
+
+.worker-dirty {
+  margin-left: 10px;
+  color: var(--ember);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.worker-status-strip {
+  display: flex;
+  flex: none;
+  gap: 22px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.worker-status-strip strong {
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-weight: 500;
+}
+
+.worker-studio-body {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.worker-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.worker-tools-pane {
+  border-left: 1px solid var(--line);
+}
+
+.worker-pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.worker-pane h3 {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.worker-rules-head {
+  margin-top: 6px;
+}
+
+.worker-json,
+.worker-snapshots,
+.worker-chat-input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.worker-json {
+  min-height: 240px;
+}
+
+.worker-snapshots {
+  min-height: 90px;
+}
+
+.worker-chat-input {
+  min-height: 60px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.worker-validation:empty {
+  display: none;
+}
+
+.worker-error-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--err);
+  font-size: 12px;
+}
+
+.worker-valid {
+  margin: 0;
+  color: var(--verdigris);
+  font-size: 12px;
+}
+
+.worker-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.worker-rule-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+
+/* The rule the last simulation or live turn actually fired, so the graph
+   answers "why did it do that" without reading the trace line by line. */
+.worker-rule-card.matched {
+  border-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.worker-rule-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.worker-rule-id {
+  font-family: var(--mono-font);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.worker-priority {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.worker-condition {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.worker-actions {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.worker-rule-link {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.worker-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.worker-tool:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.worker-tool label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.worker-chat,
+.worker-results,
+.worker-trace {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.worker-chat:empty,
+.worker-results:empty,
+.worker-trace:empty {
+  display: none;
+}
+
+.worker-chat-message p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.worker-chat-message strong {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.worker-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.worker-inline-actions .hint {
+  margin: 0;
+}
+
+.worker-result-card,
+.worker-trace-entry {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+
+.worker-trace-entry time {
+  color: var(--muted);
+  font-family: var(--mono-font);
+  font-size: 11px;
+}
+
+.worker-match {
+  margin: 4px 0 0;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.worker-skip {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.worker-error {
+  margin: 0;
+  color: var(--err);
+}
+
+.worker-eval-trace {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.worker-eval-trace .matched {
+  color: var(--text);
+}
+
+/* Three button groups instead of the single trailing Apply the other modals
+   use, so the shared `margin-left: auto` on .modal-foot button has to go. */
+.worker-studio-foot {
+  flex-wrap: wrap;
+}
+
+.worker-studio-foot button {
+  margin-left: 0;
+}
+
+.worker-file-actions,
+.worker-main-actions {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .worker-studio-body {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .worker-tools-pane {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

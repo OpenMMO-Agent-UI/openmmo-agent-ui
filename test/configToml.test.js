@@ -129,6 +129,15 @@ test('the engine picker and its knobs reach the generated config', () => {
   assert.match(table, /^bag_full_pct = 70$/m)
 })
 
+test('template workers use the fixed runtime document path', () => {
+  const template = workerTable(renderConfigToml(settings({ workerKind: 'template' })))
+  const fighter = workerTable(renderConfigToml(settings({ workerKind: 'fighter' })))
+
+  assert.match(template, /^kind = "template"$/m)
+  assert.match(template, /^template_file = "data\/workers\/active\.ommoworker\.json"$/m)
+  assert.doesNotMatch(fighter, /^template_file = /m)
+})
+
 test('no worker selected still writes the table, so switching back keeps the knobs', () => {
   const table = workerTable(renderConfigToml(settings({ ...DEFAULTS, workerKind: 'none' })))
 

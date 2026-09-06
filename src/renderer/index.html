@@ -278,6 +278,7 @@
                 <label data-i18n>Potions<input type="number" id="workerPotionStock" min="0" max="99" /></label>
                 <label data-i18n>Scrolls<input type="number" id="workerScrollStock" min="0" max="99" /></label>
               </div>
+              <button id="workerStudioOpen" class="ghost block">Worker Studio</button>
               <button id="restart" class="primary" hidden data-i18n>Apply &amp; restart</button>
             </div>
             <div data-drawer-panel="worn" hidden>
@@ -460,6 +461,78 @@
           <p id="settingsDirty" class="foot-note" hidden></p>
           <p id="settingsAuto" class="foot-note" hidden data-i18n>Changes here save as you make them.</p>
           <button id="settingsApply" class="primary" data-i18n>Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="workerStudioModal" class="modal worker-studio-modal" hidden>
+      <div class="modal-card worker-studio-card" role="dialog" aria-modal="true" aria-labelledby="workerStudioTitle">
+        <div class="modal-head">
+          <div>
+            <span id="workerStudioTitle">Worker Studio</span>
+            <span id="workerStudioDirty" class="worker-dirty" hidden>Unsaved draft changes</span>
+          </div>
+          <button id="workerStudioClose" class="ghost" aria-label="Close Worker Studio">×</button>
+        </div>
+        <div class="worker-status-strip" aria-label="Worker versions">
+          <span>Draft <strong id="workerDraftStatus">—</strong></span>
+          <span>Active <strong id="workerActiveStatus">—</strong></span>
+          <span>Previous <strong id="workerPreviousStatus">—</strong></span>
+        </div>
+        <div class="worker-studio-body">
+          <section class="worker-pane worker-editor-pane" aria-labelledby="workerEditorTitle">
+            <div class="worker-pane-head">
+              <h3 id="workerEditorTitle">Canonical JSON</h3>
+              <button id="workerValidate" class="ghost small">Validate</button>
+            </div>
+            <textarea id="workerJson" class="worker-json" spellcheck="false" aria-label="Worker JSON document"></textarea>
+            <div id="workerValidation" class="worker-validation" aria-live="polite"></div>
+            <div class="worker-pane-head worker-rules-head">
+              <h3>Rule graph</h3>
+              <span id="workerRuleCount" class="hint"></span>
+            </div>
+            <div id="workerRules" class="worker-rules"></div>
+          </section>
+
+          <section class="worker-pane worker-tools-pane">
+            <div class="worker-tool">
+              <h3>Customize with LLM</h3>
+              <div id="workerChat" class="worker-chat" aria-live="polite"></div>
+              <label>Request<textarea id="workerChatMessage" class="worker-chat-input" placeholder="For example: retreat below 25% health"></textarea></label>
+              <div class="worker-inline-actions">
+                <button id="workerChatSend" class="primary">Send</button>
+                <span id="workerChatHint" class="hint">Changes stay in the draft until Apply.</span>
+              </div>
+            </div>
+            <div class="worker-tool">
+              <div class="worker-pane-head">
+                <h3>Simulator</h3>
+                <button id="workerSimulate" class="ghost small">Simulate</button>
+              </div>
+              <label>Named snapshots — empty simulates against the live agent<textarea id="workerSnapshots" class="worker-snapshots" spellcheck="false"></textarea></label>
+              <div id="workerSimulation" class="worker-results" aria-live="polite"></div>
+            </div>
+            <div class="worker-tool worker-trace-tool">
+              <div class="worker-pane-head">
+                <h3>Live trace</h3>
+                <button id="workerTraceClear" class="ghost small">Clear</button>
+              </div>
+              <div id="workerTrace" class="worker-trace" aria-live="polite"></div>
+            </div>
+          </section>
+        </div>
+        <div class="modal-foot worker-studio-foot">
+          <p id="workerStudioStatus" class="foot-note" aria-live="polite"></p>
+          <div class="worker-file-actions">
+            <button id="workerImport" class="ghost">Import</button>
+            <button id="workerExport" class="ghost">Export</button>
+            <button id="workerOpenFolder" class="ghost">Open folder</button>
+          </div>
+          <div class="worker-main-actions">
+            <button id="workerRollback" class="ghost">Rollback</button>
+            <button id="workerSave" class="ghost">Save draft</button>
+            <button id="workerApply" class="primary">Apply</button>
+          </div>
         </div>
       </div>
     </div>

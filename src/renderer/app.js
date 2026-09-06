@@ -7,6 +7,7 @@ import * as bagWorn from './bagWorn.js'
 import * as settingsPanel from './settingsPanel.js'
 import * as signInFlow from './signInFlow.js'
 import * as updateStatus from './updateStatus.js'
+import * as workerStudio from './workerStudio.js'
 import { t, setDictionary, applyI18n } from './i18n.js'
 
 const api = window.agentApp
@@ -1225,6 +1226,23 @@ async function init() {
     onImmediateChange: (patch) => {
       settings = { ...settings, ...patch }
       void persistImmediateSetting(patch)
+    },
+  })
+
+  // The studio owns its own modal and the worker:trace feed; it only borrows
+  // the agent's run state so Apply can restart a live session.
+  workerStudio.mount(api, {
+    isRunning: () => running,
+    restart: async () => {
+      const res = await api.restart()
+      if (!res.ok) throw new Error((res.errors || ['Restart failed']).join(' '))
+      setStatus(res.status)
+    },
+    chatSupported: info.workerChatSupported !== false,
+    // Apply switches workerKind to `template` in main; keep the renderer's
+    // copy in step so the next settings save does not write it back.
+    onApplied: (applied) => {
+      if (applied) settings = applied
     },
   })
 

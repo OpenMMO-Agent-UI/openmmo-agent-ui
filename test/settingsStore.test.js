@@ -15,7 +15,7 @@ function settings(overrides = {}) {
   }
 }
 
-test('Automatic play runs the fighter, the only driver there is for now', () => {
+test('Automatic play still defaults to the fighter and refuses retired worker kinds', () => {
   assert.equal(DEFAULTS.workerKind, 'fighter')
   assert.equal(settingsStore.usesWorker(settings()), true)
   // The LLM agent is off: nothing can select it, and a stored `none` from an
@@ -28,6 +28,19 @@ test('the fighter starts without a model or a base URL — there is no LLM to se
   const missing = { llm: 'openai', models: { ...DEFAULTS.models, openai: '' }, openaiBaseUrl: '' }
 
   assert.deepEqual(settingsStore.validate(settings(missing)), [])
+})
+
+test('a template worker is supported and needs no LLM configuration', () => {
+  const missing = {
+    workerKind: 'template',
+    llm: 'openai',
+    models: { ...DEFAULTS.models, openai: '' },
+    openaiBaseUrl: '',
+  }
+
+  assert.equal(settingsStore.usesWorker(settings(missing)), true)
+  assert.deepEqual(settingsStore.validate(settings(missing)), [])
+  assert.ok(settingsStore.WORKERS.includes('template'))
 })
 
 test('an unknown worker is refused before the agent is started', () => {

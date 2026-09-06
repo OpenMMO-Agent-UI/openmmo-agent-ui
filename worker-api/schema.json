@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openmmo.dev/worker-api/schema.json",
+  "title": "OpenMMO Worker",
+  "description": "Portable declarative OpenMMO Worker Studio document, version 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "metadata", "rules"],
+  "properties": {
+    "format": { "const": "openmmo-worker" },
+    "version": { "const": 1 },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "priority", "condition", "actions"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "priority": { "type": "integer" },
+        "condition": { "$ref": "#/$defs/condition" },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/action" }
+        }
+      }
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all"],
+          "properties": { "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["any"],
+          "properties": { "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["not"],
+          "properties": { "not": { "$ref": "#/$defs/condition" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exists"],
+          "properties": { "exists": { "oneOf": [{ "$ref": "#/$defs/operand" }, { "$ref": "#/$defs/selector" }] } }
+        },
+        { "$ref": "#/$defs/comparison" }
+      ]
+    },
+    "comparison": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "propertyNames": { "enum": ["eq", "ne", "lt", "lte", "gt", "gte"] },
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": { "$ref": "#/$defs/operand" }
+      }
+    },
+    "operand": {
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref"],
+          "properties": { "ref": { "$ref": "#/$defs/ref" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count"],
+          "properties": { "count": { "$ref": "#/$defs/selector" } }
+        }
+      ]
+    },
+    "ref": {
+      "enum": [
+        "self.id", "self.name", "self.health", "self.max_health", "self.health_pct", "self.mana", "self.max_mana", "self.mana_pct", "self.level", "self.gold", "self.position", "self.x", "self.y",
+        "monster.id", "monster.name", "monster.kind", "monster.health", "monster.max_health", "monster.health_pct", "monster.level", "monster.position", "monster.x", "monster.y", "monster.distance", "monster.aggressive",
+        "item.id", "item.name", "item.count", "item.quantity", "item.slot", "item.type", "item.value",
+        "player.id", "player.name", "player.health", "player.max_health", "player.health_pct", "player.level", "player.position", "player.x", "player.y", "player.distance",
+        "ground_item.id", "ground_item.item", "ground_item.name", "ground_item.quantity", "ground_item.position", "ground_item.x", "ground_item.y", "ground_item.distance"
+      ]
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["select"],
+      "properties": {
+        "select": { "enum": ["bag", "monsters", "players", "ground_items"] },
+        "where": { "$ref": "#/$defs/condition" },
+        "order": { "enum": ["nearest"] }
+      }
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["action"],
+          "not": { "required": ["intent"] },
+          "properties": {
+            "action": { "enum": ["attack", "move", "use", "buy", "sell", "drop", "pickup", "fish", "say", "wait"] },
+            "target": { "$ref": "#/$defs/selector" },
+            "item": { "$ref": "#/$defs/selector" }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": ["intent"],
+          "not": { "required": ["action"] },
+          "properties": { "intent": { "enum": ["patrol", "flee", "return_to_anchor"] } },
+          "additionalProperties": true
+        }
+      ]
+    }
+  }
+}

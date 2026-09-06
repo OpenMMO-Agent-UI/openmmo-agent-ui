@@ -48,6 +48,18 @@ contextBridge.exposeInMainWorld('agentApp', {
   openDownloadPage: () => ipcRenderer.invoke('update:download-page'),
   openView: () => ipcRenderer.invoke('view:open'),
   clearAssetCache: () => ipcRenderer.invoke('cache:clear'),
+  getWorkerState: () => ipcRenderer.invoke('worker:get-state'),
+  saveWorkerDraft: (document) => ipcRenderer.invoke('worker:save-draft', document),
+  validateWorker: (document) => ipcRenderer.invoke('worker:validate', document),
+  simulateWorker: ({ document, snapshots } = {}) =>
+    ipcRenderer.invoke('worker:simulate', { document, snapshots }),
+  customizeWorker: ({ document, message }) =>
+    ipcRenderer.invoke('worker:customize', { document, message }),
+  applyWorker: (document) => ipcRenderer.invoke('worker:apply', document),
+  rollbackWorker: () => ipcRenderer.invoke('worker:rollback'),
+  importWorker: () => ipcRenderer.invoke('worker:import'),
+  exportWorker: () => ipcRenderer.invoke('worker:export'),
+  openWorkerFolder: () => ipcRenderer.invoke('worker:open-folder'),
   open: (target) => ipcRenderer.invoke('shell:open', target),
   onLog: on('agent:log'),
   onState: on('agent:state'),
@@ -67,4 +79,5 @@ contextBridge.exposeInMainWorld('agentApp', {
   onViewStop: on('view:stop'),
   onPlayState: on('play:state'),
   onUpdateState: on('update:state'),
+  onWorkerTrace: on('worker:trace'),
 })
