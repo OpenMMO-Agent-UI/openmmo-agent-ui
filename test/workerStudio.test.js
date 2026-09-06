@@ -219,7 +219,7 @@ test('portable helpers whitelist spec fields, strip secrets and paths, and emit 
 test('the portable fixture validates and the JSON Schema describes version 1', async () => {
   const { validateDocument } = await studioPromise
   const root = path.join(__dirname, '..')
-  const fixture = JSON.parse(fs.readFileSync(path.join(root, 'worker-api/examples/slime-hunter.ommoworker.json'), 'utf8'))
+  const fixture = JSON.parse(fs.readFileSync(path.join(root, 'worker-api/examples/monster-hunter.ommoworker.json'), 'utf8'))
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'worker-api/schema.json'), 'utf8'))
 
   assert.deepEqual(validateDocument(fixture), [])
@@ -260,24 +260,24 @@ test('snapshotFromState turns a live agent state body into the ref vocabulary', 
 test('a live state body decides the same rule the running worker would', async () => {
   const { snapshotFromState, evaluateDocument } = await studioPromise
   const document = JSON.parse(
-    fs.readFileSync(path.join(__dirname, '..', 'worker-api/examples/slime-hunter.ommoworker.json'), 'utf8'),
+    fs.readFileSync(path.join(__dirname, '..', 'worker-api/examples/monster-hunter.ommoworker.json'), 'utf8'),
   )
   const body = (health) => ({
     self: { id: 'p1', name: 'Me', level: 4, health, max_health: 100, position: { x: 0, y: 1.2, z: 0 } },
     monsters: [
-      { id: 'far', monster_type: 'Slime', health: 20, max_health: 20, position: { x: 0, y: 0, z: 9 } },
-      { id: 'near', monster_type: 'Slime', health: 20, max_health: 20, position: { x: 3, y: 0, z: 0 } },
+      { id: 'far', monster_type: 'Slime', level_override: 3, health: 20, max_health: 20, position: { x: 0, y: 0, z: 9 } },
+      { id: 'near', monster_type: 'Slime', level_override: 3, health: 20, max_health: 20, position: { x: 3, y: 0, z: 0 } },
     ],
-    bag: [{ instance_id: 7, item_def_id: 'Health Potion', quantity: 2 }],
+    bag: [{ instance_id: 7, item_def_id: 'healing_potion', quantity: 2 }],
   })
 
   const healthy = evaluateDocument(document, snapshotFromState(body(80)))
-  assert.equal(healthy.matchedRuleId, 'hunt-slimes')
+  assert.equal(healthy.matchedRuleId, 'hunt')
   assert.equal(healthy.actions[0].target.id, 'near', 'nearest is measured on the ground plane')
 
   const hurt = evaluateDocument(document, snapshotFromState(body(20)))
   assert.equal(hurt.matchedRuleId, 'heal')
-  assert.equal(hurt.actions[0].item.name, 'Health Potion')
+  assert.equal(hurt.actions[0].item.name, 'healing_potion')
 
   // An empty body must not throw or invent a match; it is the state before the
   // agent is in game.
