@@ -54,8 +54,9 @@ const DEFAULTS = {
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
   alwaysActive: true,
-  /// What drives Automatic play. Rule and template workers need no LLM or API
-  /// key; fighter remains the default for existing installs.
+  /// What drives Automatic play. The rule-based fighter inside agent-client
+  /// (no LLM, no API key) is the only driver with a panel: the LLM agent and
+  /// the fisher are off for now, so nothing here can select them.
   workerKind: 'fighter',
   workerLevelMargin: 0,
   workerLowHealthPct: 70,
@@ -295,7 +296,8 @@ function usesWorker(s) {
   return Boolean(s.workerKind) && s.workerKind !== 'none'
 }
 
-const WORKERS = ['fighter', 'template']
+/// Only the fighter for now — see DEFAULTS.workerKind.
+const WORKERS = ['fighter']
 
 /// Refuse to start on the mistakes agent-client would only report after the
 /// window has already switched to the spectator view.

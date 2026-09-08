@@ -3,7 +3,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
-const { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } = require('electron')
+const { app, BrowserWindow, ipcMain, safeStorage, shell } = require('electron')
 const { preserveLegacyUserData } = require('./appPaths')
 
 // productName controls Electron's default userData directory. Keep the
@@ -28,9 +28,6 @@ const { validateLlmSettings } = require('./llmValidation')
 const { translateText } = require('./translate')
 const telemetry = require('./telemetry')
 const updater = require('./updater')
-const workerCore = require('./workerStudio')
-const { buildWorkerPatch } = require('./workerStudio/builder')
-const { WorkerStore } = require('./workerStudio/store')
 
 const agent = new AgentProcess()
 const clientServer = new ClientServer()
@@ -62,8 +59,6 @@ let settings = null
 let win = null
 let profileStore = null
 let characterStore = null
-let workerStore = null
-let latestWorkerSnapshot = null
 let currentIdToken = null
 let playSession = null
 let currentCharacters = []
@@ -178,7 +173,6 @@ async function pollFeed(port) {
   })
   if (!res.ok) return
   const body = await res.json()
-  latestWorkerSnapshot = body
   const items = body.feed || []
   if (items.length) {
     feedSeq = items[items.length - 1].s
@@ -186,9 +180,7 @@ async function pollFeed(port) {
     // A worker's turns feed the action captions but not the Thoughts panel:
     // there is no model thinking, and LLM-shaped entries there would lie.
     const visible = items.filter((item) => item.k !== 'worker')
-    const traces = items.filter((item) => item.k === 'worker')
     if (visible.length) send('agent:feed', visible)
-    if (traces.length) send('worker:trace', traces)
   }
   send('agent:vitals', {
     connected: body.connected === true,
@@ -241,7 +233,6 @@ function startFeedPolling(port) {
 function stopFeedPolling() {
   if (feedTimer) clearInterval(feedTimer)
   feedTimer = null
-  latestWorkerSnapshot = null
 }
 
 /// The spectator view's URL: the built web client, served locally, pointed at
@@ -496,10 +487,6 @@ app.whenReady().then(() => {
     },
   })
   characterStore = new CharacterStore({ baseDir: app.getPath('userData') })
-  workerStore = new WorkerStore({
-    file: path.join(app.getPath('userData'), 'worker-studio.json'),
-    runtimeFile: path.join(agentDir(), 'data', 'workers', 'active.ommoworker.json'),
-  })
   applySelectedProfile()
   playSession = createPlaySession()
 
@@ -569,11 +556,6 @@ ipcMain.handle('app:info', () => ({
   clientBuilt: distReady(),
   signedIn: settingsStore.signedIn(),
   credentialPath: settingsStore.credentialPath(),
-  // Worker Studio's chat posts an OpenAI-compatible request; a CLI backend has
-  // no endpoint to post to, so the panel disables the chat instead of failing.
-  workerChatSupported: settingsStore.BACKENDS.some(
-    (backend) => backend.id === settings.llm && backend.kind === 'http',
-  ),
 }))
 
 ipcMain.handle('profiles:list', () => profileStore.list())
@@ -643,139 +625,6 @@ ipcMain.handle('settings:apply', async (_e, patch) => {
 
 ipcMain.handle('config:preview', () => renderConfigToml(settings))
 
-function workerError(error) {
-  return { ok: false, error: error?.message || String(error) }
-}
-
-ipcMain.handle('worker:get-state', () => {
-  try {
-    return { ok: true, state: workerStore.read() }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:save-draft', (_event, document) => {
-  try {
-    return { ok: true, state: workerStore.saveDraft(document) }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:validate', (_event, document) => {
-  try {
-    const errors = workerCore.validateDocument(document)
-    return errors.length ? { ok: false, error: 'Worker document is invalid', errors } : { ok: true, errors: [] }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:simulate', (_event, input = {}) => {
-  try {
-    const state = workerStore.read()
-    const document = input?.document || state.draft
-    let scenarios = input?.snapshots
-    if (scenarios === undefined) {
-      if (!latestWorkerSnapshot) {
-        return { ok: false, error: 'No live agent snapshot is available yet. Start the agent or provide snapshots.' }
-      }
-      scenarios = [{ name: 'Live', snapshot: workerCore.snapshotFromState(latestWorkerSnapshot) }]
-    } else if (!Array.isArray(scenarios) && scenarios && typeof scenarios === 'object') {
-      scenarios = Object.entries(scenarios).map(([name, snapshot]) => ({ name, snapshot }))
-    }
-    return { ok: true, results: workerCore.simulateDocument(document, scenarios) }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:customize', async (_event, input = {}) => {
-  try {
-    const document = input?.document || workerStore.read().draft
-    const result = await buildWorkerPatch(settings, { document, message: input?.message })
-    if (!result.ok) return result
-    const draft = workerCore.applyJsonPatch(document, result.patch)
-    const errors = workerCore.validateDocument(draft)
-    if (errors.length) return { ok: false, error: 'Worker customization produced an invalid document', errors }
-    const state = workerStore.saveDraft(draft)
-    return { ok: true, summary: result.summary, patch: result.patch, state }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:apply', (_event, document) => {
-  try {
-    if (document !== undefined) workerStore.saveDraft(document)
-    const state = workerStore.apply()
-    settings = settingsStore.save({ ...settings, workerKind: 'template' })
-    return { ok: true, state, settings }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:rollback', () => {
-  try {
-    return { ok: true, state: workerStore.rollback() }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-const MAX_WORKER_IMPORT_BYTES = 1024 * 1024
-
-ipcMain.handle('worker:import', async () => {
-  try {
-    const choice = await dialog.showOpenDialog(win, {
-      properties: ['openFile'],
-      filters: [{ name: 'OpenMMO Worker JSON', extensions: ['json'] }],
-    })
-    if (choice.canceled || choice.filePaths.length === 0) return { ok: false, canceled: true }
-    const file = choice.filePaths[0]
-    if (fs.statSync(file).size > MAX_WORKER_IMPORT_BYTES) {
-      return { ok: false, error: 'Worker import exceeds the 1 MiB limit' }
-    }
-    const contents = fs.readFileSync(file, 'utf8')
-    if (Buffer.byteLength(contents, 'utf8') > MAX_WORKER_IMPORT_BYTES) {
-      return { ok: false, error: 'Worker import exceeds the 1 MiB limit' }
-    }
-    const document = workerCore.importPortableDocument(contents)
-    return { ok: true, state: workerStore.saveDraft(document) }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:export', async () => {
-  try {
-    const active = workerStore.read().active
-    if (!active) return { ok: false, error: 'There is no active worker to export' }
-    const choice = await dialog.showSaveDialog(win, {
-      defaultPath: 'worker.ommoworker.json',
-      filters: [{ name: 'OpenMMO Worker JSON', extensions: ['json'] }],
-    })
-    if (choice.canceled || !choice.filePath) return { ok: false, canceled: true }
-    fs.writeFileSync(choice.filePath, workerCore.exportPortableDocument(active), { mode: 0o600 })
-    return { ok: true, file: choice.filePath }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
-ipcMain.handle('worker:open-folder', async () => {
-  try {
-    const folder = path.join(agentDir(), 'data', 'workers')
-    fs.mkdirSync(folder, { recursive: true })
-    const error = await shell.openPath(folder)
-    return error ? { ok: false, error } : { ok: true }
-  } catch (error) {
-    return workerError(error)
-  }
-})
-
 /// null rather than an error: the spectator client falls back to its on-device
 /// translator when this returns nothing, and a failed line keeps its original
 /// text rather than announcing itself in the chat panel.
@@ -801,16 +650,6 @@ ipcMain.handle('translate:test', async (_e, patch) => {
 async function startAgent() {
   const errors = settingsStore.validate(settings)
   if (errors.length) return { ok: false, errors }
-  if (settings.workerKind === 'template') {
-    try {
-      workerStore.materialize()
-    } catch (err) {
-      return {
-        ok: false,
-        errors: [`Worker Studio template cannot start: ${err.message}. Apply a valid worker first.`],
-      }
-    }
-  }
   // The pre-flight session already resolved the exact character agent-client
   // is about to enter with — nothing left for it to do.
   closePreflightSession()
