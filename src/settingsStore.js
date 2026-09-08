@@ -77,6 +77,10 @@ const DEFAULTS = {
   workerAnchorName: '',
   workerAnchorX: null,
   workerAnchorZ: null,
+  /// The spots the Anchor dropdown offers, saved by the player from the Hunt
+  /// drawer. Nothing is shipped: the coordinates worth hunting are the ones
+  /// this character has actually stood on.
+  workerAnchors: [],
   workerPatrolRadius: 100,
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
@@ -192,6 +196,7 @@ function load() {
   }
   setLanguage(settings.language)
   settings.workerKind = supportedWorker(settings.workerKind)
+  settings.workerAnchors = normalizeAnchors(settings.workerAnchors)
   for (const key of SECRET_KEYS) {
     settings[key] = Object.hasOwn(secrets, key) ? secrets[key] : DEFAULTS[key] || ''
   }
@@ -282,6 +287,15 @@ function importExistingConfig(settings) {
   return merged
 }
 
+/// Hand-edited settings.json included: a spot the dropdown cannot label or
+/// walk to is worse than no spot at all.
+function normalizeAnchors(saved) {
+  if (!Array.isArray(saved)) return []
+  return saved
+    .filter((c) => c && Number.isFinite(Number(c.x)) && Number.isFinite(Number(c.z)))
+    .map((c) => ({ name: String(c.name || ''), x: Number(c.x), z: Number(c.z) }))
+}
+
 /// A driver with no panel — an older build's `none`/`fisher`, a hand-written
 /// config's, or one retired between versions — would fail validation on every
 /// Play with nothing to point at. Read it as the fighter instead of stranding
@@ -358,6 +372,7 @@ module.exports = {
   load,
   save,
   importExistingConfig,
+  normalizeAnchors,
   usesWorker,
   validate,
   WORKERS,

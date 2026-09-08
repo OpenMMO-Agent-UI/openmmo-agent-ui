@@ -1551,6 +1551,17 @@ button.icon-quiet:hover {
   text-align: center;
 }
 
+/* A spot's name is read, its coordinates are only checked, so the name gets
+   the room. */
+.row.anchor-spot > label:first-child {
+  flex: 2;
+}
+
+.row.anchor-actions {
+  justify-content: flex-start;
+  margin-bottom: 7px;
+}
+
 /* Follow + Clear: pane plumbing, not part of the reading, so it sits tight
    above the pane instead of taking a form row's worth of space. */
 .row.pane-controls {

@@ -267,6 +267,17 @@
               </div>
               <label data-i18n>Anchor<select id="workerAnchor"></select></label>
               <p class="hint" data-i18n>The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
+              <div class="row anchor-spot">
+                <label data-i18n>Spot name<input type="text" id="anchorName" maxlength="40" /></label>
+                <label>X<input type="number" id="anchorX" step="0.1" /></label>
+                <label>Z<input type="number" id="anchorZ" step="0.1" /></label>
+              </div>
+              <div class="row anchor-actions">
+                <button id="anchorHere" class="ghost small" data-i18n>Where I stand</button>
+                <button id="anchorSave" class="ghost small" data-i18n>Save spot</button>
+                <button id="anchorDelete" class="ghost small" data-i18n>Delete spot</button>
+              </div>
+              <p class="hint" data-i18n>The spots in the list are your own: save where the character is standing, or type the coordinates yourself.</p>
               <h3 class="settings-section" data-i18n>Restock</h3>
               <div class="row">
                 <label data-i18n>Food type<select id="workerFoodItem"></select></label>

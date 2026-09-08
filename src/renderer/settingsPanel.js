@@ -63,32 +63,50 @@ export function sendAudioToView(settings) {
   )
 }
 
-function sameSpot(a, b) {
+export function sameSpot(a, b) {
   return Math.abs(a.x - b.x) < 0.05 && Math.abs(a.z - b.z) < 0.05
 }
 
-/// The spots the fighter can be anchored to — the four the world is built
-/// around, named so the dropdown reads as places rather than numbers.
-const ANCHOR_SPOTS = [
-  { name: 'Aldermark', x: -1471.4, y: 0.9, z: 4741.2 },
-  { name: 'Old Crypt', x: -1450, y: 0.7, z: 4720 },
-  { name: 'Orc Warrens', x: -1616, y: 1.05, z: 4918 },
-  { name: 'Ogre Stronghold', x: -1785.2, y: 1.4, z: 5072.3 },
-]
+/// A coordinate a text field holds, or null when the field is empty or not a
+/// number. `Number(null)` is 0, so an unset anchor would otherwise read as a
+/// real spot at the world's origin.
+function coord(value) {
+  if (value === '' || value == null) return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+/// A spot the player typed, or null when it is not a usable one. The name is
+/// only a label, so an unnamed spot is still a spot.
+export function anchorSpot(name, x, z) {
+  const [px, pz] = [coord(x), coord(z)]
+  if (px == null || pz == null) return null
+  return { name: String(name || '').trim(), x: px, z: pz }
+}
+
+/// The saved list with `spot` in it, replacing whatever already stood there —
+/// a name saved twice moves the pin rather than growing a second entry with
+/// the same label.
+export function withAnchorSpot(saved, spot) {
+  const kept = (saved || []).filter((c) => !sameSpot(c, spot) && (c.name || '') !== spot.name)
+  return [...kept, spot]
+}
+
+/// The saved list without the spot standing at `spot`.
+export function withoutAnchorSpot(saved, spot) {
+  return (saved || []).filter((c) => !sameSpot(c, spot))
+}
 
 /// The fighter's Anchor dropdown: index 0 is always "no anchor picked" (the
-/// world's spawn point), then the spots above, and last the stored anchor when
-/// the list no longer holds it — an anchor the player picked must not silently
-/// reset because it is not one of the named spots.
+/// world's spawn point), then the player's own saved spots, and last the
+/// stored anchor when the list no longer holds it — an anchor the player
+/// picked must not silently reset because its spot was deleted or imported
+/// from a config.toml.
 ///
 /// What settings hold is a snapshot; the name is only what this shows.
-export function anchorChoices(settings, saved = ANCHOR_SPOTS) {
-  // `Number(null)` is 0, so an unset anchor would read as a real spot at the
-  // world's origin — and show as one, picked, in place of the spawn point.
-  const coord = (value) => (value === '' || value == null ? null : Number(value))
-  const [x, z] = [coord(settings.workerAnchorX), coord(settings.workerAnchorZ)]
-  const anchor =
-    Number.isFinite(x) && Number.isFinite(z) ? { name: settings.workerAnchorName || '', x, z } : null
+export function anchorChoices(settings, saved = settings.workerAnchors || []) {
+  const { workerAnchorName, workerAnchorX, workerAnchorZ } = settings
+  const anchor = anchorSpot(workerAnchorName, workerAnchorX, workerAnchorZ)
   const choices = [null, ...saved]
   if (anchor && !choices.some((c) => c && sameSpot(c, anchor))) choices.push(anchor)
   const at = choices.findIndex((c) => (anchor ? c && sameSpot(c, anchor) : !c))
