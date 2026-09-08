@@ -46,3 +46,34 @@ test('an anchor imported from a config.toml has no name to show, and is still pi
   assert.equal(choices[selected].name, '', 'the panel labels a nameless anchor itself')
   assert.notEqual(selected, 0)
 })
+
+test('the dropdown offers the spots the player saved, not a list shipped with the app', async () => {
+  const { anchorChoices } = await settingsPanelPromise
+  const { choices } = anchorChoices({ workerAnchors: SAVED, workerAnchorX: null, workerAnchorZ: null })
+
+  assert.deepEqual(choices, [null, ...SAVED], 'nothing but the spawn point and the saved spots')
+  assert.deepEqual(anchorChoices({}).choices, [null], 'a player with no spots has only the spawn point')
+})
+
+test('a half-typed coordinate is not a spot', async () => {
+  const { anchorSpot } = await settingsPanelPromise
+
+  assert.equal(anchorSpot('Camp', '12', ''), null)
+  assert.equal(anchorSpot('Camp', 'over there', '-8'), null)
+  assert.deepEqual(anchorSpot('  Camp  ', '12', '-8'), { name: 'Camp', x: 12, z: -8 })
+  assert.deepEqual(anchorSpot('', '0', '0'), { name: '', x: 0, z: 0 }, 'the origin is a real place')
+})
+
+test('saving a spot moves the pin rather than growing a second entry for it', async () => {
+  const { withAnchorSpot, withoutAnchorSpot } = await settingsPanelPromise
+  const moved = { name: 'Orc Warrens', x: -1600, z: 4900 }
+
+  const after = withAnchorSpot(SAVED, moved)
+  assert.deepEqual(after, [SAVED[0], moved], 'the name it was saved under is one spot, not two')
+  // Same place under a new name is also one spot.
+  assert.deepEqual(withAnchorSpot(after, { name: 'The Warrens', x: -1600, z: 4900 }), [
+    SAVED[0],
+    { name: 'The Warrens', x: -1600, z: 4900 },
+  ])
+  assert.deepEqual(withoutAnchorSpot(after, moved), [SAVED[0]])
+})

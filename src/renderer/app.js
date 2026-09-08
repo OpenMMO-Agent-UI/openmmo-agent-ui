@@ -184,7 +184,8 @@ function agentEndpoint() {
 let anchorOptions = [null]
 
 /// A coordinate name is player-written, so the options are built as nodes
-/// rather than markup.
+/// rather than markup. The editor under the dropdown always shows whatever is
+/// picked, so saving a tweaked copy is one field and one click.
 function renderAnchorOptions() {
   const select = $('workerAnchor')
   const { choices, selected } = settingsPanel.anchorChoices(settings)
@@ -199,6 +200,53 @@ function renderAnchorOptions() {
     select.appendChild(option)
   }
   select.value = String(selected)
+  writeAnchorFields(choices[selected] || null)
+}
+
+function writeAnchorFields(spot) {
+  writeField('anchorName', 'text', spot ? spot.name : '')
+  writeField('anchorX', 'float', spot ? spot.x : null)
+  writeField('anchorZ', 'float', spot ? spot.z : null)
+  // Only a spot the saved list actually holds can be deleted; the spawn point
+  // and an anchor kept as a snapshot are not entries.
+  const saved = settings.workerAnchors || []
+  $('anchorDelete').disabled = !spot || !saved.some((c) => settingsPanel.sameSpot(c, spot))
+}
+
+/// What the editor's three fields say, or null while they are unusable — a
+/// half-typed coordinate is not a spot.
+function editedAnchor() {
+  return settingsPanel.anchorSpot($('anchorName').value, $('anchorX').value, $('anchorZ').value)
+}
+
+function persistAnchor(spot) {
+  return persist({
+    workerAnchorName: spot ? spot.name || '' : '',
+    workerAnchorX: spot ? spot.x : null,
+    workerAnchorZ: spot ? spot.z : null,
+  })
+}
+
+/// Saving a spot posts the fighter to it in the same click: a list entry
+/// nothing points at is a bookmark nobody asked for.
+async function saveAnchorSpot(spot) {
+  await persist({
+    workerAnchors: settingsPanel.withAnchorSpot(settings.workerAnchors, spot),
+    workerAnchorName: spot.name,
+    workerAnchorX: spot.x,
+    workerAnchorZ: spot.z,
+  })
+  renderAnchorOptions()
+}
+
+/// Deleting a spot only forgets the bookmark: the anchor is a snapshot, so a
+/// fighter posted there stays posted and the dropdown keeps showing it,
+/// unnamed, at the end of the list. Nothing to restart for.
+async function deleteAnchorSpot(spot) {
+  await persistImmediateSetting({
+    workerAnchors: settingsPanel.withoutAnchorSpot(settings.workerAnchors, spot),
+  })
+  renderAnchorOptions()
 }
 
 /// One restock picker: "Auto" (the id agent-client falls back to on an empty
@@ -797,11 +845,43 @@ function bindHuntFields() {
 
   $('workerAnchor').addEventListener('change', () => {
     const choice = anchorOptions[Number($('workerAnchor').value)] || null
-    void persist({
-      workerAnchorName: choice ? choice.name || '' : '',
-      workerAnchorX: choice ? choice.x : null,
-      workerAnchorZ: choice ? choice.z : null,
+    writeAnchorFields(choice)
+    void persistAnchor(choice)
+  })
+
+  // Typing is not picking: the fields describe a spot until Save is pressed,
+  // and only then does the fighter's own anchor move.
+  for (const id of ['anchorName', 'anchorX', 'anchorZ']) {
+    $(id).addEventListener('input', () => {
+      $('anchorDelete').disabled = true
     })
+  }
+
+  $('anchorHere').addEventListener('click', () => {
+    const here = lastSelf && lastSelf.position
+    if (!here) {
+      showErrors([t('The character has to be in the world before its position can be saved.')])
+      return
+    }
+    writeField('anchorX', 'float', Math.round(here.x * 10) / 10)
+    writeField('anchorZ', 'float', Math.round(here.z * 10) / 10)
+    $('anchorDelete').disabled = true
+  })
+
+  $('anchorSave').addEventListener('click', () => {
+    const spot = editedAnchor()
+    if (!spot) {
+      showErrors([t('A spot needs both an X and a Z.')])
+      return
+    }
+    showErrors([])
+    void saveAnchorSpot(spot)
+  })
+
+  $('anchorDelete').addEventListener('click', () => {
+    const spot = anchorOptions[Number($('workerAnchor').value)] || null
+    if (!spot) return
+    void deleteAnchorSpot(spot)
   })
 
   for (const id of Object.keys(RESTOCK_ITEMS)) {

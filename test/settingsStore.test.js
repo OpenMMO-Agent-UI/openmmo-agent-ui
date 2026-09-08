@@ -38,3 +38,11 @@ test('an unknown worker is refused before the agent is started', () => {
     `expected a complaint about the worker, got ${JSON.stringify(errors)}`,
   )
 })
+
+test('a hand-edited spot list keeps only the spots the dropdown can show', () => {
+  assert.deepEqual(settingsStore.normalizeAnchors('nonsense'), [])
+  assert.deepEqual(
+    settingsStore.normalizeAnchors([{ name: 'Camp', x: '12', z: -8 }, { name: 'Nowhere' }, null]),
+    [{ name: 'Camp', x: 12, z: -8 }],
+  )
+})
