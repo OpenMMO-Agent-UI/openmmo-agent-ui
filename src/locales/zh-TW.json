@@ -133,7 +133,7 @@
   "Hands": "手部",
   "Head": "頭部",
   "High": "高",
-  "Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.": "獵殺最近打得贏的怪物，撿走戰利品，再回城補貨。不用 LLM，也不用 API key。",
+  "Hunts the nearest monster it can beat, loots the kill, and restocks in town — riding there when the bag holds Horse Reins. No LLM, no API key.": "獵殺最近打得贏的怪物，撿走戰利品，再回城補貨；背包裡有 Horse Reins 就騎馬趕路。不用 LLM，也不用 API key。",
   "Installing v{version}…": "安裝 v{version} 中…",
   "Interface language": "介面語言",
   "Invite→{player}": "邀請→{player}",

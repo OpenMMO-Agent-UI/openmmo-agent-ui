@@ -133,7 +133,7 @@
   "Hands": "손",
   "Head": "머리",
   "High": "높음",
-  "Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.": "이길 수 있는 가장 가까운 몬스터를 사냥하고 전리품을 챙긴 뒤 마을에서 보충합니다. LLM도 API key도 필요 없습니다.",
+  "Hunts the nearest monster it can beat, loots the kill, and restocks in town — riding there when the bag holds Horse Reins. No LLM, no API key.": "이길 수 있는 가장 가까운 몬스터를 사냥하고 전리품을 챙긴 뒤 마을에서 보충합니다. 가방에 Horse Reins가 있으면 말을 타고 이동합니다. LLM도 API key도 필요 없습니다.",
   "Installing v{version}…": "v{version} 설치 중…",
   "Interface language": "인터페이스 언어",
   "Invite→{player}": "초대→{player}",

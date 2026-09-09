@@ -55,6 +55,10 @@ const ENTITY_STATE_SLOT = new Map([
   ['PlayerHealthUpdate', 'health'],
   ['PlayerTorchToggled', 'torch'],
   ['PlayerInteractionChanged', 'interaction'],
+  // Being on a horse is how fast the body moves, so a spectator that joins
+  // mid-ride and is not told draws it at footpace and snaps forward for the
+  // rest of the ride.
+  ['PlayerMountChanged', 'mount'],
 ])
 
 /// Truly one-of-a-kind state: one gold total, one bag, one clock.
@@ -153,6 +157,13 @@ class WorldSnapshot {
     this.selfPosition = null
     this.selfRotation = 0
     this.selfFloor = 0
+    /// Whether the last step was a run. The client interpolates a mirrored
+    /// character at the speed this flag picks (`remotePlayerManager`), so
+    /// dropping it drew a sprinting agent at walking pace: the body fell
+    /// 1.5 m/s behind its own frames until the spectator's 8 m desync guard
+    /// snapped it forward, which is what "the character keeps teleporting"
+    /// was.
+    this.selfSprinting = false
     this.join = null
     /// The one `GameState` the server sends at join (server's add_player): a
     /// bulk baseline of everything already nearby. Always older than any
@@ -319,10 +330,13 @@ class WorldSnapshot {
     if (SINGLETON.has(name)) this.singletons.set(name, raw)
   }
 
+  /// A teleport or a correction, never a step: whatever the body was doing
+  /// it is standing still at the far end of one.
   takeSelfPosition(position, rotation, floorLevel) {
     if (Array.isArray(position)) this.selfPosition = position
     if (typeof rotation === 'number') this.selfRotation = rotation
     if (typeof floorLevel === 'number') this.selfFloor = floorLevel
+    this.selfSprinting = false
   }
 
   /// The agent's own movement never comes back from the server (see
@@ -339,6 +353,7 @@ class WorldSnapshot {
         this.selfPosition.map((n) => new Float(n)),
         new Float(this.selfRotation),
         this.selfFloor,
+        this.selfSprinting,
       ],
     })
   }
@@ -596,11 +611,15 @@ class AgentProxy {
     const [name, body] = safeVariant(frame)
     if (!Array.isArray(body)) return
     if (name === 'PlayerMove') {
-      const [position, rotation, floorLevel] = body
+      // PlayerMove is [position, rotation, floor_level, append, sprinting]
+      // (shared/src/messages.rs) — the sprint flag is what paces the step, so
+      // it has to travel with the position it paced.
+      const [position, rotation, floorLevel, , sprinting] = body
       if (!Array.isArray(position) || this.snapshot.selfPlayerId === null) return
       this.snapshot.selfPosition = position
       this.snapshot.selfRotation = typeof rotation === 'number' ? rotation : 0
       this.snapshot.selfFloor = typeof floorLevel === 'number' ? floorLevel : this.snapshot.selfFloor
+      this.snapshot.selfSprinting = sprinting === true
       if (this.spectators.size === 0) return
       this.broadcast(this.snapshot.selfPlayerMovedFrame())
       return

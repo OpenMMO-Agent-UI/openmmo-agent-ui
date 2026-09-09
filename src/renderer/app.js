@@ -120,7 +120,7 @@ const WORKER_KINDS = [
   {
     id: 'fighter',
     label: 'Monster Fighter',
-    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.',
+    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town — riding there when the bag holds Horse Reins. No LLM, no API key.',
   },
   {
     id: 'dungeoneer',
@@ -293,8 +293,7 @@ function renderRestockOptions() {
 }
 
 /// The engine picker, and which half of the drawer its choice leaves showing.
-function renderWorkerKind() {
-  const kind = settings.workerKind || 'fighter'
+function renderWorkerKind(kind = settings.workerKind || 'fighter') {
   const select = $('workerKind')
   select.innerHTML = WORKER_KINDS.map(
     (w) => `<option value="${w.id}">${t(w.label)}</option>`,
@@ -905,8 +904,9 @@ function bindHuntFields() {
   }
 
   $('workerKind').addEventListener('change', () => {
-    void persist({ workerKind: $('workerKind').value })
-    renderWorkerKind()
+    const kind = $('workerKind').value
+    void persist({ workerKind: kind })
+    renderWorkerKind(kind)
   })
 
   $('workerDungeonId').addEventListener('change', () => {
