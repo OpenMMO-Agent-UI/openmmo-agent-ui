@@ -171,7 +171,8 @@
         <!-- Native popover: light dismiss, Escape, and the top layer come
              free, so this menu needs no open/close code of its own. -->
         <div id="sessionMenu" class="menu" popover>
-          <p class="menu-label" data-i18n>Spectator view</p>
+          <p class="menu-label" data-mode-only="ai" data-i18n>Spectator view</p>
+          <p class="menu-label" data-mode-only="manual" data-i18n>Game view</p>
           <button id="reloadView" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Reload the view</button>
           <button id="clearCache" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Clear asset cache</button>
           <p class="menu-label" data-i18n>This session</p>
@@ -256,28 +257,36 @@
                  modal you had to close to see the result. Saved as you go: a
                  running agent picks them up on Apply & restart. -->
             <div data-drawer-panel="hunt" hidden>
-              <p class="hint" data-i18n>Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.</p>
+              <label data-i18n>Work<select id="workerKind"></select></label>
+              <p class="hint" id="workerKindHint"></p>
               <div class="row">
                 <label data-i18n>Level margin<input type="number" id="workerLevelMargin" min="0" max="50" /></label>
                 <label data-i18n>Drink below (%)<input type="number" id="workerLowHealthPct" min="1" max="99" /></label>
-              </div>
-              <div class="row">
                 <label data-i18n>Bag full at (%)<input type="number" id="workerBagFullPct" min="1" max="100" /></label>
+              </div>
+              <!-- The two engines share the knobs above and the restock block
+                   below; only where they work differs. -->
+              <div data-worker="fighter" hidden>
                 <label data-i18n>Patrol radius (m)<input type="number" id="workerPatrolRadius" min="20" max="500" /></label>
+                <label data-i18n>Anchor<select id="workerAnchor"></select></label>
+                <p class="hint" data-i18n>The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
+                <div class="row anchor-spot">
+                  <label data-i18n>Spot name<input type="text" id="anchorName" maxlength="40" /></label>
+                  <label>X<input type="number" id="anchorX" step="0.1" /></label>
+                  <label>Z<input type="number" id="anchorZ" step="0.1" /></label>
+                </div>
+                <div class="row anchor-actions">
+                  <button id="anchorHere" class="ghost small" data-i18n>Where I stand</button>
+                  <button id="anchorSave" class="ghost small" data-i18n>Save spot</button>
+                  <button id="anchorDelete" class="ghost small" data-i18n>Delete spot</button>
+                </div>
+                <p class="hint" data-i18n>The spots in the list are your own: save where the character is standing, or type the coordinates yourself.</p>
               </div>
-              <label data-i18n>Anchor<select id="workerAnchor"></select></label>
-              <p class="hint" data-i18n>The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
-              <div class="row anchor-spot">
-                <label data-i18n>Spot name<input type="text" id="anchorName" maxlength="40" /></label>
-                <label>X<input type="number" id="anchorX" step="0.1" /></label>
-                <label>Z<input type="number" id="anchorZ" step="0.1" /></label>
+              <div data-worker="dungeoneer" hidden>
+                <label data-i18n>Give up after (deaths)<input type="number" id="workerDeathLimit" min="1" max="20" /></label>
+                <label data-i18n>Dungeon<select id="workerDungeonId"></select></label>
+                <p class="hint" data-i18n>Deeper dungeons lock more floors, and each lock wants its own key. Pick one the character can actually fight through.</p>
               </div>
-              <div class="row anchor-actions">
-                <button id="anchorHere" class="ghost small" data-i18n>Where I stand</button>
-                <button id="anchorSave" class="ghost small" data-i18n>Save spot</button>
-                <button id="anchorDelete" class="ghost small" data-i18n>Delete spot</button>
-              </div>
-              <p class="hint" data-i18n>The spots in the list are your own: save where the character is standing, or type the coordinates yourself.</p>
               <h3 class="settings-section" data-i18n>Restock</h3>
               <div class="row">
                 <label data-i18n>Food type<select id="workerFoodItem"></select></label>

@@ -164,6 +164,28 @@ test('the anchor is written only once it is picked, so an unset one stays the sp
   assert.doesNotMatch(picked, /Orc Warrens/, 'the name is the panel\'s label, not the worker\'s business')
 })
 
+test('the dungeoneer names its dungeon and its death limit', () => {
+  const table = workerTable(
+    renderConfigToml(
+      settings({ workerKind: 'dungeoneer', workerDungeonId: 'ogre_stronghold', workerDeathLimit: 5 }),
+    ),
+  )
+
+  assert.match(table, /^kind = "dungeoneer"$/m)
+  assert.match(table, /^dungeon_id = "ogre_stronghold"$/m)
+  assert.match(table, /^death_limit = 5$/m)
+})
+
+test('an empty dungeon id is still written, so agent-client picks the shallowest itself', () => {
+  const table = workerTable(renderConfigToml(settings({ workerDungeonId: '' })))
+
+  assert.match(table, /^dungeon_id = ""$/m)
+  // The limit is a u32 in Rust and a run with no bail-out is not a setting
+  // the panel offers, so it is held to the range the input allows.
+  assert.match(workerTable(renderConfigToml(settings({ workerDeathLimit: 0 }))), /^death_limit = 1$/m)
+  assert.match(workerTable(renderConfigToml(settings({ workerDeathLimit: 99 }))), /^death_limit = 20$/m)
+})
+
 test('half an anchor is no anchor, and the radius is held to the range the panel offers', () => {
   const half = workerTable(renderConfigToml(settings({ workerAnchorX: -1616, workerAnchorZ: null })))
   assert.doesNotMatch(half, /^anchor_/m)

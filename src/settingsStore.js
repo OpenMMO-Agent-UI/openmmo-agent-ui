@@ -54,9 +54,9 @@ const DEFAULTS = {
   minIntervalSecs: 5,
   idleIntervalSecs: 8,
   alwaysActive: true,
-  /// What drives Automatic play. The rule-based fighter inside agent-client
-  /// (no LLM, no API key) is the only driver with a panel: the LLM agent and
-  /// the fisher are off for now, so nothing here can select them.
+  /// What drives Automatic play. The rule-based workers inside agent-client
+  /// (no LLM, no API key) are the ones with a panel: the LLM agent and the
+  /// fisher are off for now, so nothing here can select them.
   workerKind: 'fighter',
   workerLevelMargin: 0,
   workerLowHealthPct: 70,
@@ -77,6 +77,13 @@ const DEFAULTS = {
   workerAnchorName: '',
   workerAnchorX: null,
   workerAnchorZ: null,
+  /// Which dungeon the dungeoneer works, by registry id
+  /// (deps/OpenMMO/data/dungeons.json).
+  workerDungeonId: 'old_crypt',
+  /// Deaths in one nightly cycle before it stops and says why. A character
+  /// that cannot survive the section should not grind the XP penalty down
+  /// all night.
+  workerDeathLimit: 3,
   /// The spots the Anchor dropdown offers, saved by the player from the Hunt
   /// drawer. Nothing is shipped: the coordinates worth hunting are the ones
   /// this character has actually stood on.
@@ -264,6 +271,8 @@ function importExistingConfig(settings) {
   take('workerAnchorX', worker.anchor_x)
   take('workerAnchorZ', worker.anchor_z)
   take('workerPatrolRadius', worker.patrol_radius)
+  take('workerDungeonId', worker.dungeon_id)
+  take('workerDeathLimit', worker.death_limit)
   take('minIntervalSecs', npc.min_interval_secs)
   take('idleIntervalSecs', npc.idle_interval_secs)
   if (typeof npc.always_active === 'boolean') merged.alwaysActive = npc.always_active
@@ -310,8 +319,9 @@ function usesWorker(s) {
   return Boolean(s.workerKind) && s.workerKind !== 'none'
 }
 
-/// Only the fighter for now — see DEFAULTS.workerKind.
-const WORKERS = ['fighter']
+/// The rule engines with a panel — see DEFAULTS.workerKind. agent-client also
+/// carries a fisher, which has no settings of its own here yet.
+const WORKERS = ['fighter', 'dungeoneer']
 
 /// Refuse to start on the mistakes agent-client would only report after the
 /// window has already switched to the spectator view.
