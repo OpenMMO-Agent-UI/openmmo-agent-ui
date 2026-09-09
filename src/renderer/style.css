@@ -961,9 +961,10 @@ body[data-mode='manual'] .action-toasts {
   display: none !important;
 }
 
-/* Manual mode drops every other header control and floats just the mode
-   switcher over the fullscreen spectator view, so switching back out of
-   Manual play never depends on a header the game area has taken over. */
+/* Manual mode drops the header controls that belong to the agent and floats
+   what is left — the mode switcher and the session menu — over the
+   fullscreen game, so leaving Manual play, changing character or reloading
+   the view never depends on a header the game area has taken over. */
 body[data-mode='manual'] .gamebar {
   position: fixed;
   top: 8px;
@@ -975,13 +976,34 @@ body[data-mode='manual'] .gamebar {
   -webkit-app-region: no-drag;
 }
 
-body[data-mode='manual'] .gamebar > *:not(.mode-switch) {
+body[data-mode='manual'] .gamebar > *:not(.mode-switch):not(#sessionMenuButton):not(#sessionMenu) {
   display: none;
 }
 
-body[data-mode='manual'] .mode-switch {
+/* The menu itself is left alone rather than shown: it is a popover, so the
+   UA keeps it hidden until it opens. Hiding it here would win over that and
+   the button would open nothing. */
+body[data-mode='manual'] .mode-switch,
+body[data-mode='manual'] #sessionMenuButton {
   background: rgba(13, 15, 20, 0.92);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+/* Over the game the icon needs its own edge: on the header it sits on a bar
+   that already draws one. */
+body[data-mode='manual'] #sessionMenuButton {
+  border-color: var(--line);
+  color: var(--text);
+  -webkit-app-region: no-drag;
+}
+
+/* One of the two view labels, by mode. Two nodes rather than one rewritten
+   from script: `applyI18n` re-translates a marked node from the English it
+   captured first, so anything script wrote there is lost on the next
+   language switch. */
+body[data-mode='manual'] [data-mode-only='ai'],
+body:not([data-mode='manual']) [data-mode-only='manual'] {
+  display: none;
 }
 
 body[data-mode='manual'] .gameshell,
@@ -1197,6 +1219,12 @@ body[data-mode='manual'] .gamesurface {
 }
 
 .menu-label:first-child {
+  margin-top: 2px;
+}
+
+/* Either of the two view labels can be the one on show, so both take the
+   top row's margin — only one is ever `:first-child`. */
+.menu-label[data-mode-only] {
   margin-top: 2px;
 }
 

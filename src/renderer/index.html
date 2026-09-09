@@ -171,7 +171,8 @@
         <!-- Native popover: light dismiss, Escape, and the top layer come
              free, so this menu needs no open/close code of its own. -->
         <div id="sessionMenu" class="menu" popover>
-          <p class="menu-label" data-i18n>Spectator view</p>
+          <p class="menu-label" data-mode-only="ai" data-i18n>Spectator view</p>
+          <p class="menu-label" data-mode-only="manual" data-i18n>Game view</p>
           <button id="reloadView" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Reload the view</button>
           <button id="clearCache" popovertarget="sessionMenu" popovertargetaction="hide" data-i18n>Clear asset cache</button>
           <p class="menu-label" data-i18n>This session</p>
