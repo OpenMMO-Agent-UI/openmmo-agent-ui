@@ -293,8 +293,7 @@ function renderRestockOptions() {
 }
 
 /// The engine picker, and which half of the drawer its choice leaves showing.
-function renderWorkerKind() {
-  const kind = settings.workerKind || 'fighter'
+function renderWorkerKind(kind = settings.workerKind || 'fighter') {
   const select = $('workerKind')
   select.innerHTML = WORKER_KINDS.map(
     (w) => `<option value="${w.id}">${t(w.label)}</option>`,
@@ -905,8 +904,9 @@ function bindHuntFields() {
   }
 
   $('workerKind').addEventListener('change', () => {
-    void persist({ workerKind: $('workerKind').value })
-    renderWorkerKind()
+    const kind = $('workerKind').value
+    void persist({ workerKind: kind })
+    renderWorkerKind(kind)
   })
 
   $('workerDungeonId').addEventListener('change', () => {
