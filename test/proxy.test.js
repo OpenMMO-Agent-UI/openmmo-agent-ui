@@ -21,7 +21,8 @@ function groundItemArray(instanceId, position) {
 }
 
 const joinSuccessFrame = (id, position) => encode({ JoinSuccess: [playerArray(id, position, 'TestChar'), false] })
-const playerMoveFrame = (position) => encode({ PlayerMove: [position.map(F), F(0), 0] })
+const playerMoveFrame = (position, sprinting = false) =>
+  encode({ PlayerMove: [position.map(F), F(0), 0, false, sprinting] })
 const monsterSpawnedFrame = (id, position) => encode({ MonsterSpawned: [monsterArray(id, position)] })
 const monsterMovedFrame = (id, p) => encode({ MonsterMoved: [id, p.map(F), F(0), 'Chase', p.map(F), null] })
 const playerAppearedFrame = (id, position) => encode({ PlayerAppeared: [playerArray(id, position)] })
@@ -271,6 +272,41 @@ test('each outbound move is broadcast live to attached spectators', () => {
   assert.strictEqual(moves.length, 3, `every move should reach the spectator, got ${spy.sent.length} frames`)
   assert.strictEqual(moves[2][1][0], 42, 'broadcast must carry the agent player id')
   assertNear(moves[2][1][1], [30, 0, 30])
+})
+
+test('a sprinted step is broadcast as a sprint, live and on reconnect', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  const spy = fakeSpectator()
+  proxy.spectators.add(spy)
+
+  // Workers always sprint. A spectator told otherwise walks the body at 3 m/s
+  // while the server runs it at 4.5, and the gap only ends in the client's
+  // desync snap — the teleporting the mirror was full of.
+  proxy.onAgentFrame(playerMoveFrame([10, 0, 10], true))
+
+  const live = decodedOf(spy.sent).filter(([n]) => n === 'PlayerMoved')
+  assert.strictEqual(live[0][1][4], true, 'the live frame must carry the sprint')
+  const replayed = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMoved')
+  assert.strictEqual(replayed[0][1][4], true, 'and so must the one a late spectator is replayed')
+
+  // A teleport lands standing still: nothing paced it, so nothing may claim it did.
+  proxy.onServerFrame(encode({ PlayerTeleported: [42, [80, 0, 80].map(F), F(0), 0] }))
+  const afterJump = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMoved')
+  assert.strictEqual(afterJump[0][1][4], false)
+})
+
+test('a spectator that joins mid-ride is told the character is mounted', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(encode({ PlayerMountChanged: [42, true] }))
+
+  const mounts = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMountChanged')
+  assert.deepStrictEqual(mounts.map(([, body]) => body), [[42, true]])
+
+  proxy.onServerFrame(encode({ PlayerMountChanged: [42, false] }))
+  const after = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMountChanged')
+  assert.deepStrictEqual(after.map(([, body]) => body), [[42, false]], 'the latest mount state wins')
 })
 
 test('monsters the agent drives are broadcast live and tracked for reconnects', () => {
