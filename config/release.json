@@ -25,9 +25,10 @@
     52,
     57,
     59,
-    62
+    62,
+    65
   ],
-  "fallbackProtocol": 59,
-  "pinnedProtocol": 62,
+  "fallbackProtocol": 62,
+  "pinnedProtocol": 65,
   "pinnedLayout": "21ee51ec96294ef3"
 }
