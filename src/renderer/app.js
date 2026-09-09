@@ -120,7 +120,7 @@ const WORKER_KINDS = [
   {
     id: 'fighter',
     label: 'Monster Fighter',
-    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.',
+    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town — riding there when the bag holds Horse Reins. No LLM, no API key.',
   },
   {
     id: 'dungeoneer',
