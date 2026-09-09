@@ -115,6 +115,8 @@ function renderConfigToml(s) {
     `scroll_stock = ${Math.max(0, Math.round(Number(s.workerScrollStock)) || 0)}`,
     `bag_full_pct = ${clampPercent(s.workerBagFullPct, 90)}`,
     `patrol_radius = ${clampRange(s.workerPatrolRadius, 100, 20, 500)}`,
+    `dungeon_id = ${tomlString(s.workerDungeonId || '')}`,
+    `death_limit = ${clampRange(s.workerDeathLimit, 3, 1, 20)}`,
   )
   // Left out entirely when unset ("Auto" in the picker): agent-client falls
   // back to its own default (or the merchant's first stocked meal, for food)

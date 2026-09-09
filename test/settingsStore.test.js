@@ -30,6 +30,12 @@ test('the fighter starts without a model or a base URL — there is no LLM to se
   assert.deepEqual(settingsStore.validate(settings(missing)), [])
 })
 
+test('the dungeoneer is a driver the panel can select', () => {
+  assert.deepEqual(settingsStore.validate(settings({ workerKind: 'dungeoneer' })), [])
+  assert.equal(settingsStore.usesWorker(settings({ workerKind: 'dungeoneer' })), true)
+  assert.equal(DEFAULTS.workerDungeonId, 'old_crypt')
+})
+
 test('an unknown worker is refused before the agent is started', () => {
   const errors = settingsStore.validate(settings({ workerKind: 'lumberjack' }))
 

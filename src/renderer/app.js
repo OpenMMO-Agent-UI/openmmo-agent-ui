@@ -62,6 +62,7 @@ const FEED_KINDS = [
   'llm-prompt',
   'llm-response',
   'llm-error',
+  'progress',
   'chat',
   'combat',
   'trade',
@@ -75,6 +76,9 @@ const FEED_LABELS = {
   'llm-prompt': 'Prompt',
   'llm-response': 'Reply',
   'llm-error': 'Error',
+  // A rule-based worker has no prompt to read, so this is the only line that
+  // says what it is doing and how far it has got.
+  progress: 'Progress',
   chat: 'Chat',
   combat: 'Combat',
   trade: 'Trade',
@@ -104,10 +108,36 @@ const HUNT_FIELDS = {
   workerLowHealthPct: 'int',
   workerBagFullPct: 'int',
   workerPatrolRadius: 'int',
+  workerDeathLimit: 'int',
   workerFoodStock: 'int',
   workerPotionStock: 'int',
   workerScrollStock: 'int',
 }
+
+/// The rule engines the drawer can select, and what each one is for. Kept in
+/// the same order agent-client's `WorkerKind` lists them.
+const WORKER_KINDS = [
+  {
+    id: 'fighter',
+    label: 'Monster Fighter',
+    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town. No LLM, no API key.',
+  },
+  {
+    id: 'dungeoneer',
+    label: 'Dungeon Conqueror',
+    hint: 'Works one dungeon: farms each locked floor for its key, clears the guardian, empties the great chest, then banks the next run\u2019s keys until the dungeons reset. No LLM, no API key.',
+  },
+]
+
+/// The dungeons the game ships, in ascending difficulty — the fixed registry
+/// (deps/OpenMMO/data/dungeons.json), not something a server varies. Named
+/// here rather than read from it: the panel has no access to the checkout,
+/// and the same list already sits in RESTOCK_ITEMS' hands for the same reason.
+const DUNGEONS = [
+  { id: 'old_crypt', name: 'Old Crypt', floors: 5 },
+  { id: 'orc_warrens', name: 'Orc Warrens', floors: 10 },
+  { id: 'ogre_stronghold', name: 'Ogre Stronghold', floors: 15 },
+]
 
 /// What a town trip may restock, by category — the game's fixed item list
 /// (deps/OpenMMO/data/items.json), not something a server varies. The first
@@ -262,9 +292,38 @@ function renderRestockOptions() {
   }
 }
 
+/// The engine picker, and which half of the drawer its choice leaves showing.
+function renderWorkerKind() {
+  const kind = settings.workerKind || 'fighter'
+  const select = $('workerKind')
+  select.innerHTML = WORKER_KINDS.map(
+    (w) => `<option value="${w.id}">${t(w.label)}</option>`,
+  ).join('')
+  select.value = kind
+  const chosen = WORKER_KINDS.find((w) => w.id === kind) || WORKER_KINDS[0]
+  $('workerKindHint').textContent = t(chosen.hint)
+  for (const block of document.querySelectorAll('[data-worker]')) {
+    block.hidden = block.dataset.worker !== kind
+  }
+  $('drawerTitle').textContent = t(chosen.label)
+}
+
+/// One dungeon per registry entry, with its depth in the label — the floor
+/// count is the whole difficulty story, and it is what decides how many keys
+/// a run has to find.
+function renderDungeonOptions() {
+  const select = $('workerDungeonId')
+  select.innerHTML = DUNGEONS.map(
+    (d) => `<option value="${d.id}">${t(d.name)} (${t('{n} floors', { n: d.floors })})</option>`,
+  ).join('')
+  select.value = settings.workerDungeonId || DUNGEONS[0].id
+}
+
 /// The whole Hunt drawer, off the current settings.
 function renderHunt() {
   for (const [id, type] of Object.entries(HUNT_FIELDS)) writeField(id, type, settings[id])
+  renderWorkerKind()
+  renderDungeonOptions()
   renderAnchorOptions()
   renderRestockOptions()
 }
@@ -712,6 +771,8 @@ function applyPlayState(state) {
   }
 }
 
+/// The Hunt drawer is titled by whichever engine is selected, so renderHunt
+/// writes that one itself.
 const DRAWER_TITLES = {
   worn: 'Character',
   hunt: 'Monster Fighter',
@@ -842,6 +903,15 @@ function bindHuntFields() {
       void persist({ [id]: value })
     })
   }
+
+  $('workerKind').addEventListener('change', () => {
+    void persist({ workerKind: $('workerKind').value })
+    renderWorkerKind()
+  })
+
+  $('workerDungeonId').addEventListener('change', () => {
+    void persist({ workerDungeonId: $('workerDungeonId').value })
+  })
 
   $('workerAnchor').addEventListener('change', () => {
     const choice = anchorOptions[Number($('workerAnchor').value)] || null
