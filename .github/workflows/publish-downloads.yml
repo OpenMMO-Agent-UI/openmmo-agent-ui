@@ -1,8 +1,10 @@
 name: Publish downloads to wiki
 
 # Mirrors a published release's artifacts to the public wiki repo, which is
-# where players actually download from — this repository is private, so its
-# own release assets are not anonymously reachable.
+# where players actually download from. This repository was private when that
+# mirroring was set up; it is public now, so the assets here are reachable
+# too. The mirror stays because the wiki is the published download page and
+# the auto-update feed reads from it — not because this repo hides anything.
 #
 # Triggered by `release: published` rather than the tag push, so the mirror
 # only ever runs on artifacts that finished building, signing and notarizing.

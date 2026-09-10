@@ -4,3 +4,19 @@ out/
 build/
 .release-sync.log
 .DS_Store
+
+# Credentials must never reach a public repo by accident. Nothing matching
+# these has ever been committed (audited across all 2015 blobs in history on
+# 2026-09-10) — this is a guard for the future, not a cleanup.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+id_rsa*
+credentials.json
