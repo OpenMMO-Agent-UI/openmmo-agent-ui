@@ -124,7 +124,7 @@ running agent: type an instruction and it arrives as the character's next
 turn, best-effort — nothing forces the model to obey it, so the UI shows the
 agent's next action right next to what you sent.
 
-**Settings** (opened from the rail or the mode switch) has three tabs: LLM
+**Settings** (opened from the left rail) has three tabs: LLM
 (backend, model, API key), Automatic play (response-cadence sliders, whether
 to keep adventuring while alone), and Advanced (raw intervals, watch port,
 log level, concurrency, request timeout).

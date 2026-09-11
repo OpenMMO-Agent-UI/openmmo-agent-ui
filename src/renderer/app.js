@@ -1368,7 +1368,6 @@ async function init() {
     getSettings: () => settings,
     persist,
     applyPlayState,
-    openSettings,
   })
   settingsPanel.bind({
     getSettings: () => settings,
