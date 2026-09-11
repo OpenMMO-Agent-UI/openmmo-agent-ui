@@ -107,7 +107,7 @@ Play step: picking or creating a character enters play immediately.
 
 **Game** — the header shows connection status, vitals, spectator memory
 use, a reload button for the 3D view, **Apply & restart** (appears once a
-setting changed while the agent is running), the Manual/AI mode switch, and
+setting changed while the agent is running), the Auto/Manual mode switch, and
 buttons to change character or server. The left rail opens drawers over the
 view:
 
