@@ -41,8 +41,7 @@ let lastPlayedId = null
 /// `deps` are the app.js-owned pieces this flow reads/reports through rather
 /// than importing app.js directly (which would be a cycle): `getSettings`
 /// for the live settings object, `persist` for the Apply-gated save path,
-/// `applyPlayState` for the handoff once a character enters the game, and
-/// `openSettings` for the settings modal.
+/// and `applyPlayState` for the handoff once a character enters the game.
 let deps = null
 
 const MAX_CHARACTERS = 3
@@ -469,10 +468,6 @@ function bind() {
     await workflow.continueWithProfile(selectedProfileId)
   })
 
-  // The only way to the LLM settings used to be the in-game rail, so a first
-  // run had to join the world with an unconfigured agent to fix it.
-  $('openSettingsFromCharacter').addEventListener('click', () => deps.openSettings())
-
   $('backToRoster').addEventListener('click', () => {
     showErrors([])
     showCreate(false)
@@ -504,7 +499,7 @@ function bind() {
   })
 }
 
-/// `dependencies`: `{ getSettings, persist, applyPlayState, openSettings }`
+/// `dependencies`: `{ getSettings, persist, applyPlayState }`
 /// — see the `deps` comment above. Constructs the AppWorkflow instance and
 /// wires every profile/login/roster control; call start() afterward once
 /// app.js has finished its own init() wiring.

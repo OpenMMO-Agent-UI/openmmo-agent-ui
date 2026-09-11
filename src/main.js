@@ -494,6 +494,10 @@ app.whenReady().then(() => {
   agent.on('state', (state) => {
     if (!state.running) stopFeedPolling()
     send('agent:state', state)
+    // The play button starts the agent without going through the coordinator
+    // (a pause is not a mode switch), so this is where a paused session learns
+    // it is driving again. `publish` sends its own play:state.
+    if (state.running) playSession?.controllerStarted()
     if (!state.running && state.exitCode != null) playSession?.controllerExited('AI disconnected')
   })
   agent.on('fatal', (message) => send('agent:fatal', message))
@@ -680,7 +684,13 @@ async function startAgent() {
 
 ipcMain.handle('agent:start', startAgent)
 
-ipcMain.handle('agent:stop', () => ({ ok: true, status: agent.stop() }))
+// Pausing parks the session in auto mode with nothing driving — the same
+// state entering the world leaves it in, and the one the play button lifts.
+ipcMain.handle('agent:stop', () => {
+  const status = agent.stop()
+  playSession?.controllerPaused()
+  return { ok: true, status }
+})
 
 ipcMain.handle('agent:restart', async () => {
   if (agent.running) await agent.stopAndWait()

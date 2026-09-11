@@ -88,7 +88,6 @@
         <div class="account-line">
           <span id="accountName"></span>
           <button id="switchAccount" class="linklike-inline" data-i18n>Switch account</button>
-          <button id="openSettingsFromCharacter" class="linklike-inline" data-i18n>Settings</button>
         </div>
 
         <div id="rosterPanel">
@@ -140,11 +139,13 @@
         </div>
 
         <!-- Who is driving the character: the app's largest state, so it says
-             so in words rather than leaving two unlabelled icons to it. -->
+             so in words rather than leaving two unlabelled icons to it. Auto,
+             not Agent: the rules engines drive the character themselves, and
+             an LLM is one way to run it rather than what the mode is. -->
         <div class="mode-switch" role="group" aria-label="Who plays" data-i18n-attr="aria-label">
           <button id="modeAi" class="mode-button on" aria-pressed="true">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="3"/><path d="M9 7V4h6v3M8 13h.01M16 13h.01M9 17h6"/></svg>
-            <span>Agent</span>
+            <span data-i18n>Auto</span>
           </button>
           <button id="modeManual" class="mode-button" aria-pressed="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V5a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v5-3a1.5 1.5 0 0 1 3 0v6c0 5-3 8-8 8h-1c-3 0-5-1-7-4l-2-3a1.7 1.7 0 0 1 2.8-1.9L7 15Z"/></svg>

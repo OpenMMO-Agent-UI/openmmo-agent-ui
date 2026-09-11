@@ -51,15 +51,57 @@ function fixture({ llmValid = true } = {}) {
   return { ai, manual, coordinator, events, scheduled }
 }
 
-test('entering a character starts Automatic play by default', async () => {
+/// The play button: the agent is started outside the coordinator (a pause is
+/// not a mode switch), which then learns the session is driving. Entering only
+/// parks it in auto.
+async function play(coordinator, ai) {
+  await ai.start()
+  return coordinator.controllerStarted()
+}
+
+test('entering a character parks in auto play without starting it', async () => {
   const { coordinator, events } = fixture()
 
   const state = await coordinator.enter({ characterId: 7 })
 
   assert.equal(state.mode, 'ai')
+  assert.equal(state.phase, 'paused')
+  assert.equal(state.viewUrl, null)
+  assert.deepEqual(events, [], 'entering the world hands nothing over')
+})
+
+test('the play button is what turns a parked session active', async () => {
+  const { coordinator, ai } = fixture()
+  await coordinator.enter({ characterId: 7 })
+
+  const state = await play(coordinator, ai)
+
+  assert.equal(state.mode, 'ai')
   assert.equal(state.phase, 'active')
-  assert.equal(state.viewUrl, 'http://ai-view')
-  assert.deepEqual(events, ['ai:start'])
+})
+
+test('pausing parks the session again, so the exit is not read as a crash', async () => {
+  const { coordinator, ai, scheduled } = fixture()
+  await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
+
+  const state = coordinator.controllerPaused()
+  assert.equal(state.mode, 'ai')
+  assert.equal(state.phase, 'paused')
+
+  coordinator.controllerExited('AI disconnected')
+  assert.deepEqual(scheduled, [], 'a parked session has nothing to reconnect')
+  assert.equal(coordinator.snapshot().phase, 'paused')
+})
+
+test('a crash before the first play is not reconnected from', async () => {
+  const { coordinator, scheduled } = fixture()
+  await coordinator.enter({ characterId: 7 })
+
+  coordinator.controllerExited('AI disconnected')
+
+  assert.deepEqual(scheduled, [])
+  assert.equal(coordinator.snapshot().phase, 'paused')
 })
 
 test('an invalid global LLM configuration falls back to manual play', async () => {
@@ -74,8 +116,9 @@ test('an invalid global LLM configuration falls back to manual play', async () =
 })
 
 test('AI to manual handoff cancels pending work before changing controller', async () => {
-  const { coordinator, events } = fixture()
+  const { coordinator, events, ai } = fixture()
   await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
 
   const state = await coordinator.switchTo('manual')
 
@@ -85,8 +128,9 @@ test('AI to manual handoff cancels pending work before changing controller', asy
 })
 
 test('failed handoff restores the prior working controller', async () => {
-  const { coordinator, events, manual } = fixture()
+  const { coordinator, events, manual, ai } = fixture()
   await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
   manual.start = async () => {
     events.push('manual:start')
     throw new Error('manual failed')
@@ -107,21 +151,26 @@ test('failed handoff restores the prior working controller', async () => {
   ])
 })
 
-test('failed initial AI readiness is cleaned up before manual fallback', async () => {
+test('an auto controller that will not come up hands back to manual play', async () => {
   const { coordinator, events, ai } = fixture()
+  await coordinator.enter({ characterId: 7 })
+  await coordinator.switchTo('manual')
   ai.start = async () => {
     events.push('ai:start')
     throw new Error('world readiness timed out')
   }
 
-  const state = await coordinator.enter({ characterId: 7 })
+  const state = await coordinator.switchTo('ai')
 
   assert.equal(state.mode, 'manual')
-  assert.deepEqual(events, ['ai:start', 'ai:cancel', 'ai:stop', 'manual:start'])
+  assert.equal(state.phase, 'active')
+  assert.equal(state.notice, 'world readiness timed out')
 })
 
 test('cleanup failure disconnects instead of starting a second controller', async () => {
   const { coordinator, events, ai } = fixture()
+  await coordinator.enter({ characterId: 7 })
+  await coordinator.switchTo('manual')
   ai.start = async () => {
     events.push('ai:start')
     throw new Error('world readiness timed out')
@@ -131,17 +180,17 @@ test('cleanup failure disconnects instead of starting a second controller', asyn
     throw new Error('AI would not stop')
   }
 
-  const state = await coordinator.enter({ characterId: 7 })
+  const state = await coordinator.switchTo('ai')
 
   assert.equal(state.phase, 'disconnected')
   assert.equal(state.mode, null)
-  assert.match(state.notice, /could not stop Automatic play/)
-  assert.equal(events.includes('manual:start'), false)
+  assert.match(state.notice, /could not stop ai/)
 })
 
 test('failed target cleanup disconnects instead of restoring the prior controller', async () => {
-  const { coordinator, events, manual } = fixture()
+  const { coordinator, events, manual, ai } = fixture()
   await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
   manual.start = async () => {
     events.push('manual:start')
     throw new Error('manual failed')
@@ -160,8 +209,9 @@ test('failed target cleanup disconnects instead of restoring the prior controlle
 })
 
 test('unexpected AI exit retries forever with a delay capped at 30 seconds', async () => {
-  const { coordinator, events, scheduled } = fixture()
+  const { coordinator, events, scheduled, ai } = fixture()
   await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
 
   for (const expected of [2000, 5000, 10000, 30000, 30000]) {
     coordinator.controllerExited('AI disconnected')
@@ -175,8 +225,9 @@ test('unexpected AI exit retries forever with a delay capped at 30 seconds', asy
 })
 
 test('switching to manual cancels an automatic retry timer', async () => {
-  const { coordinator, scheduled } = fixture()
+  const { coordinator, scheduled, ai } = fixture()
   await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
   coordinator.controllerExited('AI disconnected')
 
   const state = await coordinator.switchTo('manual')
@@ -189,6 +240,7 @@ test('switching to manual cancels an automatic retry timer', async () => {
 test('switching waits for an in-flight retry to clean up before starting manual play', async () => {
   const { coordinator, scheduled, ai, events } = fixture()
   await coordinator.enter({ characterId: 7 })
+  await play(coordinator, ai)
   coordinator.controllerExited('AI disconnected')
   const lateStart = deferred()
   ai.start = () => {
