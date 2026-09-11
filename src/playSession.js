@@ -47,34 +47,36 @@ class PlaySessionCoordinator {
       })
     }
 
-    this.publish({ mode: 'ai', phase: 'starting', notice: null, retryInMs: null })
-    try {
-      const started = await this.controllers.ai.start(context)
-      return this.publish({
-        mode: 'ai',
-        phase: 'active',
-        viewUrl: started.viewUrl || null,
-        notice: null,
-      })
-    } catch (err) {
-      try {
-        await this.stopController('ai')
-      } catch (cleanupError) {
-        return this.publish({
-          mode: null,
-          phase: 'disconnected',
-          viewUrl: null,
-          notice: `${err.message}; could not stop Automatic play: ${cleanupError.message}`,
-        })
-      }
-      const started = await this.controllers.manual.start(context)
-      return this.publish({
-        mode: 'manual',
-        phase: 'active',
-        viewUrl: started.viewUrl || null,
-        notice: err.message,
-      })
-    }
+    // Auto play is the mode we enter in, but it does not start driving on its
+    // own: entering the world and handing the character over are two
+    // decisions, and joining straight into a run is how a session began with
+    // the character already walking somewhere the player had not chosen.
+    // Nothing is spawned here — the play button starts the agent, the same
+    // path a resume takes.
+    return this.publish({
+      mode: 'ai',
+      phase: 'paused',
+      viewUrl: null,
+      notice: null,
+      retryInMs: null,
+    })
+  }
+
+  /// The agent came up outside a mode switch: the play button, after entering
+  /// paused or after a pause. Only that turns the session active — and
+  /// `active` is what arms the retry below, so a crash before the first play
+  /// is not something to reconnect from.
+  controllerStarted() {
+    if (this.state.mode !== 'ai' || this.state.phase !== 'paused') return this.snapshot()
+    return this.publish({ phase: 'active', notice: null, retryInMs: null })
+  }
+
+  /// The pause button stopped the agent. It is not a mode switch — the session
+  /// stays in auto — but it must stop counting as active, or the exit would
+  /// read as a crash and reconnect the character the player just parked.
+  controllerPaused() {
+    if (this.state.mode !== 'ai' || this.state.phase !== 'active') return this.snapshot()
+    return this.publish({ phase: 'paused', viewUrl: null, notice: null, retryInMs: null })
   }
 
   clearRetry() {

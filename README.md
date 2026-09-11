@@ -103,13 +103,14 @@ credential skips straight to Character.
 **Character** — two tabs: *Choose your character* (up to 3, server-enforced;
 pick one to enter play, or delete it) and *Create a new character* (name,
 class, gender — hidden once the account is at the cap). There is no separate
-Play step: picking or creating a character enters play immediately.
+Play step: picking or creating a character enters the world immediately, in
+Auto mode but parked — nothing drives the character until you press play.
 
 **Game** — the header shows connection status, vitals, spectator memory
 use, a reload button for the 3D view, **Apply & restart** (appears once a
-setting changed while the agent is running), the Auto/Manual mode switch, and
-buttons to change character or server. The left rail opens drawers over the
-view:
+setting changed while the agent is running), the Auto/Manual mode switch, the
+play/pause button, and buttons to change character or server. The left rail
+opens drawers over the view:
 
 | Drawer | What it shows |
 |---|---|
