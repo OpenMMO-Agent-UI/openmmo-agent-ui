@@ -47,6 +47,21 @@ fi
 echo "==> building agent-client (release)"
 cargo build --manifest-path "$checkout/Cargo.toml" --release -p agent-client
 
+# deps/OpenMMO/client/scripts/build-wasm.sh serialises concurrent wasm builds
+# with flock(1), which only Linux ships — a macOS or Windows build died on the
+# missing command before the client was built at all. One build at a time is
+# the only case here, so a stand-in that always takes the lock is enough, and
+# it stays on our side rather than patching upstream's script, which we would
+# then own through every rebase. Scoped to this run: a stand-in left on PATH
+# would go on answering for a real flock long after the build that needed it.
+if ! command -v flock >/dev/null; then
+    flock_stand_in="$(mktemp -d)"
+    trap 'rm -rf "$flock_stand_in"' EXIT
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$flock_stand_in/flock"
+    chmod +x "$flock_stand_in/flock"
+    export PATH="$flock_stand_in:$PATH"
+fi
+
 echo "==> building the web client"
 npm --prefix "$checkout/client" ci
 npm --prefix "$checkout/client" run build

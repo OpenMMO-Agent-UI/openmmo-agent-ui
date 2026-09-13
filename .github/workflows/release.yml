@@ -172,23 +172,6 @@ jobs:
         with:
           tool: wasm-pack
       - run: npm ci
-      - name: Provide flock where the runner has none
-        shell: bash
-        # deps/OpenMMO/client/scripts/build-wasm.sh serialises concurrent wasm
-        # builds with flock(1), which only Linux ships. A runner builds once, so
-        # a stand-in that always takes the lock is enough — and this stays in
-        # our workflow rather than patching upstream's script, which we would
-        # then own through every rebase.
-        run: |
-          command -v flock >/dev/null && exit 0
-          for dir in /usr/local/bin /usr/bin; do
-            [ -w "$dir" ] || continue
-            printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/flock"
-            chmod +x "$dir/flock"
-            exit 0
-          done
-          echo "no writable directory on PATH to hold a flock stand-in" >&2
-          exit 1
       - name: Configure Apple signing and notarization
         if: matrix.os == 'macos-14'
         env:
