@@ -18,7 +18,7 @@ const path = require('node:path')
 const { WebSocket } = require('ws')
 
 const { encode, decode, variantOf } = require('./../src/msgpack')
-const { layoutVersion, fnv1a64, FNV_OFFSET } = require('./layout-version.js')
+const { layoutVersion, dataInputs, fnv1a64, FNV_OFFSET } = require('./layout-version.js')
 
 // `../..` from this script only finds the OpenMMO checkout when
 // this repo is cloned *inside* it (the README's documented layout) —
@@ -106,12 +106,18 @@ function newestCommitSpeaking(wanted, commits) {
 /// that predates the generator.
 function layoutVersionAt(sha) {
   let names
+  let buildRs
   try {
     names = git('ls-tree', '--name-only', `${sha}:shared/src/dungeon`).split('\n').filter(Boolean)
+    // Read per commit rather than once from the tip: which data files count is
+    // itself history — upstream added monsters.csv to the set in v0.51.0 — and
+    // hashing the tip's list over an older tree fingerprints a build that
+    // never existed.
+    buildRs = git('show', `${sha}:shared/build.rs`)
   } catch {
     return null
   }
-  const inputs = ['../data-src/dungeons.csv']
+  const inputs = dataInputs(buildRs)
   for (const name of names) {
     if (name.endsWith('.rs') && name !== 'tests.rs') inputs.push(`src/dungeon/${name}`)
   }
@@ -191,14 +197,12 @@ function probe(url, version, layout) {
 /// never moves, so the newest commit carrying an accepted one is the commit
 /// just below the next boundary up.
 async function newestCommitWithAcceptedLayout(url, ref, limit = 25) {
-  const boundaries = git(
-    'log',
-    '--format=%H',
-    ref,
-    '--',
-    'shared/src/dungeon',
-    'data-src/dungeons.csv',
+  // Every path that can move the fingerprint, build.rs included: changing
+  // which files it hashes moves it just as surely as changing one of them.
+  const dataPaths = dataInputs(git('show', `${ref}:shared/build.rs`)).map((rel) =>
+    rel.replace(/^\.\.\//, ''),
   )
+  const boundaries = git('log', '--format=%H', ref, '--', 'shared/src/dungeon', 'shared/build.rs', ...dataPaths)
     .split('\n')
     .filter(Boolean)
     .slice(0, limit)

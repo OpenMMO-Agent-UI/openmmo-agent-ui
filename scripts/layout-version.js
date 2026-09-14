@@ -12,11 +12,11 @@
 ///
 ///   node scripts/layout-version.js [path/to/OpenMMO checkout]
 ///
-/// Mirrors shared/build.rs exactly: FNV-1a 64 over `../data-src/dungeons.csv`
-/// plus `src/dungeon/*.rs` minus `tests.rs`, sorted by path as seen from the
-/// shared/ crate, each file's path bytes then its contents with CR dropped.
-/// Prints the 16-hex-digit fingerprint; exits 2 when the checkout lacks the
-/// inputs (a build predating the stamp).
+/// Mirrors shared/build.rs exactly: FNV-1a 64 over the data files build.rs
+/// names plus `src/dungeon/*.rs` minus `tests.rs`, sorted by path as seen from
+/// the shared/ crate, each file's path bytes then its contents with CR
+/// dropped. Prints the 16-hex-digit fingerprint; exits 2 when the checkout
+/// lacks the inputs (a build predating the stamp).
 
 const fs = require('node:fs')
 const path = require('node:path')
@@ -34,15 +34,35 @@ function fnv1a64(seed, bytes) {
   return hash
 }
 
+/// The data files build.rs hashes alongside the generator sources, read out of
+/// build.rs itself rather than copied here. This list used to be spelled out
+/// in this file, and v0.51.0 is what that cost: upstream added
+/// `../data-src/monsters.csv` to it, this mirror kept hashing dungeons.csv
+/// alone, and the desktop build stamped a fingerprint the agent-client and
+/// wasm it shipped beside did not carry. Every platform's package job failed
+/// its staged-layout check and the release published nothing. Parsing the
+/// source of truth means the next input upstream adds costs no edit here.
+///
+/// Paths are as build.rs sees them, relative to shared/ — the path bytes are
+/// part of the hash, so spelling must match, separators included.
+const DATA_INPUT = /PathBuf::from\("([^"]+)"\)/g
+
+function dataInputs(buildRs) {
+  const found = Array.from(buildRs.matchAll(DATA_INPUT), (m) => m[1])
+  // Silence here would mean hashing the generator sources alone and calling
+  // the result a fingerprint, which is the failure this parsing replaced.
+  if (!found.length) throw new Error('shared/build.rs names no layout data inputs — this mirror needs updating')
+  return found
+}
+
 /// Fingerprint of the checkout at `root` (the OpenMMO repo root), or null if
 /// it has no dungeon generator to fingerprint.
 function layoutVersion(root) {
   const shared = path.join(root, 'shared')
   const dungeonDir = path.join(shared, 'src', 'dungeon')
-  if (!fs.existsSync(dungeonDir)) return null
-  // Paths as build.rs sees them, relative to shared/ — the path bytes are part
-  // of the hash, so spelling must match, separators included.
-  const inputs = ['../data-src/dungeons.csv']
+  const buildRs = path.join(shared, 'build.rs')
+  if (!fs.existsSync(dungeonDir) || !fs.existsSync(buildRs)) return null
+  const inputs = dataInputs(fs.readFileSync(buildRs, 'utf8'))
   for (const name of fs.readdirSync(dungeonDir)) {
     if (name.endsWith('.rs') && name !== 'tests.rs') inputs.push(`src/dungeon/${name}`)
   }
@@ -56,7 +76,7 @@ function layoutVersion(root) {
   return hash.toString(16).padStart(16, '0')
 }
 
-module.exports = { layoutVersion, fnv1a64, FNV_OFFSET }
+module.exports = { layoutVersion, dataInputs, fnv1a64, FNV_OFFSET }
 
 if (require.main === module) {
   const root = process.argv[2] || path.join(__dirname, '..', 'deps', 'OpenMMO')
