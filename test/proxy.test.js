@@ -3,7 +3,7 @@
 const test = require('node:test')
 const assert = require('node:assert')
 
-const { AgentProxy } = require('../src/proxy')
+const { AgentProxy, WorldView, parseWorldUpdate } = require('../src/proxy')
 const { encode, decode, variantOf, Float } = require('../src/msgpack')
 
 const F = (n) => new Float(n)
@@ -623,4 +623,110 @@ test('setActiveTitle refuses when there is no live session to reach the server',
 
   proxy.agentUpstream = { readyState: 3, send: () => assert.fail('must not send on a dead socket') }
   assert.strictEqual(proxy.setActiveTitle('orc_slayer'), false)
+})
+
+// ---------- interest-set world view (protocol v80) ----------
+
+const worldUpdateFrame = ({ epoch = 'e1', generation = 5, sequence, reset = false, events = [] }) =>
+  encode({ WorldUpdate: [epoch, generation, sequence, [1, 0, 2].map(F), 0, reset, true, events] })
+const enter = (subject, revision, ...messages) => [subject, revision, 'Enter', messages]
+const update = (subject, revision, ...messages) => [subject, revision, 'Update', messages]
+const leave = (subject, revision, ...messages) => [subject, revision, 'Leave', messages]
+
+function attachedSpectator(proxy) {
+  const spy = { ...fakeSpectator(), on: () => {} }
+  proxy.attachSpectator(spy)
+  return spy
+}
+
+const worldUpdatesOf = (frames) =>
+  frames.filter((raw) => variantOf(decode(raw))[0] === 'WorldUpdate').map((raw) => parseWorldUpdate(raw))
+
+/// The client's own acceptance rules, run over what a spectator was sent.
+function acceptsAll(frames) {
+  const view = new WorldView()
+  return worldUpdatesOf(frames).every((u) => view.accept(u))
+}
+
+test('a spectator attaching after the reset went by is handed a reset of everything in view', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 1, reset: true, events: [enter('player:7', 10, { PlayerAppeared: [playerArray(7, [3, 0, 3])] })] }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 2, events: [enter('monster:m1', 11, { MonsterSpawned: [monsterArray('m1', [5, 0, 5])] })] }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 3, events: [update('player:7', 12, { PlayerMoved: [7, [9, 0, 9].map(F), F(0), 0] })] }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 4, events: [leave('monster:m1', 13, { MonsterRemoved: ['m1'] })] }))
+
+  const spy = attachedSpectator(proxy)
+  const [reset] = worldUpdatesOf(spy.sent)
+  assert.ok(reset && reset.reset, 'the replay must open with a reset')
+  assert.strictEqual(reset.sequence, 1)
+  assert.strictEqual(reset.generation, 5)
+  assert.deepStrictEqual(
+    reset.events.map((e) => [e.subject, e.revision, e.change, e.messages.map((m) => variantOf(decode(m))[0])]),
+    [['player:7', 12, 'Enter', ['PlayerAppeared', 'PlayerMoved']]]
+  )
+  assertNear(finalOtherPlayerPosition(reset.events[0].messages, 7), [9, 0, 9])
+
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 5, events: [update('player:7', 14, { PlayerHealthUpdate: [7, 50, 100] })] }))
+  const live = worldUpdatesOf(spy.sent)
+  assert.strictEqual(live.length, 2)
+  assert.strictEqual(live[1].sequence, 2, 'live frames chain onto the synthesized reset')
+  assert.strictEqual(live[1].events[0].subject, 'player:7')
+  assert.ok(acceptsAll(spy.sent))
+})
+
+test('a spectator attached before the reset gets the stream verbatim', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  const spy = attachedSpectator(proxy)
+  assert.strictEqual(worldUpdatesOf(spy.sent).length, 0, 'nothing to synthesize before the agent has a view')
+
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 1, reset: true }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 2 }))
+  assert.deepStrictEqual(worldUpdatesOf(spy.sent).map((u) => u.sequence), [1, 2])
+  assert.ok(acceptsAll(spy.sent))
+})
+
+test('a frame the agent would refuse is not relayed, and a spectator waits for the next reset', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 1, reset: true }))
+  const spy = attachedSpectator(proxy)
+  // A gap: the agent resyncs, the server answers with a new generation.
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 3 }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 2 }))
+  proxy.onServerFrame(worldUpdateFrame({ generation: 6, sequence: 1, reset: true }))
+  proxy.onServerFrame(worldUpdateFrame({ generation: 6, sequence: 2 }))
+  assert.deepStrictEqual(
+    worldUpdatesOf(spy.sent).map((u) => [u.generation, u.sequence]),
+    [
+      [5, 1],
+      [6, 1],
+      [6, 2],
+    ]
+  )
+  assert.ok(acceptsAll(spy.sent))
+})
+
+test('a death followed by a respawn is replayed in that order', () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 1, reset: true, events: [enter('player:7', 1, { PlayerAppeared: [playerArray(7, [3, 0, 3])] })] }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 2, events: [update('player:7', 2, { PlayerDead: [7] })] }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 3, events: [update('player:7', 3, { PlayerRespawned: [playerArray(7, [0, 0, 0])] })] }))
+  proxy.onServerFrame(worldUpdateFrame({ sequence: 4, events: [update('player:7', 4, { PlayerDead: [7] })] }))
+  const [reset] = worldUpdatesOf(attachedSpectator(proxy).sent)
+  assert.deepStrictEqual(
+    reset.events[0].messages.map((m) => variantOf(decode(m))[0]),
+    ['PlayerAppeared', 'PlayerRespawned', 'PlayerDead']
+  )
+})
+
+test("the agent's own teleport inside a world event moves the synthesized self position", () => {
+  const proxy = new AgentProxy()
+  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
+  proxy.onServerFrame(
+    worldUpdateFrame({ sequence: 1, reset: true, events: [update('player:42', 1, { PlayerTeleported: [42, [80, 0, 80].map(F), F(0), 0] })] })
+  )
+  assertNear(finalPosition(proxy.snapshot.frames()), [80, 0, 80])
 })

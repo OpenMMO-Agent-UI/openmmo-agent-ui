@@ -3,7 +3,7 @@
 const http = require('node:http')
 const { WebSocket, WebSocketServer } = require('ws')
 
-const { encode, decode, variantOf, Float } = require('./msgpack')
+const { encode, decode, variantOf, Float, endOf, arrayAt, arrayHeader } = require('./msgpack')
 
 /// Sits between agent-client and the game server, on loopback:
 ///
@@ -330,6 +330,17 @@ class WorldSnapshot {
     if (SINGLETON.has(name)) this.singletons.set(name, raw)
   }
 
+  /// A message delivered inside a `WorldUpdate` event. The world view keeps
+  /// those for replay; only the agent's own relocations are read here, since
+  /// they are what the synthesized self position has to follow.
+  observeNested(name, body) {
+    if (!Array.isArray(body) || this.selfPlayerId === null) return
+    if (MOVE_PLAYER.has(name) && body[0] === this.selfPlayerId) this.takeSelfPosition(body[1], body[2], body[3])
+    if (name === 'PlayerRespawned' && Array.isArray(body[0]) && body[0][0] === this.selfPlayerId) {
+      this.takeSelfPosition(body[0][2], body[0][3], body[0][11])
+    }
+  }
+
   /// A teleport or a correction, never a step: whatever the body was doing
   /// it is standing still at the far end of one.
   takeSelfPosition(position, rotation, floorLevel) {
@@ -369,10 +380,15 @@ class WorldSnapshot {
   /// An entity has to be introduced before any frame that repositions or
   /// re-states it, or the client drops a message naming an id it has never
   /// seen — which is why 3 precedes 4 rather than being interleaved.
-  frames() {
+  ///
+  /// `worldReset` is the interest-set snapshot (protocol v80), which carries
+  /// everything the per-entity frames below used to; it goes right after the
+  /// join, since a reset clears whatever the client drew before it.
+  frames(worldReset = null) {
     const out = []
     if (this.join) out.push(this.join)
     if (this.baseline) out.push(this.baseline)
+    if (worldReset) out.push(worldReset)
 
     out.push(...this.playerDrops.values(), ...this.monsterDrops.values(), ...this.groundItemDrops.values())
     out.push(...this.players.values(), ...this.monsters.values(), ...this.groundItems.values())
@@ -385,6 +401,175 @@ class WorldSnapshot {
     out.push(...this.places.values(), ...this.singletons.values())
     return out
   }
+}
+
+/// A `WorldUpdate` frame taken apart into byte ranges, so its pieces can be
+/// re-emitted without re-encoding them (integral floats would come back as
+/// ints, and a spectator reads the same wire format the agent does).
+function parseWorldUpdate(frame) {
+  try {
+    if (frame[0] !== 0x81) return null
+    let i = endOf(frame, 1)
+    const [count, first] = arrayAt(frame, i)
+    if (count !== 8) return null
+    i = first
+    const fields = []
+    for (let k = 0; k < 8; k++) {
+      const start = i
+      i = endOf(frame, i)
+      fields.push([start, i])
+    }
+    const field = (k) => decode(frame.subarray(fields[k][0], fields[k][1]))
+    const events = []
+    let [n, at] = arrayAt(frame, fields[7][0])
+    for (let k = 0; k < n; k++) {
+      const [, inner] = arrayAt(frame, at)
+      let j = inner
+      const subject = decode(frame.subarray(j, (j = endOf(frame, j))))
+      const revision = decode(frame.subarray(j, (j = endOf(frame, j))))
+      const change = decode(frame.subarray(j, (j = endOf(frame, j))))
+      const [m, messagesAt] = arrayAt(frame, j)
+      j = messagesAt
+      const messages = []
+      for (let q = 0; q < m; q++) {
+        const start = j
+        j = endOf(frame, j)
+        messages.push(frame.subarray(start, j))
+      }
+      events.push({ subject, revision, change, messages })
+      at = endOf(frame, at)
+    }
+    return {
+      epoch: field(0),
+      generation: field(1),
+      sequence: field(2),
+      position: frame.subarray(fields[3][0], fields[3][1]),
+      floor: frame.subarray(fields[4][0], fields[4][1]),
+      reset: field(5),
+      ready: field(6),
+      sequenceAt: fields[2],
+      events,
+    }
+  } catch {
+    return null
+  }
+}
+
+/// The agent's interest set, as the server streams it (protocol v80): every
+/// nearby entity arrives inside `WorldUpdate` events, subject by subject, and
+/// a client accepts those only in sequence from a `reset`. A spectator that
+/// attaches after the agent's reset went by would reject everything, so this
+/// keeps each subject's snapshot — its Enter messages plus the latest of each
+/// Update message kind — to hand a late spectator a reset of its own, and
+/// renumbers the live frames that follow so they chain onto it.
+class WorldView {
+  constructor() {
+    this.reset()
+  }
+
+  reset() {
+    this.epoch = ''
+    this.generation = 0
+    this.sequence = 0
+    this.synchronized = false
+    this.position = null
+    this.floor = null
+    this.ready = false
+    this.subjects = new Map()
+    this.retiredEpochs = new Set()
+  }
+
+  /// Mirrors `WorldView::accept` in shared/src/interest.rs.
+  accept(update) {
+    const sameEpoch = this.epoch === update.epoch
+    if (
+      this.retiredEpochs.has(update.epoch) ||
+      (sameEpoch &&
+        (update.generation < this.generation ||
+          (update.generation === this.generation && update.sequence <= this.sequence)))
+    )
+      return false
+    if (update.reset) {
+      if (update.sequence !== 1 || (sameEpoch && update.generation <= this.generation)) {
+        this.synchronized = false
+        return false
+      }
+      if (this.epoch && !sameEpoch) this.retiredEpochs.add(this.epoch)
+      this.epoch = update.epoch
+      this.generation = update.generation
+      this.sequence = 0
+      this.subjects.clear()
+      this.synchronized = true
+    }
+    if (
+      !this.synchronized ||
+      update.epoch !== this.epoch ||
+      update.generation !== this.generation ||
+      update.sequence !== this.sequence + 1 ||
+      update.events.some((event) => (this.subjects.get(event.subject)?.revision ?? 0) > event.revision)
+    ) {
+      this.synchronized = false
+      return false
+    }
+    this.sequence = update.sequence
+    this.position = update.position
+    this.floor = update.floor
+    this.ready = update.ready
+    for (const event of update.events) {
+      if (event.change === 'Leave' || event.change === 'Delete') {
+        this.subjects.delete(event.subject)
+        continue
+      }
+      let subject = this.subjects.get(event.subject)
+      if (event.change === 'Enter' || !subject) {
+        subject = { revision: event.revision, enter: [], updates: new Map() }
+        this.subjects.set(event.subject, subject)
+      }
+      subject.revision = event.revision
+      if (event.change === 'Enter') {
+        subject.enter = event.messages
+        continue
+      }
+      // Latest of each kind, in order of recency: a death followed by a
+      // respawn replays as both, in that order, and ends alive.
+      for (const raw of event.messages) {
+        const [name] = safeVariant(raw)
+        subject.updates.delete(name)
+        subject.updates.set(name, raw)
+      }
+    }
+    return true
+  }
+
+  /// A `reset` carrying everything in view, numbered as sequence 1 of the
+  /// current generation.
+  resetFrame() {
+    if (!this.synchronized || !this.position) return null
+    const parts = [
+      Buffer.from([0x81]),
+      encode('WorldUpdate'),
+      Buffer.from([0x98]),
+      encode(this.epoch),
+      encode(this.generation),
+      encode(1),
+      this.position,
+      this.floor,
+      encode(true),
+      encode(this.ready),
+      arrayHeader(this.subjects.size),
+    ]
+    for (const [id, subject] of this.subjects) {
+      const messages = [...subject.enter, ...subject.updates.values()]
+      parts.push(Buffer.from([0x94]), encode(id), encode(subject.revision), encode('Enter'), arrayHeader(messages.length), ...messages)
+    }
+    return Buffer.concat(parts)
+  }
+}
+
+/// The same frame with its sequence field replaced.
+function renumbered(frame, update, sequence) {
+  const [start, end] = update.sequenceAt
+  return Buffer.concat([frame.subarray(0, start), encode(sequence), frame.subarray(end)])
 }
 
 /// Mirrors `api_base_url` in agent-client's orchestrator.rs: an explicit port
@@ -429,7 +614,12 @@ class AgentProxy {
     this.port = 0
     this.upstreamUrl = ''
     this.snapshot = new WorldSnapshot()
+    this.view = new WorldView()
     this.spectators = new Set()
+    /// Per spectator, how its `WorldUpdate` numbering relates to the agent's:
+    /// the agent's sequence minus this is the spectator's. Absent until the
+    /// spectator has been handed a reset to chain onto.
+    this.sequenceBase = new WeakMap()
     this.agentSocket = null
     this.agentUpstream = null
   }
@@ -496,6 +686,7 @@ class AgentProxy {
     if (this.agentSocket) this.agentSocket.close()
     this.agentSocket = downstream
     this.snapshot.reset()
+    this.view.reset()
     // A fresh session wears nothing and has trained nothing until the server
     // says otherwise; leaving the last session's gear, skills or gear-fed
     // stats on screen would outlive the character.
@@ -552,7 +743,9 @@ class AgentProxy {
 
   attachSpectator(ws) {
     this.spectators.add(ws)
-    for (const frame of this.snapshot.frames()) ws.send(frame)
+    const reset = this.view.resetFrame()
+    if (reset) this.sequenceBase.set(ws, this.view.sequence - 1)
+    for (const frame of this.snapshot.frames(reset)) ws.send(frame)
     // A spectator cannot act, but it still speaks first (the client sends its
     // protocol handshake on open); read and drop so the socket stays healthy.
     ws.on('message', () => {})
@@ -570,6 +763,10 @@ class AgentProxy {
   onServerFrame(frame) {
     const [name, body] = safeVariant(frame)
     if (!name) return
+    if (name === 'WorldUpdate') {
+      this.onWorldUpdate(frame)
+      return
+    }
     this.snapshot.observe(name, body, frame)
     if (INVENTORY.has(name)) {
       const worn = wornFromInventory(body)
@@ -598,6 +795,30 @@ class AgentProxy {
       }
     }
     if (!OWNER_ONLY.has(name)) this.broadcast(frame)
+  }
+
+  /// A frame the agent's own view would refuse is not relayed: the agent
+  /// answers it with a resync, and the reset that follows supersedes it.
+  onWorldUpdate(frame) {
+    const update = parseWorldUpdate(frame)
+    if (!update || !this.view.accept(update)) return
+    for (const event of update.events) {
+      for (const raw of event.messages) {
+        const [name, body] = safeVariant(raw)
+        if (name) this.snapshot.observeNested(name, body)
+      }
+    }
+    for (const ws of this.spectators) {
+      if (ws.readyState !== WebSocket.OPEN) continue
+      if (update.reset) {
+        this.sequenceBase.set(ws, 0)
+        ws.send(frame)
+        continue
+      }
+      const base = this.sequenceBase.get(ws)
+      if (base === undefined) continue
+      ws.send(base === 0 ? frame : renumbered(frame, update, update.sequence - base))
+    }
   }
 
   /// The agent's own movement never comes back from the server, so a
@@ -745,6 +966,8 @@ function safeVariant(frame) {
 module.exports = {
   AgentProxy,
   WorldSnapshot,
+  WorldView,
+  parseWorldUpdate,
   OWNER_ONLY,
   apiBaseUrl,
   wornFromInventory,
