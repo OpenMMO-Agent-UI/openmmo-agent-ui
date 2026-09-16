@@ -133,6 +133,53 @@ function decode(buf) {
   return read()
 }
 
+/// Where the value starting at `i` ends, without decoding it — for slicing a
+/// nested value out of a frame byte-for-byte.
+function endOf(buf, i) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  const b = buf[i]
+  if (b <= 0x7f || b >= 0xe0) return i + 1
+  if (b >= 0x80 && b <= 0x8f) return endOfN(buf, i + 1, 2 * (b & 0x0f))
+  if (b >= 0x90 && b <= 0x9f) return endOfN(buf, i + 1, b & 0x0f)
+  if (b >= 0xa0 && b <= 0xbf) return i + 1 + (b & 0x1f)
+  switch (b) {
+    case 0xc0: case 0xc2: case 0xc3: return i + 1
+    case 0xc4: case 0xd9: return i + 2 + buf[i + 1]
+    case 0xc5: case 0xda: return i + 3 + dv.getUint16(i + 1)
+    case 0xc6: case 0xdb: return i + 5 + dv.getUint32(i + 1)
+    case 0xcc: case 0xd0: return i + 2
+    case 0xcd: case 0xd1: return i + 3
+    case 0xca: case 0xce: case 0xd2: return i + 5
+    case 0xcb: case 0xcf: case 0xd3: return i + 9
+    case 0xdc: return endOfN(buf, i + 3, dv.getUint16(i + 1))
+    case 0xdd: return endOfN(buf, i + 5, dv.getUint32(i + 1))
+    case 0xde: return endOfN(buf, i + 3, 2 * dv.getUint16(i + 1))
+    case 0xdf: return endOfN(buf, i + 5, 2 * dv.getUint32(i + 1))
+    default: throw new Error(`unhandled msgpack byte 0x${b.toString(16)}`)
+  }
+}
+
+function endOfN(buf, i, n) {
+  for (let k = 0; k < n; k++) i = endOf(buf, i)
+  return i
+}
+
+/// `[count, offset of the first element]` for the array starting at `i`.
+function arrayAt(buf, i) {
+  const b = buf[i]
+  if (b >= 0x90 && b <= 0x9f) return [b & 0x0f, i + 1]
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  if (b === 0xdc) return [dv.getUint16(i + 1), i + 3]
+  if (b === 0xdd) return [dv.getUint32(i + 1), i + 5]
+  throw new Error(`not an array: 0x${b.toString(16)}`)
+}
+
+function arrayHeader(n) {
+  if (n < 16) return Buffer.from([0x90 | n])
+  if (n < 0x10000) return Buffer.from([0xdc, n >> 8, n & 0xff])
+  return Buffer.from([0xdd, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff])
+}
+
 /// `["PlayerMoved", [..fields]]` for a tagged variant, `["Heartbeat", null]`
 /// for a unit one. Returns `[null, null]` for anything unrecognisable, so a
 /// protocol addition can never crash the relay.
@@ -145,4 +192,4 @@ function variantOf(decoded) {
   return [null, null]
 }
 
-module.exports = { encode, decode, variantOf, Float }
+module.exports = { encode, decode, variantOf, Float, endOf, arrayAt, arrayHeader }
