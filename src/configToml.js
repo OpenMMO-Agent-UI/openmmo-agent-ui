@@ -131,6 +131,11 @@ function renderConfigToml(s) {
   if (anchor.every(isNumber)) {
     lines.push(`anchor_x = ${Number(anchor[0])}`, `anchor_z = ${Number(anchor[1])}`)
   }
+  // Same for the fisher's spot: missing means wherever it stands.
+  const fishing = [s.workerFishingX, s.workerFishingZ]
+  if (fishing.every(isNumber)) {
+    lines.push(`fishing_x = ${Number(fishing[0])}`, `fishing_z = ${Number(fishing[1])}`)
+  }
   lines.push('')
   return lines.join('\n')
 }

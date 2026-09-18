@@ -55,8 +55,8 @@ const DEFAULTS = {
   idleIntervalSecs: 8,
   alwaysActive: true,
   /// What drives Automatic play. The rule-based workers inside agent-client
-  /// (no LLM, no API key) are the ones with a panel: the LLM agent and the
-  /// fisher are off for now, so nothing here can select them.
+  /// (no LLM, no API key) are the ones with a panel: the LLM agent is off for
+  /// now, so nothing here can select it.
   workerKind: 'fighter',
   workerLevelMargin: 0,
   workerLowHealthPct: 70,
@@ -89,6 +89,12 @@ const DEFAULTS = {
   /// this character has actually stood on.
   workerAnchors: [],
   workerPatrolRadius: 100,
+  /// Where the fisher works, the same way: a snapshot with its own list of
+  /// saved spots. Both null fishes from wherever the character stands.
+  workerFishingName: '',
+  workerFishingX: null,
+  workerFishingZ: null,
+  workerFishingSpots: [],
   maxConcurrent: 2,
   requestTimeoutSecs: 120,
   rustLog: 'info',
@@ -204,6 +210,7 @@ function load() {
   setLanguage(settings.language)
   settings.workerKind = supportedWorker(settings.workerKind)
   settings.workerAnchors = normalizeAnchors(settings.workerAnchors)
+  settings.workerFishingSpots = normalizeAnchors(settings.workerFishingSpots)
   for (const key of SECRET_KEYS) {
     settings[key] = Object.hasOwn(secrets, key) ? secrets[key] : DEFAULTS[key] || ''
   }
@@ -273,6 +280,8 @@ function importExistingConfig(settings) {
   take('workerPatrolRadius', worker.patrol_radius)
   take('workerDungeonId', worker.dungeon_id)
   take('workerDeathLimit', worker.death_limit)
+  take('workerFishingX', worker.fishing_x)
+  take('workerFishingZ', worker.fishing_z)
   take('minIntervalSecs', npc.min_interval_secs)
   take('idleIntervalSecs', npc.idle_interval_secs)
   if (typeof npc.always_active === 'boolean') merged.alwaysActive = npc.always_active
@@ -305,10 +314,10 @@ function normalizeAnchors(saved) {
     .map((c) => ({ name: String(c.name || ''), x: Number(c.x), z: Number(c.z) }))
 }
 
-/// A driver with no panel — an older build's `none`/`fisher`, a hand-written
-/// config's, or one retired between versions — would fail validation on every
-/// Play with nothing to point at. Read it as the fighter instead of stranding
-/// the session.
+/// A driver with no panel — an older build's `none`, a hand-written config's,
+/// or one retired between versions — would fail validation on every Play with
+/// nothing to point at. Read it as the fighter instead of stranding the
+/// session.
 function supportedWorker(kind) {
   return WORKERS.includes(kind) ? kind : 'fighter'
 }
@@ -319,9 +328,8 @@ function usesWorker(s) {
   return Boolean(s.workerKind) && s.workerKind !== 'none'
 }
 
-/// The rule engines with a panel — see DEFAULTS.workerKind. agent-client also
-/// carries a fisher, which has no settings of its own here yet.
-const WORKERS = ['fighter', 'dungeoneer']
+/// The rule engines with a panel — see DEFAULTS.workerKind.
+const WORKERS = ['fighter', 'dungeoneer', 'fisher']
 
 /// Refuse to start on the mistakes agent-client would only report after the
 /// window has already switched to the spectator view.

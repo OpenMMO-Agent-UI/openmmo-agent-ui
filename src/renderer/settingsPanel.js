@@ -97,20 +97,29 @@ export function withoutAnchorSpot(saved, spot) {
   return (saved || []).filter((c) => !sameSpot(c, spot))
 }
 
-/// The fighter's Anchor dropdown: index 0 is always "no anchor picked" (the
-/// world's spawn point), then the player's own saved spots, and last the
-/// stored anchor when the list no longer holds it — an anchor the player
-/// picked must not silently reset because its spot was deleted or imported
-/// from a config.toml.
+/// A spot dropdown: index 0 is always "no spot picked", then the player's own
+/// saved spots, and last the stored spot when the list no longer holds it — a
+/// spot the player picked must not silently reset because its entry was
+/// deleted or it was imported from a config.toml.
 ///
 /// What settings hold is a snapshot; the name is only what this shows.
+function spotChoices(current, saved) {
+  const choices = [null, ...saved]
+  if (current && !choices.some((c) => c && sameSpot(c, current))) choices.push(current)
+  const at = choices.findIndex((c) => (current ? c && sameSpot(c, current) : !c))
+  return { choices, selected: at < 0 ? 0 : at }
+}
+
+/// The fighter's Anchor dropdown; unset is the world's spawn point.
 export function anchorChoices(settings, saved = settings.workerAnchors || []) {
   const { workerAnchorName, workerAnchorX, workerAnchorZ } = settings
-  const anchor = anchorSpot(workerAnchorName, workerAnchorX, workerAnchorZ)
-  const choices = [null, ...saved]
-  if (anchor && !choices.some((c) => c && sameSpot(c, anchor))) choices.push(anchor)
-  const at = choices.findIndex((c) => (anchor ? c && sameSpot(c, anchor) : !c))
-  return { choices, selected: at < 0 ? 0 : at }
+  return spotChoices(anchorSpot(workerAnchorName, workerAnchorX, workerAnchorZ), saved)
+}
+
+/// The fisher's spot dropdown; unset fishes from wherever it stands.
+export function fishingChoices(settings, saved = settings.workerFishingSpots || []) {
+  const { workerFishingName, workerFishingX, workerFishingZ } = settings
+  return spotChoices(anchorSpot(workerFishingName, workerFishingX, workerFishingZ), saved)
 }
 
 /// Called when the Settings modal opens: mirrors current settings onto the

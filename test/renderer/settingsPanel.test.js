@@ -55,6 +55,24 @@ test('the dropdown offers the spots the player saved, not a list shipped with th
   assert.deepEqual(anchorChoices({}).choices, [null], 'a player with no spots has only the spawn point')
 })
 
+test('the fishing spot dropdown reads its own settings, not the anchor', async () => {
+  const { fishingChoices } = await settingsPanelPromise
+  const pond = { name: 'Mill pond', x: 12, z: -8 }
+  const { choices, selected } = fishingChoices({
+    workerFishingSpots: [pond],
+    workerFishingName: 'Mill pond',
+    workerFishingX: 12,
+    workerFishingZ: -8,
+    workerAnchors: SAVED,
+    workerAnchorX: -1616,
+    workerAnchorZ: 4918,
+  })
+
+  assert.deepEqual(choices, [null, pond], 'the anchor list is not this list')
+  assert.equal(selected, 1)
+  assert.deepEqual(fishingChoices({}).choices, [null])
+})
+
 test('a half-typed coordinate is not a spot', async () => {
   const { anchorSpot } = await settingsPanelPromise
 

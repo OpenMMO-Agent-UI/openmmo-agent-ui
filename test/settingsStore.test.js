@@ -36,6 +36,14 @@ test('the dungeoneer is a driver the panel can select', () => {
   assert.equal(DEFAULTS.workerDungeonId, 'old_crypt')
 })
 
+test('the fisher is a driver the panel can select, with a spot list of its own', () => {
+  assert.deepEqual(settingsStore.validate(settings({ workerKind: 'fisher' })), [])
+  assert.equal(settingsStore.usesWorker(settings({ workerKind: 'fisher' })), true)
+  assert.deepEqual(settingsStore.normalizeAnchors(DEFAULTS.workerFishingSpots), [])
+  assert.equal(DEFAULTS.workerFishingX, null)
+  assert.equal(DEFAULTS.workerFishingZ, null)
+})
+
 test('an unknown worker is refused before the agent is started', () => {
   const errors = settingsStore.validate(settings({ workerKind: 'lumberjack' }))
 

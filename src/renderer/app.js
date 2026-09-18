@@ -127,6 +127,11 @@ const WORKER_KINDS = [
     label: 'Dungeon Conqueror',
     hint: 'Works one dungeon: farms each locked floor for its key, clears the guardian, empties the great chest, then banks the next run\u2019s keys until the dungeons reset. No LLM, no API key.',
   },
+  {
+    id: 'fisher',
+    label: 'Fisher',
+    hint: 'Walks to its fishing spot, casts at the nearest water and lands whatever bites, buying a rod in town when it has none. Catches marked Sellable are sold there. No LLM, no API key.',
+  },
 ]
 
 /// The dungeons the game ships, in ascending difficulty — the fixed registry
@@ -209,74 +214,110 @@ function agentEndpoint() {
   }
 }
 
-/// What the Anchor dropdown is offering, by option index — read back when one
-/// is picked. The list itself is settingsPanel's decision.
-let anchorOptions = [null]
+/// The two spot editors — the fighter's anchor and the fisher's spot — are
+/// the same widget over different settings: a dropdown of the player's own
+/// saved spots, and the fields under it that always show whatever is picked,
+/// so saving a tweaked copy is one field and one click.
+const SPOT_EDITORS = {
+  anchor: {
+    select: 'workerAnchor',
+    fields: ['anchorName', 'anchorX', 'anchorZ'],
+    here: 'anchorHere',
+    save: 'anchorSave',
+    remove: 'anchorDelete',
+    list: 'workerAnchors',
+    keys: ['workerAnchorName', 'workerAnchorX', 'workerAnchorZ'],
+    choices: settingsPanel.anchorChoices,
+    unset: 'Spawn point',
+  },
+  fishing: {
+    select: 'workerFishingSpot',
+    fields: ['fishingName', 'fishingX', 'fishingZ'],
+    here: 'fishingHere',
+    save: 'fishingSave',
+    remove: 'fishingDelete',
+    list: 'workerFishingSpots',
+    keys: ['workerFishingName', 'workerFishingX', 'workerFishingZ'],
+    choices: settingsPanel.fishingChoices,
+    unset: 'Where it stands',
+  },
+}
+
+/// What each dropdown is offering, by option index — read back when one is
+/// picked. The list itself is settingsPanel's decision.
+const spotOptions = { anchor: [null], fishing: [null] }
 
 /// A coordinate name is player-written, so the options are built as nodes
-/// rather than markup. The editor under the dropdown always shows whatever is
-/// picked, so saving a tweaked copy is one field and one click.
-function renderAnchorOptions() {
-  const select = $('workerAnchor')
-  const { choices, selected } = settingsPanel.anchorChoices(settings)
-  anchorOptions = choices
+/// rather than markup.
+function renderSpotOptions(id) {
+  const editor = SPOT_EDITORS[id]
+  const select = $(editor.select)
+  const { choices, selected } = editor.choices(settings)
+  spotOptions[id] = choices
   select.innerHTML = ''
   for (const [i, choice] of choices.entries()) {
     const option = document.createElement('option')
     option.value = String(i)
     option.textContent = choice
       ? `${choice.name || t('Custom')} (${Math.round(choice.x)}, ${Math.round(choice.z)})`
-      : t('Spawn point')
+      : t(editor.unset)
     select.appendChild(option)
   }
   select.value = String(selected)
-  writeAnchorFields(choices[selected] || null)
+  writeSpotFields(id, choices[selected] || null)
 }
 
-function writeAnchorFields(spot) {
-  writeField('anchorName', 'text', spot ? spot.name : '')
-  writeField('anchorX', 'float', spot ? spot.x : null)
-  writeField('anchorZ', 'float', spot ? spot.z : null)
-  // Only a spot the saved list actually holds can be deleted; the spawn point
-  // and an anchor kept as a snapshot are not entries.
-  const saved = settings.workerAnchors || []
-  $('anchorDelete').disabled = !spot || !saved.some((c) => settingsPanel.sameSpot(c, spot))
+function writeSpotFields(id, spot) {
+  const editor = SPOT_EDITORS[id]
+  const [name, x, z] = editor.fields
+  writeField(name, 'text', spot ? spot.name : '')
+  writeField(x, 'float', spot ? spot.x : null)
+  writeField(z, 'float', spot ? spot.z : null)
+  // Only a spot the saved list actually holds can be deleted; the unset
+  // choice and a spot kept as a snapshot are not entries.
+  const saved = settings[editor.list] || []
+  $(editor.remove).disabled = !spot || !saved.some((c) => settingsPanel.sameSpot(c, spot))
 }
 
 /// What the editor's three fields say, or null while they are unusable — a
 /// half-typed coordinate is not a spot.
-function editedAnchor() {
-  return settingsPanel.anchorSpot($('anchorName').value, $('anchorX').value, $('anchorZ').value)
+function editedSpot(id) {
+  const [name, x, z] = SPOT_EDITORS[id].fields
+  return settingsPanel.anchorSpot($(name).value, $(x).value, $(z).value)
 }
 
-function persistAnchor(spot) {
+function persistSpot(id, spot) {
+  const [name, x, z] = SPOT_EDITORS[id].keys
   return persist({
-    workerAnchorName: spot ? spot.name || '' : '',
-    workerAnchorX: spot ? spot.x : null,
-    workerAnchorZ: spot ? spot.z : null,
+    [name]: spot ? spot.name || '' : '',
+    [x]: spot ? spot.x : null,
+    [z]: spot ? spot.z : null,
   })
 }
 
-/// Saving a spot posts the fighter to it in the same click: a list entry
+/// Saving a spot posts the worker to it in the same click: a list entry
 /// nothing points at is a bookmark nobody asked for.
-async function saveAnchorSpot(spot) {
+async function saveSpot(id, spot) {
+  const editor = SPOT_EDITORS[id]
+  const [name, x, z] = editor.keys
   await persist({
-    workerAnchors: settingsPanel.withAnchorSpot(settings.workerAnchors, spot),
-    workerAnchorName: spot.name,
-    workerAnchorX: spot.x,
-    workerAnchorZ: spot.z,
+    [editor.list]: settingsPanel.withAnchorSpot(settings[editor.list], spot),
+    [name]: spot.name,
+    [x]: spot.x,
+    [z]: spot.z,
   })
-  renderAnchorOptions()
+  renderSpotOptions(id)
 }
 
-/// Deleting a spot only forgets the bookmark: the anchor is a snapshot, so a
-/// fighter posted there stays posted and the dropdown keeps showing it,
+/// Deleting a spot only forgets the bookmark: the setting is a snapshot, so a
+/// worker posted there stays posted and the dropdown keeps showing it,
 /// unnamed, at the end of the list. Nothing to restart for.
-async function deleteAnchorSpot(spot) {
+async function deleteSpot(id, spot) {
+  const editor = SPOT_EDITORS[id]
   await persistImmediateSetting({
-    workerAnchors: settingsPanel.withoutAnchorSpot(settings.workerAnchors, spot),
+    [editor.list]: settingsPanel.withoutAnchorSpot(settings[editor.list], spot),
   })
-  renderAnchorOptions()
+  renderSpotOptions(id)
 }
 
 /// One restock picker: "Auto" (the id agent-client falls back to on an empty
@@ -292,7 +333,8 @@ function renderRestockOptions() {
   }
 }
 
-/// The engine picker, and which half of the drawer its choice leaves showing.
+/// The engine picker, and which parts of the drawer its choice leaves
+/// showing: `data-worker` names the engines a block belongs to.
 function renderWorkerKind(kind = settings.workerKind || 'fighter') {
   const select = $('workerKind')
   select.innerHTML = WORKER_KINDS.map(
@@ -302,9 +344,8 @@ function renderWorkerKind(kind = settings.workerKind || 'fighter') {
   const chosen = WORKER_KINDS.find((w) => w.id === kind) || WORKER_KINDS[0]
   $('workerKindHint').textContent = t(chosen.hint)
   for (const block of document.querySelectorAll('[data-worker]')) {
-    block.hidden = block.dataset.worker !== kind
+    block.hidden = !block.dataset.worker.split(' ').includes(kind)
   }
-  $('drawerTitle').textContent = t(chosen.label)
 }
 
 /// One dungeon per registry entry, with its depth in the label — the floor
@@ -323,7 +364,7 @@ function renderHunt() {
   for (const [id, type] of Object.entries(HUNT_FIELDS)) writeField(id, type, settings[id])
   renderWorkerKind()
   renderDungeonOptions()
-  renderAnchorOptions()
+  for (const id of Object.keys(SPOT_EDITORS)) renderSpotOptions(id)
   renderRestockOptions()
 }
 
@@ -770,11 +811,9 @@ function applyPlayState(state) {
   }
 }
 
-/// The Hunt drawer is titled by whichever engine is selected, so renderHunt
-/// writes that one itself.
 const DRAWER_TITLES = {
   worn: 'Character',
-  hunt: 'Monster Fighter',
+  hunt: 'Auto Worker',
   activity: 'Activity',
 }
 
@@ -913,50 +952,58 @@ function bindHuntFields() {
     void persist({ workerDungeonId: $('workerDungeonId').value })
   })
 
-  $('workerAnchor').addEventListener('change', () => {
-    const choice = anchorOptions[Number($('workerAnchor').value)] || null
-    writeAnchorFields(choice)
-    void persistAnchor(choice)
+  for (const id of Object.keys(SPOT_EDITORS)) bindSpotEditor(id)
+
+  for (const id of Object.keys(RESTOCK_ITEMS)) {
+    $(id).addEventListener('change', () => void persist({ [id]: $(id).value }))
+  }
+}
+
+function bindSpotEditor(id) {
+  const editor = SPOT_EDITORS[id]
+  const picked = () => spotOptions[id][Number($(editor.select).value)] || null
+
+  $(editor.select).addEventListener('change', () => {
+    const choice = picked()
+    writeSpotFields(id, choice)
+    void persistSpot(id, choice)
   })
 
   // Typing is not picking: the fields describe a spot until Save is pressed,
-  // and only then does the fighter's own anchor move.
-  for (const id of ['anchorName', 'anchorX', 'anchorZ']) {
-    $(id).addEventListener('input', () => {
-      $('anchorDelete').disabled = true
+  // and only then does the worker's own spot move.
+  for (const field of editor.fields) {
+    $(field).addEventListener('input', () => {
+      $(editor.remove).disabled = true
     })
   }
 
-  $('anchorHere').addEventListener('click', () => {
+  $(editor.here).addEventListener('click', () => {
     const here = lastSelf && lastSelf.position
     if (!here) {
       showErrors([t('The character has to be in the world before its position can be saved.')])
       return
     }
-    writeField('anchorX', 'float', Math.round(here.x * 10) / 10)
-    writeField('anchorZ', 'float', Math.round(here.z * 10) / 10)
-    $('anchorDelete').disabled = true
+    const [, x, z] = editor.fields
+    writeField(x, 'float', Math.round(here.x * 10) / 10)
+    writeField(z, 'float', Math.round(here.z * 10) / 10)
+    $(editor.remove).disabled = true
   })
 
-  $('anchorSave').addEventListener('click', () => {
-    const spot = editedAnchor()
+  $(editor.save).addEventListener('click', () => {
+    const spot = editedSpot(id)
     if (!spot) {
       showErrors([t('A spot needs both an X and a Z.')])
       return
     }
     showErrors([])
-    void saveAnchorSpot(spot)
+    void saveSpot(id, spot)
   })
 
-  $('anchorDelete').addEventListener('click', () => {
-    const spot = anchorOptions[Number($('workerAnchor').value)] || null
+  $(editor.remove).addEventListener('click', () => {
+    const spot = picked()
     if (!spot) return
-    void deleteAnchorSpot(spot)
+    void deleteSpot(id, spot)
   })
-
-  for (const id of Object.keys(RESTOCK_ITEMS)) {
-    $(id).addEventListener('change', () => void persist({ [id]: $(id).value }))
-  }
 }
 
 function bindActions() {

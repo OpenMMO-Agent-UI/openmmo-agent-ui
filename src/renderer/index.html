@@ -198,8 +198,8 @@
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3.4" /><path d="M4.5 20v-1.5a5 5 0 0 1 5-5h5a5 5 0 0 1 5 5V20" /></svg>
           </button>
           <span class="rail-rule"></span>
-          <button data-drawer="hunt" aria-label="Monster Fighter" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 8.2 2.6 3.4l5 1.5" /><path d="M17.4 8.2l4-4.8-5 1.5" /><path d="M5 12.5a7 7 0 0 1 14 0v1a5.5 5.5 0 0 1-5.5 5.5h-3A5.5 5.5 0 0 1 5 13.5z" /><path d="M9.5 12.5v1.4M14.5 12.5v1.4" /><path d="M10 16.8h4" /></svg>
+          <button data-drawer="hunt" aria-label="Auto Worker" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="9" width="14" height="10" rx="2.5" /><path d="M12 9V5.5" /><circle cx="12" cy="4" r="1.5" /><path d="M2.5 13v3M21.5 13v3" /><path d="M9 13.5v1.2M15 13.5v1.2" /><path d="M9.5 17h5" /></svg>
           </button>
           <span class="rail-rule"></span>
           <button data-drawer="activity" aria-label="Activity" aria-expanded="false" aria-controls="drawer" data-i18n-attr="aria-label">
@@ -253,7 +253,7 @@
                 <pre id="log"></pre>
               </div>
             </div>
-            <!-- The fighter's own knobs. They were a Settings tab, which put
+            <!-- The worker's own knobs. They were a Settings tab, which put
                  the one thing you tune while watching the agent work behind a
                  modal you had to close to see the result. Saved as you go: a
                  running agent picks them up on Apply & restart. -->
@@ -261,11 +261,13 @@
               <label data-i18n>Work<select id="workerKind"></select></label>
               <p class="hint" id="workerKindHint"></p>
               <div class="row">
-                <label data-i18n>Level margin<input type="number" id="workerLevelMargin" min="0" max="50" /></label>
+                <!-- Only the combat engines pick fights; the fisher answers
+                     whatever hits it, whatever the level. -->
+                <label data-worker="fighter dungeoneer" data-i18n>Level margin<input type="number" id="workerLevelMargin" min="0" max="50" /></label>
                 <label data-i18n>Drink below (%)<input type="number" id="workerLowHealthPct" min="1" max="99" /></label>
                 <label data-i18n>Bag full at (%)<input type="number" id="workerBagFullPct" min="1" max="100" /></label>
               </div>
-              <!-- The two engines share the knobs above and the restock block
+              <!-- The engines share the knobs above and the restock block
                    below; only where they work differs. -->
               <div data-worker="fighter" hidden>
                 <label data-i18n>Patrol radius (m)<input type="number" id="workerPatrolRadius" min="20" max="500" /></label>
@@ -287,6 +289,21 @@
                 <label data-i18n>Give up after (deaths)<input type="number" id="workerDeathLimit" min="1" max="20" /></label>
                 <label data-i18n>Dungeon<select id="workerDungeonId"></select></label>
                 <p class="hint" data-i18n>Deeper dungeons lock more floors, and each lock wants its own key. Pick one the character can actually fight through.</p>
+              </div>
+              <div data-worker="fisher" hidden>
+                <label data-i18n>Fishing spot<select id="workerFishingSpot"></select></label>
+                <p class="hint" data-i18n>The fisher walks to this spot, looks for water around it, and comes back to the same shore after every town trip. Unset, it fishes wherever it stands.</p>
+                <div class="row anchor-spot">
+                  <label data-i18n>Spot name<input type="text" id="fishingName" maxlength="40" /></label>
+                  <label>X<input type="number" id="fishingX" step="0.1" /></label>
+                  <label>Z<input type="number" id="fishingZ" step="0.1" /></label>
+                </div>
+                <div class="row anchor-actions">
+                  <button id="fishingHere" class="ghost small" data-i18n>Where I stand</button>
+                  <button id="fishingSave" class="ghost small" data-i18n>Save spot</button>
+                  <button id="fishingDelete" class="ghost small" data-i18n>Delete spot</button>
+                </div>
+                <p class="hint" data-i18n>It needs a Fishing Rod and buys one in town when it has none. Catches are sold only once they are marked Sellable in the Bag drawer.</p>
               </div>
               <h3 class="settings-section" data-i18n>Restock</h3>
               <div class="row">

@@ -214,6 +214,33 @@ test('restock item picks are written only once chosen, so an unset one stays age
   assert.match(picked, /^scroll_item = "scroll_of_return"$/m)
 })
 
+test('the fishing spot is written only once it is picked, and apart from the anchor', () => {
+  const unset = workerTable(renderConfigToml(settings({ workerKind: 'fisher' })))
+  assert.doesNotMatch(unset, /^fishing_/m, 'agent-client reads a missing spot as wherever it stands')
+
+  const picked = workerTable(
+    renderConfigToml(
+      settings({
+        workerKind: 'fisher',
+        workerFishingName: 'Mill pond',
+        workerFishingX: -1500.5,
+        workerFishingZ: 4800,
+        workerAnchorX: -1616,
+        workerAnchorZ: 4918,
+      }),
+    ),
+  )
+  assert.match(picked, /^fishing_x = -1500.5$/m)
+  assert.match(picked, /^fishing_z = 4800$/m)
+  assert.match(picked, /^anchor_x = -1616$/m, 'the anchor keeps its own place')
+  assert.doesNotMatch(picked, /Mill pond/)
+  assert.doesNotMatch(
+    workerTable(renderConfigToml(settings({ workerFishingX: 12, workerFishingZ: null }))),
+    /^fishing_/m,
+    'half a spot is no spot',
+  )
+})
+
 test('a worker run tells agent-client there is no LLM at all', () => {
   const toml = renderConfigToml(settings({ llm: 'openai', workerKind: 'fisher' }))
 
