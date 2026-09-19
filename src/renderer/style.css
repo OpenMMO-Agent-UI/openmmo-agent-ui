@@ -136,7 +136,7 @@ button.linklike-inline:hover {
   color: var(--text);
 }
 
-button.ghost.small {
+button.small {
   padding: 2px 8px;
   font-size: 11px;
 }
@@ -1631,15 +1631,53 @@ button.icon-quiet:hover {
   text-align: center;
 }
 
+/* The saved-spot editor sits under its dropdown as one inset block, so the
+   fields read as "the spot being edited" rather than three more settings. */
+.spot-editor {
+  margin: -4px 0 12px;
+  padding: 10px 10px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
 /* A spot's name is read, its coordinates are only checked, so the name gets
-   the room. */
-.row.anchor-spot > label:first-child {
+   the room — in the editor and in the dropdown beside its one number. */
+.row.anchor-spot > label:first-child,
+.row.spot-row > label:first-child {
   flex: 2;
 }
 
 .row.anchor-actions {
   justify-content: flex-start;
-  margin-bottom: 7px;
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+/* Forgetting a bookmark is the least of the three: a plain word at the end
+   of the row, coloured for what it is only when it is live. */
+button.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+button.quiet:not(:disabled):hover {
+  border-color: transparent;
+  color: var(--ember);
+}
+
+/* One supply per line: the item on the left takes the room, the count to
+   hold is a short field on the right. */
+.restock {
+  display: grid;
+  grid-template-columns: 1fr 5.5em;
+  gap: 0 10px;
+  align-items: end;
+}
+
+.restock > label {
+  margin-bottom: 10px;
 }
 
 /* Follow + Clear: pane plumbing, not part of the reading, so it sits tight

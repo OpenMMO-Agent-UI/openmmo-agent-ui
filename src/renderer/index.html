@@ -216,8 +216,8 @@
             <iframe id="frame" hidden></iframe>
             <div id="placeholder">
               <h2 data-i18n>Nothing to watch yet</h2>
-              <p data-i18n>Start the agent and its world appears here, rendered by the real game client from the agent's own view.</p>
-              <p class="hint" id="viewHint" data-i18n>Nothing leaves this machine: the agent mirrors its session on 127.0.0.1 and this window is the only thing reading it.</p>
+              <p data-i18n>Start the agent and its world appears here.</p>
+              <p class="hint" id="viewHint" data-i18n>Mirrored on this machine only.</p>
             </div>
             <div id="actionToasts" class="action-toasts"></div>
           </div>
@@ -243,7 +243,6 @@
                   <button id="clearFeed" class="ghost small" data-i18n>Clear</button>
                 </div>
                 <div id="feed"></div>
-                <p class="hint" data-i18n>Every prompt the agent sends and every reply it gets. Click a turn to expand it.</p>
               </div>
               <div data-activity-panel="log" hidden>
                 <div class="row pane-controls">
@@ -268,53 +267,57 @@
                 <label data-i18n>Bag full at (%)<input type="number" id="workerBagFullPct" min="1" max="100" /></label>
               </div>
               <!-- The engines share the knobs above and the restock block
-                   below; only where they work differs. -->
+                   below; only where they work differs. The two spot editors
+                   are the same widget over different settings (app.js
+                   SPOT_EDITORS). -->
               <div data-worker="fighter" hidden>
-                <label data-i18n>Patrol radius (m)<input type="number" id="workerPatrolRadius" min="20" max="500" /></label>
-                <label data-i18n>Anchor<select id="workerAnchor"></select></label>
-                <p class="hint" data-i18n>The fighter hunts and patrols within this radius of its anchor, and walks back when a fight or a town trip takes it further out.</p>
-                <div class="row anchor-spot">
-                  <label data-i18n>Spot name<input type="text" id="anchorName" maxlength="40" /></label>
-                  <label>X<input type="number" id="anchorX" step="0.1" /></label>
-                  <label>Z<input type="number" id="anchorZ" step="0.1" /></label>
+                <div class="row spot-row">
+                  <label data-i18n>Anchor<select id="workerAnchor"></select></label>
+                  <label data-i18n>Patrol radius (m)<input type="number" id="workerPatrolRadius" min="20" max="500" /></label>
                 </div>
-                <div class="row anchor-actions">
-                  <button id="anchorHere" class="ghost small" data-i18n>Where I stand</button>
-                  <button id="anchorSave" class="ghost small" data-i18n>Save spot</button>
-                  <button id="anchorDelete" class="ghost small" data-i18n>Delete spot</button>
+                <div class="spot-editor">
+                  <div class="row anchor-spot">
+                    <label data-i18n>Spot name<input type="text" id="anchorName" maxlength="40" /></label>
+                    <label>X<input type="number" id="anchorX" step="0.1" /></label>
+                    <label>Z<input type="number" id="anchorZ" step="0.1" /></label>
+                  </div>
+                  <div class="row anchor-actions">
+                    <button id="anchorHere" class="ghost small" data-i18n>Where I stand</button>
+                    <button id="anchorSave" class="ghost small" data-i18n>Save spot</button>
+                    <button id="anchorDelete" class="quiet small" data-i18n>Delete</button>
+                  </div>
                 </div>
-                <p class="hint" data-i18n>The spots in the list are your own: save where the character is standing, or type the coordinates yourself.</p>
               </div>
               <div data-worker="dungeoneer" hidden>
-                <label data-i18n>Give up after (deaths)<input type="number" id="workerDeathLimit" min="1" max="20" /></label>
-                <label data-i18n>Dungeon<select id="workerDungeonId"></select></label>
-                <p class="hint" data-i18n>Deeper dungeons lock more floors, and each lock wants its own key. Pick one the character can actually fight through.</p>
+                <div class="row spot-row">
+                  <label data-i18n>Dungeon<select id="workerDungeonId"></select></label>
+                  <label data-i18n>Death limit<input type="number" id="workerDeathLimit" min="1" max="20" /></label>
+                </div>
               </div>
               <div data-worker="fisher" hidden>
                 <label data-i18n>Fishing spot<select id="workerFishingSpot"></select></label>
-                <p class="hint" data-i18n>The fisher walks to this spot, looks for water around it, and comes back to the same shore after every town trip. Unset, it fishes wherever it stands.</p>
-                <div class="row anchor-spot">
-                  <label data-i18n>Spot name<input type="text" id="fishingName" maxlength="40" /></label>
-                  <label>X<input type="number" id="fishingX" step="0.1" /></label>
-                  <label>Z<input type="number" id="fishingZ" step="0.1" /></label>
+                <div class="spot-editor">
+                  <div class="row anchor-spot">
+                    <label data-i18n>Spot name<input type="text" id="fishingName" maxlength="40" /></label>
+                    <label>X<input type="number" id="fishingX" step="0.1" /></label>
+                    <label>Z<input type="number" id="fishingZ" step="0.1" /></label>
+                  </div>
+                  <div class="row anchor-actions">
+                    <button id="fishingHere" class="ghost small" data-i18n>Where I stand</button>
+                    <button id="fishingSave" class="ghost small" data-i18n>Save spot</button>
+                    <button id="fishingDelete" class="quiet small" data-i18n>Delete</button>
+                  </div>
                 </div>
-                <div class="row anchor-actions">
-                  <button id="fishingHere" class="ghost small" data-i18n>Where I stand</button>
-                  <button id="fishingSave" class="ghost small" data-i18n>Save spot</button>
-                  <button id="fishingDelete" class="ghost small" data-i18n>Delete spot</button>
-                </div>
-                <p class="hint" data-i18n>It needs a Fishing Rod and buys one in town when it has none. Catches are sold only once they are marked Sellable in the Bag drawer.</p>
               </div>
               <h3 class="settings-section" data-i18n>Restock</h3>
-              <div class="row">
-                <label data-i18n>Food type<select id="workerFoodItem"></select></label>
-                <label data-i18n>Potion type<select id="workerPotionItem"></select></label>
-                <label data-i18n>Scroll type<select id="workerScrollItem"></select></label>
-              </div>
-              <div class="row">
-                <label data-i18n>Food<input type="number" id="workerFoodStock" min="0" max="99" /></label>
-                <label data-i18n>Potions<input type="number" id="workerPotionStock" min="0" max="99" /></label>
-                <label data-i18n>Scrolls<input type="number" id="workerScrollStock" min="0" max="99" /></label>
+              <!-- One line per supply: what to buy, and how many to hold. -->
+              <div class="restock">
+                <label data-i18n>Food<select id="workerFoodItem"></select></label>
+                <label><input type="number" id="workerFoodStock" min="0" max="99" aria-label="Food to hold" data-i18n-attr="aria-label" /></label>
+                <label data-i18n>Potions<select id="workerPotionItem"></select></label>
+                <label><input type="number" id="workerPotionStock" min="0" max="99" aria-label="Potions to hold" data-i18n-attr="aria-label" /></label>
+                <label data-i18n>Scrolls<select id="workerScrollItem"></select></label>
+                <label><input type="number" id="workerScrollStock" min="0" max="99" aria-label="Scrolls to hold" data-i18n-attr="aria-label" /></label>
               </div>
               <button id="restart" class="primary" hidden data-i18n>Apply &amp; restart</button>
             </div>
@@ -336,13 +339,13 @@
                 <p class="empty" id="statsEmpty" data-i18n>Nothing rolled yet.</p>
                 <h3 class="settings-section" data-i18n>Skills</h3>
                 <div id="skillsList" class="skills-list"></div>
-                <p class="empty" id="skillsEmpty" data-i18n>No skills trained yet. They start at the first swing, cast, or cast line.</p>
+                <p class="empty" id="skillsEmpty" data-i18n>No skills trained yet.</p>
                 <!-- The title is the character's nameplate, set by whoever
                      earned it — the drawer offers every earned one, and the
                      pick goes back to the server through the relay. -->
                 <h3 class="settings-section" data-i18n>Title</h3>
                 <div id="titleList" class="title-list" role="radiogroup" aria-label="Title" data-i18n-attr="aria-label"></div>
-                <p class="empty" id="titlesEmpty" data-i18n>No titles earned yet. They come from boss kills.</p>
+                <p class="empty" id="titlesEmpty" data-i18n>No titles earned yet.</p>
                 <p class="hint" id="titlesStatus" hidden></p>
               </div>
               <div data-character-panel="worn" hidden>
@@ -384,15 +387,15 @@
           <button id="settingsClose" class="ghost" aria-label="Close settings" data-i18n-attr="aria-label">×</button>
         </div>
         <div class="tabs" id="settingsTabs" role="tablist" aria-label="Settings sections" data-i18n-attr="aria-label">
-          <button class="tab on" id="tab-llm" data-settings-tab="llm" role="tab" aria-selected="true" aria-controls="panel-llm">LLM</button>
-          <button class="tab" id="tab-display" data-settings-tab="display" role="tab" aria-selected="false" aria-controls="panel-display" data-i18n>Display</button>
+          <button class="tab on" id="tab-display" data-settings-tab="display" role="tab" aria-selected="true" aria-controls="panel-display" data-i18n>Display</button>
           <button class="tab" id="tab-audio" data-settings-tab="audio" role="tab" aria-selected="false" aria-controls="panel-audio" data-i18n>Audio</button>
+          <button class="tab" id="tab-llm" data-settings-tab="llm" role="tab" aria-selected="false" aria-controls="panel-llm" data-i18n>Translation</button>
           <button class="tab" id="tab-about" data-settings-tab="about" role="tab" aria-selected="false" aria-controls="panel-about" data-i18n>About</button>
         </div>
         <div class="modal-body">
-          <div id="panel-llm" data-settings-panel="llm" role="tabpanel" aria-labelledby="tab-llm">
+          <div id="panel-llm" data-settings-panel="llm" role="tabpanel" aria-labelledby="tab-llm" hidden>
             <h3 class="settings-section" data-i18n>Chat translation</h3>
-            <p class="hint" data-i18n>Translates other players' chat in the spectator view. Pick the language, or turn it off, in the chat panel's own dropdown. Saved as you go — the agent keeps running.</p>
+            <p class="hint" data-i18n>Other players' chat, in the language picked in the chat panel.</p>
             <label>Base URL<input id="translateBaseUrl" placeholder="http://192.168.1.120:1234/v1" /></label>
             <label>Model<input id="translateModel" placeholder="gemma-4-e2b-it-mlx" /></label>
             <label>API key<input type="password" id="translateKey" placeholder="optional — local endpoints need none" data-i18n-attr="placeholder" /></label>
@@ -401,7 +404,7 @@
               <p class="hint" id="translateTestResult" hidden></p>
             </div>
           </div>
-          <div id="panel-display" data-settings-panel="display" role="tabpanel" aria-labelledby="tab-display" hidden>
+          <div id="panel-display" data-settings-panel="display" role="tabpanel" aria-labelledby="tab-display">
             <h3 class="settings-section" data-i18n>Language</h3>
             <!-- Each language names itself: a name nobody in the room can read
                  is no help choosing. Saved and applied on change, like the rest
@@ -411,10 +414,8 @@
                 <option value="zh-TW">繁體中文</option>
                 <option value="ko">한국어</option>
               </select></label>
-            <p class="hint" data-i18n>The agent's own words, and the game client's chat, keep their own languages.</p>
 
             <h3 class="settings-section" data-i18n>Action captions</h3>
-            <p class="hint" data-i18n>The lines that appear over the world as your character acts. Repeats of one action collapse into a count.</p>
             <div class="toast-preview-box">
               <span class="toast-preview-label" data-i18n>Preview</span>
               <div id="toastPreview" class="action-toast" data-i18n>Move→north ×3</div>
@@ -437,7 +438,6 @@
           </div>
           <div id="panel-audio" data-settings-panel="audio" role="tabpanel" aria-labelledby="tab-audio" hidden>
             <p class="notice" id="audioUnavailable" data-i18n>Start the agent to control its game audio here.</p>
-            <p class="hint" data-i18n>Sets the game client's own volume, mirrored from the spectator view.</p>
             <label class="slider" data-i18n>Music <strong id="bgmVolumeLabel"></strong>
               <input id="bgmVolume" type="range" min="0" max="100" step="1" />
             </label>
@@ -450,9 +450,8 @@
           <div id="panel-about" data-settings-panel="about" role="tabpanel" aria-labelledby="tab-about" hidden>
             <h3 class="settings-section" data-i18n>Privacy</h3>
             <label class="check" data-i18n><input type="checkbox" id="telemetryEnabled" /> Share anonymous usage statistics</label>
-            <p class="hint" data-i18n>Counts app starts and which play modes get used, via Aptabase. Anonymous — never your account, characters, prompts, or servers. Off means nothing is sent.</p>
+            <p class="hint" data-i18n>App starts and play modes only, via Aptabase — never your account, characters or servers.</p>
             <h3 class="settings-section" data-i18n>This app</h3>
-            <p class="hint" data-i18n>OpenMMO Agent UI is free and open source. It runs the agent on your own machine, under your own model quota.</p>
             <p class="hint"><span data-i18n>Version</span> <strong id="appVersion">—</strong> · <span id="updateStatus" aria-live="polite">Updates install automatically.</span></p>
             <!-- The only place an update can be acted on outside the outdated
                  dialog. A downloaded build installs itself on the next quit,
