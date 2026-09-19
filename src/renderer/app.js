@@ -100,6 +100,7 @@ const HUNT_FIELDS = {
   workerLevelMargin: 'int',
   workerLowHealthPct: 'int',
   workerBagFullPct: 'int',
+  workerSatiationTarget: 'int',
   workerPatrolRadius: 'int',
   workerDeathLimit: 'int',
   workerFoodStock: 'int',

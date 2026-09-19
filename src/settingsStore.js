@@ -70,6 +70,9 @@ const DEFAULTS = {
   workerScrollStock: 5,
   workerScrollItem: '',
   workerBagFullPct: 90,
+  /// A meal, once started, runs until satiation reaches this (of 1000; a
+  /// character starts at 700).
+  workerSatiationTarget: 700,
   /// Where the fighter works. The name is only what the settings panel shows;
   /// the coordinates are a snapshot, so deleting the saved coordinate it came
   /// from — or switching to a character that never had it — leaves the worker
@@ -271,6 +274,7 @@ function importExistingConfig(settings) {
   take('workerScrollStock', worker.scroll_stock)
   take('workerScrollItem', worker.scroll_item)
   take('workerBagFullPct', worker.bag_full_pct)
+  take('workerSatiationTarget', worker.satiation_target)
   take('workerAnchorX', worker.anchor_x)
   take('workerAnchorZ', worker.anchor_z)
   take('workerPatrolRadius', worker.patrol_radius)

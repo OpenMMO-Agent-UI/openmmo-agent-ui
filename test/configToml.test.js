@@ -164,6 +164,13 @@ test('the anchor is written only once it is picked, so an unset one stays the sp
   assert.doesNotMatch(picked, /Orc Warrens/, 'the name is the panel\'s label, not the worker\'s business')
 })
 
+test('the meal target is written, held to the band a meal can actually reach', () => {
+  assert.match(workerTable(renderConfigToml(settings({}))), /^satiation_target = 700$/m)
+  assert.match(workerTable(renderConfigToml(settings({ workerSatiationTarget: 900 }))), /^satiation_target = 900$/m)
+  assert.match(workerTable(renderConfigToml(settings({ workerSatiationTarget: 50 }))), /^satiation_target = 301$/m)
+  assert.match(workerTable(renderConfigToml(settings({ workerSatiationTarget: 5000 }))), /^satiation_target = 1000$/m)
+})
+
 test('the dungeoneer names its dungeon and its death limit', () => {
   const table = workerTable(
     renderConfigToml(

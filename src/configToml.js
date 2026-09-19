@@ -114,6 +114,7 @@ function renderConfigToml(s) {
     `potion_stock = ${Math.max(0, Math.round(Number(s.workerPotionStock)) || 0)}`,
     `scroll_stock = ${Math.max(0, Math.round(Number(s.workerScrollStock)) || 0)}`,
     `bag_full_pct = ${clampPercent(s.workerBagFullPct, 90)}`,
+    `satiation_target = ${clampRange(s.workerSatiationTarget, 700, 301, 1000)}`,
     `patrol_radius = ${clampRange(s.workerPatrolRadius, 100, 20, 500)}`,
     `dungeon_id = ${tomlString(s.workerDungeonId || '')}`,
     `death_limit = ${clampRange(s.workerDeathLimit, 3, 1, 20)}`,
