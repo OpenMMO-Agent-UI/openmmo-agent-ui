@@ -545,6 +545,9 @@ const TITLE_NAMES = {
   orc_slayer_solo: 'Who Slew the Orc Warlord Alone',
   ogre_slayer: 'Slayer of the Ogre Warlord',
   ogre_slayer_solo: 'Who Slew the Ogre Warlord Alone',
+  sturgeon_angler: 'Who Landed the Golden Sturgeon',
+  skeleton_slayer: 'Slayer of the Skeleton Knight',
+  skeleton_slayer_solo: 'Who Slew the Skeleton Knight Alone',
 }
 
 /// One option in the title picker: the radio itself is the whole row, and the
