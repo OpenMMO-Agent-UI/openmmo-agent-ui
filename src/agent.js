@@ -96,6 +96,27 @@ function probeBinary(binaryPath) {
   })
 }
 
+/// agent-client's tracing subscriber colours its lines whether or not a
+/// terminal is listening (tracing-subscriber's `ansi` default), so the escape
+/// codes are stripped before anything reads the line.
+const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g
+/// One `tracing_subscriber::fmt` line: RFC 3339 timestamp, padded level,
+/// target, message. Split so the panel can lay the parts out instead of
+/// showing the wall of text; a line in any other shape is shown as it came.
+const TRACING = /^(\d{4}-\d\d-\d\dT[\d:.]+Z)\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s+(\S+?):\s(.*)$/
+
+function tracingFields(line) {
+  const m = TRACING.exec(line)
+  if (!m) return {}
+  const at = Date.parse(m[1])
+  return {
+    level: m[2].toLowerCase(),
+    target: m[3],
+    msg: m[4],
+    ...(Number.isFinite(at) ? { t: at } : {}),
+  }
+}
+
 class AgentProcess extends EventEmitter {
   constructor() {
     super()
@@ -119,9 +140,10 @@ class AgentProcess extends EventEmitter {
   }
 
   append(stream, text) {
-    for (const line of text.split(/\r?\n/)) {
+    for (const raw of String(text).split(/\r?\n/)) {
+      const line = raw.replace(ANSI, '').trimEnd()
       if (!line) continue
-      const item = { stream, line, t: Date.now() }
+      const item = { stream, line, t: Date.now(), ...tracingFields(line) }
       this.log.push(item)
       if (this.log.length > LOG_CAP) this.log.shift()
       this.emit('log', item)

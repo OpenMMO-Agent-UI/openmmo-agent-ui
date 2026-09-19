@@ -385,11 +385,31 @@ function setStatus(state) {
   updateSettingsFooter()
 }
 
+/// One log line as time · level · message. agent.js has already split a
+/// tracing line into its parts; anything else (the app's own notes, a panic)
+/// carries no level: agent-client logs on stderr, so that stream is the
+/// ordinary one and only a parsed ERROR is red. The `[label]` every agent-client line opens
+/// with names the character, which the panel already knows, so it moves into
+/// the tooltip beside the module that logged it.
 function appendLog(item) {
   const pre = $('log')
   const line = document.createElement('div')
-  line.className = `line-${item.stream}`
-  line.textContent = item.line
+  const level = item.level || (item.stream === 'app' ? 'app' : '')
+  line.className = `log-line${level ? ` log-${level}` : ''}`
+  const time = document.createElement('span')
+  time.className = 'log-time'
+  time.textContent = new Date(item.t).toLocaleTimeString([], { hour12: false })
+  const badge = document.createElement('span')
+  badge.className = 'log-level'
+  badge.textContent = level.toUpperCase()
+  const msg = document.createElement('span')
+  msg.className = 'log-msg'
+  const text = item.msg ?? item.line
+  const labelled = /^\[([^\]]+)\]\s+(.*)$/s.exec(text)
+  msg.textContent = labelled ? labelled[2] : text
+  const source = [labelled && labelled[1], item.target].filter(Boolean).join(' · ')
+  if (source) line.title = source
+  line.append(time, badge, msg)
   pre.appendChild(line)
   while (pre.childElementCount > 600) pre.removeChild(pre.firstChild)
   if ($('autoscroll').checked) pre.scrollTop = pre.scrollHeight

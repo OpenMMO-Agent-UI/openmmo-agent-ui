@@ -297,12 +297,64 @@ pre {
   overflow-y: auto;
 }
 
-.line-err {
+/* ---------- agent log ---------- */
+
+#log {
+  padding: 6px 8px;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: auto 5ch 1fr;
+  gap: 0 10px;
+  padding: 2px 0;
+  align-items: baseline;
+}
+
+.log-line + .log-line {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.log-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.log-level {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: right;
+  color: var(--muted);
+}
+
+.log-msg {
+  min-width: 0;
+}
+
+.log-info .log-level {
+  color: var(--verdigris);
+}
+
+.log-warn .log-level,
+.log-warn .log-msg {
+  color: var(--accent);
+}
+
+.log-error .log-level,
+.log-error .log-msg {
   color: #ffb4b4;
 }
 
-.line-app {
+.log-debug,
+.log-trace {
+  color: var(--muted);
+}
+
+.log-app .log-level,
+.log-app .log-msg {
   color: var(--accent);
+  font-style: italic;
 }
 
 /* ---------- global error toast ---------- */
