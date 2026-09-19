@@ -256,6 +256,7 @@
   "Save spot": "儲存",
   "Scrolls to hold": "卷軸保留數",
   "Server points at this machine ({server}). That is the relay's own address, not a game server — set it back to {default} under Connection.": "伺服器指向這台電腦（{server}）。那是轉送層自己的地址，不是遊戲伺服器 —— 請在連線設定改回 {default}。",
+  "Skeleton Crypt": "骷髏墓穴",
   "Slayer of the Skeleton Knight": "擊敗骷髏騎士者",
   "Spot name": "地點名稱",
   "Start the agent and its world appears here.": "啟動 agent，它的世界就會出現在這裡。",

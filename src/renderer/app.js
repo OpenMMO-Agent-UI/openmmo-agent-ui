@@ -135,6 +135,7 @@ const DUNGEONS = [
   { id: 'old_crypt', name: 'Old Crypt', floors: 5 },
   { id: 'orc_warrens', name: 'Orc Warrens', floors: 10 },
   { id: 'ogre_stronghold', name: 'Ogre Stronghold', floors: 15 },
+  { id: 'skeleton_crypt', name: 'Skeleton Crypt', floors: 20 },
 ]
 
 /// What a town trip may restock, by category — the game's fixed item list

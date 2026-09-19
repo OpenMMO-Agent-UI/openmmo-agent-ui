@@ -256,6 +256,7 @@
   "Save spot": "저장",
   "Scrolls to hold": "보유할 주문서 수",
   "Server points at this machine ({server}). That is the relay's own address, not a game server — set it back to {default} under Connection.": "서버가 이 컴퓨터({server})를 가리킵니다. 그것은 릴레이 자신의 주소이며 게임 서버가 아닙니다 — 연결 설정에서 {default}로 되돌리세요.",
+  "Skeleton Crypt": "스켈레톤 지하 묘지",
   "Slayer of the Skeleton Knight": "스켈레톤 기사를 쓰러뜨린 자",
   "Spot name": "지점 이름",
   "Start the agent and its world appears here.": "에이전트를 시작하면 그 세계가 여기에 나타납니다.",
