@@ -19,7 +19,6 @@ const WIKI_URL = 'https://openmmo-agent-ui.github.io/openmmo-agent-wiki/en/'
 const DISCORD_URL = 'https://discord.gg/FxeV7nNzZ'
 
 let settings = null
-let backends = []
 let classes = []
 let running = false
 let dirtyWhileRunning = false
@@ -85,17 +84,11 @@ const FEED_LABELS = {
   system: 'System',
 }
 
-/// Plain settings fields; `characterName` (Login screen), `model` and
-/// `apiKey` (per-backend) are handled apart from this generic map.
+/// Plain settings fields; `characterName` (Login screen) is handled apart
+/// from this generic map.
 const FIELDS = {
   characterClass: 'text',
   gender: 'text',
-  llm: 'text',
-  openaiBaseUrl: 'text',
-  maxTokens: 'int',
-  maxMessages: 'int',
-  temperature: 'float',
-  reasoningEffort: 'text',
   watchPort: 'int',
   rustLog: 'text',
 }
@@ -164,10 +157,6 @@ const RESTOCK_ITEMS = {
   workerScrollItem: ['scroll_of_return'],
 }
 
-function backend() {
-  return backends.find((b) => b.id === settings.llm) || { kind: 'none', models: [] }
-}
-
 async function persist(patch) {
   settings = await api.saveSettings(patch)
   if (running) {
@@ -197,21 +186,6 @@ function renderGenderOptions() {
           class: t(settings.characterClass),
         })
       : t('Changing gender on an existing character recreates it — level and items reset.')
-}
-
-/// Where the agent's own LLM is, for the parts of the panel that need to show
-/// it. backends.js is CommonJS in the main process and cannot be imported into
-/// this sandbox, so the join is restated here — but only the join: the record
-/// it reads, openrouter's fixed baseUrl included, is the same table main
-/// resolves against, handed over at startup.
-function agentEndpoint() {
-  const b = backend()
-  if (b.kind !== 'http') return null
-  return {
-    base: String(b.baseUrl || settings.openaiBaseUrl || '').replace(/\/+$/, ''),
-    model: settings.models[settings.llm] || '',
-    key: settings[`${b.id}Key`] || '',
-  }
 }
 
 /// The two spot editors — the fighter's anchor and the fisher's spot — are
@@ -368,64 +342,9 @@ function renderHunt() {
   renderRestockOptions()
 }
 
-function renderBackend() {
-  const b = backend()
-  $('model').value = settings.models[settings.llm] || ''
-  $('modelList').innerHTML = (b.models || []).map((m) => `<option value="${m}"></option>`).join('')
-  $('apiKey').value = agentEndpoint()?.key || ''
-
-  for (const el of document.querySelectorAll('[data-for]')) {
-    const want = el.dataset.for
-    const visible =
-      want === 'http'
-        ? b.kind === 'http'
-        : want === 'openai'
-          ? settings.llm === 'openai'
-          : want === settings.authMode
-    el.hidden = !visible
-  }
-
-  $('model').closest('label').hidden = b.kind === 'none'
-  $('backendHint').textContent =
-    b.kind === 'cli'
-      ? t(
-          'Runs the {cli} CLI on this machine, under your own login and quota. It must work in a terminal first.',
-          { cli: b.id },
-        )
-      : b.kind === 'http'
-        ? t(
-            'The key is stored encrypted by the OS and handed to the agent as an environment variable, never written to config.toml.',
-          )
-        : t('No LLM: the character connects and idles.')
-  renderTranslation()
-}
-
-/// Translation can borrow the Agent section above it, so what the checkbox can
-/// offer depends on the backend chosen there — the CLI backends run under your
-/// own login and have no endpoint to share. Only a click writes the setting: a
-/// backend switch re-renders and nothing else, so comparing backends, or
-/// discarding the change, never costs you the borrowed endpoint. When it is on
-/// the fields show what translation will actually call, written to the page
-/// only, so unticking brings the typed-in ones straight back.
+/// The translation provider's own fields, written from the settings in force.
 function renderTranslation() {
-  const shared = agentEndpoint()
-  const on = Boolean(shared) && settings.translateUseLlmProvider === true
-  const box = $('translateUseLlm')
-  box.disabled = !shared
-  box.checked = on
-
-  const hint = $('translateShareHint')
-  hint.hidden = Boolean(shared)
-  if (!shared) {
-    hint.textContent = t('{backend} runs on this machine, so there is no endpoint to share.', {
-      backend: backend().label || t('This backend'),
-    })
-  }
-
-  for (const id of TRANSLATION_FIELDS) $(id).disabled = on
-  $('translateBaseUrl').value = on ? shared.base : settings.translateBaseUrl || ''
-  $('translateModel').value = on ? shared.model : settings.translateModel || ''
-  $('translateKey').value = on ? shared.key : settings.translateKey || ''
+  for (const id of TRANSLATION_FIELDS) $(id).value = settings[id] || ''
 }
 
 /// The lamp and the state word, from the one pair of facts that decide them:
@@ -718,7 +637,7 @@ function renderFeedFilters() {
 /// offered for a tab where there is nothing staged to apply — but it comes
 /// back the moment something *is* staged, so switching tabs can never hide
 /// the button for work waiting on it.
-const IMMEDIATE_TABS = new Set(['display', 'audio', 'about'])
+const IMMEDIATE_TABS = new Set(['llm', 'display', 'audio', 'about'])
 
 /// Provider only. Which language, and whether translation runs at all, belongs
 /// to the spectator client's own chat dropdown.
@@ -761,7 +680,7 @@ async function closeSettings() {
     settings = settingsSnapshot
     for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
     renderClassOptions()
-    renderBackend()
+    renderTranslation()
   }
   settingsSnapshot = null
   settingsDirty = false
@@ -905,19 +824,8 @@ function bindFields() {
       if (id === 'characterClass') {
         renderGenderOptions()
       }
-      if (id === 'llm') renderBackend()
     })
   }
-
-  $('model').addEventListener('change', () => {
-    settings.models[settings.llm] = $('model').value
-    markSettingsDirty()
-  })
-  $('apiKey').addEventListener('change', () => {
-    const key = settings.llm === 'openrouter' ? 'openrouterKey' : 'openaiKey'
-    settings[key] = $('apiKey').value
-    markSettingsDirty()
-  })
 
   for (const button of document.querySelectorAll('[data-settings-tab]')) {
     button.addEventListener('click', () => setSettingsTab(button.dataset.settingsTab))
@@ -1167,14 +1075,6 @@ function bindActions() {
     })
   }
 
-  $('translateUseLlm').addEventListener('change', () => {
-    const patch = { translateUseLlmProvider: $('translateUseLlm').checked }
-    settings = { ...settings, ...patch }
-    if (settingsSnapshot) settingsSnapshot.translateUseLlmProvider = patch.translateUseLlmProvider
-    renderTranslation()
-    void persistImmediateSetting(patch)
-  })
-
   $('translateTest').addEventListener('click', async () => {
     const result = $('translateTestResult')
     $('translateTest').disabled = true
@@ -1244,7 +1144,7 @@ async function switchLanguage(language) {
   await applyLanguage(language)
   await persistImmediateSetting(patch)
   renderClassOptions()
-  renderBackend()
+  renderTranslation()
   renderHunt()
   settingsPanel.syncAll(settings)
   signInFlow.rerender()
@@ -1381,19 +1281,14 @@ function bindOutdatedDialog() {
 async function init() {
   const info = await api.info()
   settings = info.settings
-  backends = info.backends
   classes = info.classes
 
   await applyLanguage(settings.language)
   writeField('language', 'text', settings.language)
 
-  $('llm').innerHTML = backends
-    .filter((backend) => backend.kind !== 'none')
-    .map((backend) => `<option value="${backend.id}">${backend.label}</option>`)
-    .join('')
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()
-  renderBackend()
+  renderTranslation()
   renderHunt()
   actionToasts.applyToastCssVars(settings)
 

@@ -1,6 +1,5 @@
 'use strict'
 
-const { httpEndpoint } = require('./backends')
 const { t } = require('./i18n')
 
 const TIMEOUT_MS = 10000
@@ -14,14 +13,12 @@ function systemPrompt(target) {
   )
 }
 
-/// Where a translation call goes. The agent's own endpoint when it is asked to
-/// share one and that backend has one to share — a CLI backend does not, so
-/// this falls back to the fields typed under the checkbox rather than failing.
-/// Resolved per call, never copied into the settings file.
+/// Where a translation call goes: the fields under Chat translation, and
+/// nothing else — the rule workers run no LLM, so there is no agent endpoint
+/// to borrow.
 function provider(settings) {
   if (!settings) return null
-  const shared = settings.translateUseLlmProvider ? httpEndpoint(settings) : null
-  const endpoint = shared || {
+  const endpoint = {
     base: String(settings.translateBaseUrl || '').replace(/\/+$/, ''),
     model: settings.translateModel,
     key: settings.translateKey,

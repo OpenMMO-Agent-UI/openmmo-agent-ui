@@ -121,10 +121,6 @@ const DEFAULTS = {
   /// the provider lives here.
   translateBaseUrl: '',
   translateModel: '',
-  /// Borrow the agent's own endpoint instead of the three fields above.
-  /// Resolved at translation time, so changing the agent's provider carries
-  /// over without re-ticking anything.
-  translateUseLlmProvider: false,
   /// Anonymous usage analytics (src/telemetry.js). Checked at send time, so
   /// the Settings toggle takes effect immediately, no restart needed.
   telemetry: true,

@@ -376,7 +376,7 @@
       </div>
     </section>
 
-    <!-- GLOBAL LLM / AUTOMATIC PLAY SETTINGS -->
+    <!-- GLOBAL SETTINGS -->
     <div id="settingsModal" class="modal" hidden>
       <div class="modal-card settings-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <div class="modal-head">
@@ -391,28 +391,8 @@
         </div>
         <div class="modal-body">
           <div id="panel-llm" data-settings-panel="llm" role="tabpanel" aria-labelledby="tab-llm">
-            <h3 class="settings-section">Agent</h3>
-            <label>Backend<select id="llm"></select></label>
-            <label>Model<input id="model" list="modelList" /><datalist id="modelList"></datalist></label>
-            <label data-for="openai">Base URL<input id="openaiBaseUrl" placeholder="https://host/v1" /></label>
-            <label data-for="http">API key<input type="password" id="apiKey" placeholder="stored encrypted by this machine" data-i18n-attr="placeholder" /></label>
-            <label data-for="openai">Reasoning effort<select id="reasoningEffort">
-                <option value="none" data-i18n>None</option><option value="low" data-i18n>Low</option>
-                <option value="medium" data-i18n>Medium</option><option value="high" data-i18n>High</option>
-                <option value="" data-i18n>Provider default</option>
-              </select></label>
-            <p class="hint" id="backendHint"></p>
-            <div class="row">
-              <label>Maximum tokens<input id="maxTokens" type="number" min="1" /></label>
-              <label>Temperature<input id="temperature" type="number" min="0" max="2" step="0.1" /></label>
-              <label data-for="openai">Messages kept<input id="maxMessages" type="number" min="3" max="401" step="1" /></label>
-            </div>
-            <p class="hint" data-i18n>Apply checks your CLI sign-in, or sends one disclosed one-token request to the provider.</p>
-
             <h3 class="settings-section" data-i18n>Chat translation</h3>
             <p class="hint" data-i18n>Translates other players' chat in the spectator view. Pick the language, or turn it off, in the chat panel's own dropdown. Saved as you go — the agent keeps running.</p>
-            <label class="check" data-i18n><input type="checkbox" id="translateUseLlm" /> Same endpoint as the agent</label>
-            <p class="hint" id="translateShareHint" hidden></p>
             <label>Base URL<input id="translateBaseUrl" placeholder="http://192.168.1.120:1234/v1" /></label>
             <label>Model<input id="translateModel" placeholder="gemma-4-e2b-it-mlx" /></label>
             <label>API key<input type="password" id="translateKey" placeholder="optional — local endpoints need none" data-i18n-attr="placeholder" /></label>
