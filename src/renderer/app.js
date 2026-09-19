@@ -120,17 +120,17 @@ const WORKER_KINDS = [
   {
     id: 'fighter',
     label: 'Monster Fighter',
-    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town — riding there when the bag holds Horse Reins. No LLM, no API key.',
+    hint: 'Hunts the nearest monster it can beat, loots the kill, and restocks in town — riding there when the bag holds Horse Reins.',
   },
   {
     id: 'dungeoneer',
     label: 'Dungeon Conqueror',
-    hint: 'Works one dungeon: farms each locked floor for its key, clears the guardian, empties the great chest, then banks the next run\u2019s keys until the dungeons reset. No LLM, no API key.',
+    hint: 'Works one dungeon: farms each locked floor for its key, clears the guardian, empties the great chest, then banks the next run\u2019s keys until the dungeons reset.',
   },
   {
     id: 'fisher',
     label: 'Fisher',
-    hint: 'Walks to its fishing spot, casts at the nearest water and lands whatever bites, buying a rod in town when it has none. Catches marked Sellable are sold there. No LLM, no API key.',
+    hint: 'Walks to its fishing spot, casts at the nearest water and lands whatever bites, buying a rod in town when it has none. Catches marked Sellable are sold there.',
   },
 ]
 
