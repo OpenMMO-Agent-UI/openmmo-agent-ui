@@ -129,6 +129,18 @@ function titlesFromUpdate(body) {
   return { titles, active: active || null }
 }
 
+/// The title `JoinSuccess`'s own Player carries, at the slot `Player.title`
+/// holds in the positional struct (shared/entity.rs), or null when there is
+/// none. The server sends `PlayerTitles` before it has registered the player,
+/// so that frame's `active` reads as none at entry whatever the character
+/// wears; the Player that follows is where the pick actually is.
+const PLAYER_TITLE_SLOT = 18
+function titleFromJoin(body) {
+  const player = body && body[0]
+  const title = Array.isArray(player) ? player[PLAYER_TITLE_SLOT] : null
+  return typeof title === 'string' && title ? title : null
+}
+
 /// `PlayerRespawned` carries a whole `Player` (so the id is nested at [0][0]);
 /// every other per-entity state message carries the id directly at [0].
 function entityStateId(name, body) {
@@ -605,6 +617,9 @@ class AgentProxy {
     /// agent's earned titles and its shown pick. Same reason as `onWorn`: the
     /// frame is owner-private, so only the relay sees it.
     this.onTitles = onTitles
+    /// The last `PlayerTitles`, kept so the join-time Player can correct the
+    /// shown pick that frame is missing.
+    this.titles = { titles: [], active: null }
     /// Accumulated so a single-skill `SkillXpGained` can be pushed as a whole
     /// map, the way the join-time `SkillsUpdate` arrives.
     this.skills = {}
@@ -694,7 +709,8 @@ class AgentProxy {
     this.skills = {}
     this.onSkills({})
     this.onStats(null)
-    this.onTitles({ titles: [], active: null })
+    this.titles = { titles: [], active: null }
+    this.onTitles(this.titles)
 
     const upstream = new WebSocket(this.upstreamUrl)
     this.agentUpstream = upstream
@@ -785,7 +801,17 @@ class AgentProxy {
     }
     if (name === 'PlayerTitles') {
       const titles = titlesFromUpdate(body)
-      if (titles) this.onTitles(titles)
+      if (titles) {
+        this.titles = titles
+        this.onTitles(titles)
+      }
+    }
+    if (name === 'JoinSuccess') {
+      const active = titleFromJoin(body)
+      if (active && this.titles.active !== active) {
+        this.titles = { ...this.titles, active }
+        this.onTitles(this.titles)
+      }
     }
     if (name === 'SkillXpGained') {
       const gain = skillFromXpGained(body)

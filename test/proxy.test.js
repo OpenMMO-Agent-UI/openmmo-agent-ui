@@ -558,6 +558,37 @@ test('earned titles and the shown pick are read off the PlayerTitles frame', () 
   })
 })
 
+/// The server sends PlayerTitles before it has registered the player, so
+/// its `active` is always none at entry; the JoinSuccess Player that follows
+/// carries the title actually worn.
+test('the title worn at entry comes off the JoinSuccess player, not the empty PlayerTitles', () => {
+  const titles = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    (t) => titles.push(t),
+  )
+  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer', 'orc_slayer'], null))
+  const player = playerArray(1, [0, 0, 0], 'TestChar')
+  while (player.length < 18) player.push(null)
+  player.push('orc_slayer')
+  proxy.onServerFrame(encode({ JoinSuccess: [player, false] }))
+
+  assert.deepStrictEqual(titles.at(-1), {
+    titles: ['goblin_slayer', 'orc_slayer'],
+    active: 'orc_slayer',
+  })
+  // A later PlayerTitles is the server's word again.
+  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer', 'orc_slayer'], null))
+  assert.equal(titles.at(-1).active, null)
+  // A player wearing nothing adds nothing.
+  const bare = titles.length
+  proxy.onServerFrame(joinSuccessFrame(1, [0, 0, 0]))
+  assert.equal(titles.length, bare)
+})
+
 test('a title cleared back to none reads active as null', () => {
   const titles = []
   const proxy = new AgentProxy(
