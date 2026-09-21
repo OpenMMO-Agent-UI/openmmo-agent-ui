@@ -43,7 +43,7 @@ const proxy = new AgentProxy(
   // publish — pushed as it changes rather than polled, since the relay learns
   // it the moment the server says so.
   (worn) => send('agent:worn', worn),
-  // Trained skills, which the panel API does not publish either — same
+  // Learned skills, which the panel API does not publish either — same
   // push-as-it-changes path as the gear above.
   (skills) => send('agent:skills', skills),
   // Guard and CHA as the server actually reads them: the roster's rolled
@@ -51,7 +51,9 @@ const proxy = new AgentProxy(
   (stats) => send('agent:stats', stats),
   // Earned titles and the shown one — owner-private, so the relay is the
   // only place they are seen, same as gear and skills.
-  (titles) => send('agent:titles', titles)
+  (titles) => send('agent:titles', titles),
+  // The server's answer to a skill the drawer fired.
+  (reply) => send('agent:ability', reply),
 )
 let feedTimer = null
 let feedSeq = null
@@ -702,6 +704,11 @@ ipcMain.handle('agent:restart', async () => {
 /// has to exist for it; `null` clears the title.
 ipcMain.handle('agent:set-title', (_e, title) => ({
   ok: proxy.setActiveTitle(typeof title === 'string' && title ? title : null),
+}))
+
+/// A class skill fired from the character drawer, injected the same way.
+ipcMain.handle('agent:use-ability', (_e, ability) => ({
+  ok: typeof ability === 'string' && !!ability && proxy.useAbility(ability),
 }))
 
 function personalityPath(profileId, characterId) {

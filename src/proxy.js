@@ -74,27 +74,30 @@ const INVENTORY = new Set(['InventoryState', 'InventoryUpdated'])
 /// `PlayerInventory` is `[bag, equipped]`, and `equipped` is a map keyed by
 /// `EquipSlot`'s serde names ("head", "main_hand", …) whose values are
 /// `ItemInstance` = `[instance_id, item_def_id, quantity, enchant]`.
-/// `SkillsUpdate` is `[Skills]` and `Skills` is `[map]`, so the map sits at
-/// `body[0][0]`. Keys are `SkillId`'s serde names ("fishing"), values are
-/// `SkillProgress` = `[level, xp]`.
+/// `SkillsUpdate` is `[Skills]` and `Skills` is `[learned]`: the permanently
+/// learned skill ids (`SkillId`'s serde names, "fishing"), a set on the wire
+/// as a list. There is no level or XP any more — a skill is had or not.
 function skillsFromUpdate(body) {
-  const map = Array.isArray(body && body[0]) ? body[0][0] : null
-  if (!map || typeof map !== 'object' || Array.isArray(map)) return null
-  const skills = {}
-  for (const [id, progress] of Object.entries(map)) {
-    if (!Array.isArray(progress)) continue
-    skills[id] = { level: progress[0] ?? 0, xp: progress[1] ?? 0 }
-  }
-  return skills
+  const learned = Array.isArray(body && body[0]) ? body[0][0] : null
+  if (!Array.isArray(learned)) return null
+  return learned.filter((id) => typeof id === 'string')
 }
 
-/// `SkillXpGained` is `[skill, xp_amount, total_xp, new_level, leveled_up]` —
-/// it carries the running totals, so one skill can be restated from it without
-/// re-deriving anything from the XP curve.
-function skillFromXpGained(body) {
-  const [skill, , totalXp, newLevel] = body || []
-  if (typeof skill !== 'string') return null
-  return { id: skill, progress: { level: newLevel ?? 0, xp: totalXp ?? 0 } }
+/// `AbilityRejected` is `[ability, reason]`, `AbilityCooldowns` is
+/// `[[[ability, remaining_ms], …]]` — both direct replies to a `UseAbility`,
+/// so they are what the drawer's Use button hears back.
+function abilityFromReply(name, body) {
+  if (name === 'AbilityRejected') {
+    const [ability, reason] = body || []
+    return typeof ability === 'string' ? { kind: 'rejected', ability, reason } : null
+  }
+  const timers = Array.isArray(body && body[0]) ? body[0] : null
+  if (!timers) return null
+  const cooldowns = {}
+  for (const timer of timers) {
+    if (Array.isArray(timer) && typeof timer[0] === 'string') cooldowns[timer[0]] = timer[1] ?? 0
+  }
+  return { kind: 'cooldowns', cooldowns }
 }
 
 /// `EffectiveStatsUpdated` is `[guard, cha]`: what combat and haggling
@@ -599,15 +602,22 @@ function apiBaseUrl(wsUrl) {
 }
 
 class AgentProxy {
-  constructor(onError = () => {}, onWorn = () => {}, onSkills = () => {}, onStats = () => {}, onTitles = () => {}) {
+  constructor(
+    onError = () => {},
+    onWorn = () => {},
+    onSkills = () => {},
+    onStats = () => {},
+    onTitles = () => {},
+    onAbility = () => {},
+  ) {
     this.onError = onError
     /// Called with `{ slot: { itemDefId, quantity, enchant } }` whenever the
     /// server restates the agent's inventory. Decoded here rather than in the
     /// renderer because this is the only process that sees the frame.
     this.onWorn = onWorn
-    /// Called with `{ skillId: { level, xp } }`. Same reason as `onWorn`: the
-    /// trained-skill frames are owner-private, so agent-client's panel API
-    /// never republishes them and the relay is the only place they are seen.
+    /// Called with the learned skill ids. Same reason as `onWorn`: the skill
+    /// frame is owner-private, so agent-client's panel API never republishes
+    /// it and the relay is the only place it is seen.
     this.onSkills = onSkills
     /// Called with `{ guard, cha }`, or null when there is no session to read
     /// them from. Same reason as `onWorn`: the frame is owner-private, and
@@ -617,12 +627,12 @@ class AgentProxy {
     /// agent's earned titles and its shown pick. Same reason as `onWorn`: the
     /// frame is owner-private, so only the relay sees it.
     this.onTitles = onTitles
+    /// Called with the server's answer to `useAbility` — a rejection with its
+    /// reason, or the cooldowns that follow a use.
+    this.onAbility = onAbility
     /// The last `PlayerTitles`, kept so the join-time Player can correct the
     /// shown pick that frame is missing.
     this.titles = { titles: [], active: null }
-    /// Accumulated so a single-skill `SkillXpGained` can be pushed as a whole
-    /// map, the way the join-time `SkillsUpdate` arrives.
-    this.skills = {}
     this.server = null
     this.apiServer = null
     this.wss = null
@@ -706,8 +716,7 @@ class AgentProxy {
     // says otherwise; leaving the last session's gear, skills or gear-fed
     // stats on screen would outlive the character.
     this.onWorn({})
-    this.skills = {}
-    this.onSkills({})
+    this.onSkills([])
     this.onStats(null)
     this.titles = { titles: [], active: null }
     this.onTitles(this.titles)
@@ -790,10 +799,11 @@ class AgentProxy {
     }
     if (name === 'SkillsUpdate') {
       const skills = skillsFromUpdate(body)
-      if (skills) {
-        this.skills = skills
-        this.onSkills(skills)
-      }
+      if (skills) this.onSkills(skills)
+    }
+    if (name === 'AbilityRejected' || name === 'AbilityCooldowns') {
+      const reply = abilityFromReply(name, body)
+      if (reply) this.onAbility(reply)
     }
     if (name === 'EffectiveStatsUpdated') {
       const stats = statsFromEffective(body)
@@ -811,13 +821,6 @@ class AgentProxy {
       if (active && this.titles.active !== active) {
         this.titles = { ...this.titles, active }
         this.onTitles(this.titles)
-      }
-    }
-    if (name === 'SkillXpGained') {
-      const gain = skillFromXpGained(body)
-      if (gain) {
-        this.skills = { ...this.skills, [gain.id]: gain.progress }
-        this.onSkills(this.skills)
       }
     }
     if (!OWNER_ONLY.has(name)) this.broadcast(frame)
@@ -915,9 +918,21 @@ class AgentProxy {
   /// frame actually went out; a dead session refuses rather than queuing an
   /// order nobody is there to act on.
   setActiveTitle(title) {
+    return this.send({ SetActiveTitle: [title || null] })
+  }
+
+  /// Fire an untargeted ability (Guardian Ward) on the agent's connection, the
+  /// same way as the title: `UseAbility` is `[ability, monster_id,
+  /// target_player_id]`, and the server answers with `AbilityCooldowns` or
+  /// `AbilityRejected`, which `onAbility` relays.
+  useAbility(ability) {
+    return this.send({ UseAbility: [ability, null, null] })
+  }
+
+  send(message) {
     const socket = this.agentUpstream
     if (!socket || socket.readyState !== WebSocket.OPEN) return false
-    socket.send(encode({ SetActiveTitle: [title || null] }))
+    socket.send(encode(message))
     return true
   }
 
@@ -998,7 +1013,7 @@ module.exports = {
   apiBaseUrl,
   wornFromInventory,
   skillsFromUpdate,
+  abilityFromReply,
   statsFromEffective,
-  skillFromXpGained,
   titlesFromUpdate,
 }
