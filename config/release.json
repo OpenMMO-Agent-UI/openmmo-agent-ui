@@ -34,9 +34,10 @@
     80,
     83,
     84,
-    89
+    89,
+    93
   ],
-  "fallbackProtocol": 84,
-  "pinnedProtocol": 89,
-  "pinnedLayout": "392fc0ebdf8130d7"
+  "fallbackProtocol": 89,
+  "pinnedProtocol": 93,
+  "pinnedLayout": "34ee45d61bce1198"
 }
