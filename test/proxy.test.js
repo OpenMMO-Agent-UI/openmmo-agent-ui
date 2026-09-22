@@ -417,42 +417,21 @@ test('an inventory frame in a shape we cannot read is ignored, not reported as n
   assert.strictEqual(worn.length, 0)
 })
 
-/// Both shapes verified against `rmp_serde::to_vec` on the real types:
-/// `SkillsUpdate` wraps the map twice (the message struct, then `Skills`), its
-/// keys are `SkillId`'s serde names, and `SkillProgress` is [level, xp].
-const skillsUpdateFrame = (map) => encode({ SkillsUpdate: [[map]] })
-/// [skill, xp_amount, total_xp, new_level, leveled_up]
-const skillXpFrame = (skill, xpAmount, totalXp, newLevel, leveledUp = false) =>
-  encode({ SkillXpGained: [skill, xpAmount, totalXp, newLevel, leveledUp] })
+/// Verified against `rmp_serde::to_vec` on the real type: `SkillsUpdate`
+/// wraps the set twice (the message struct, then `Skills`), and the set is a
+/// list of `SkillId`'s serde names.
+const skillsUpdateFrame = (learned) => encode({ SkillsUpdate: [[learned]] })
 
-test('trained skills are read off the join-time skills frame', () => {
+test('learned skills are read off the skills frame', () => {
   const skills = []
   const proxy = new AgentProxy(
     () => {},
     () => {},
     (s) => skills.push(s),
   )
-  proxy.onServerFrame(skillsUpdateFrame({ fishing: [4, 1600] }))
+  proxy.onServerFrame(skillsUpdateFrame(['fishing']))
 
-  assert.deepStrictEqual(skills.at(-1), { fishing: { level: 4, xp: 1600 } })
-})
-
-test('an XP gain restates its own skill and leaves the others alone', () => {
-  const skills = []
-  const proxy = new AgentProxy(
-    () => {},
-    () => {},
-    (s) => skills.push(s),
-  )
-  proxy.onServerFrame(skillsUpdateFrame({ fishing: [4, 1600], mining: [1, 100] }))
-  // The gain carries the running totals, so the panel never has to re-derive
-  // a level from the XP curve.
-  proxy.onServerFrame(skillXpFrame('fishing', 900, 2500, 5, true))
-
-  assert.deepStrictEqual(skills.at(-1), {
-    fishing: { level: 5, xp: 2500 },
-    mining: { level: 1, xp: 100 },
-  })
+  assert.deepStrictEqual(skills.at(-1), ['fishing'])
 })
 
 /// [guard, cha] — the server's own effective_stats, sent on join and after
@@ -502,36 +481,71 @@ test('an effective-stats frame in a shape we cannot read is ignored', () => {
   assert.strictEqual(stats.length, 0)
 })
 
-test('a new agent session clears the skills the previous one had trained', () => {
+test('a new agent session clears the skills the previous one had learned', () => {
   const skills = []
   const proxy = new AgentProxy(
     () => {},
     () => {},
     (s) => skills.push(s),
   )
-  proxy.onServerFrame(skillsUpdateFrame({ fishing: [4, 1600] }))
+  proxy.onServerFrame(skillsUpdateFrame(['fishing']))
 
   proxy.upstreamUrl = 'ws://127.0.0.1:1/ws'
   proxy.attachAgent(fakeAgentSocket())
 
-  assert.deepStrictEqual(skills.at(-1), {}, 'attaching a fresh agent should empty the panel')
-  // And the emptied map is what a later gain builds on, not the old session's.
-  proxy.onServerFrame(skillXpFrame('fishing', 100, 100, 1))
-  assert.deepStrictEqual(skills.at(-1), { fishing: { level: 1, xp: 100 } })
+  assert.deepStrictEqual(skills.at(-1), [], 'attaching a fresh agent should empty the panel')
   proxy.stop()
 })
 
-test('a skills frame in a shape we cannot read is ignored, not reported as untrained', () => {
+test('a skills frame in a shape we cannot read is ignored, not reported as unlearned', () => {
   const skills = []
   const proxy = new AgentProxy(
     () => {},
     () => {},
     (s) => skills.push(s),
   )
-  proxy.onServerFrame(encode({ SkillsUpdate: ['not-a-skill-map'] }))
-  proxy.onServerFrame(encode({ SkillXpGained: [null, 1, 1, 1, false] }))
+  proxy.onServerFrame(encode({ SkillsUpdate: ['not-a-skill-list'] }))
+  proxy.onServerFrame(encode({ SkillsUpdate: [[{ fishing: [4, 1600] }]] }))
 
   assert.strictEqual(skills.length, 0)
+})
+
+// ---------- abilities ----------
+
+/// `AbilityRejected` is [ability, reason]; `AbilityCooldowns` is
+/// [[[ability, remaining_ms], …]] — the timer list inside the message struct.
+test("the server's answer to a fired skill reaches the drawer", () => {
+  const replies = []
+  const proxy = new AgentProxy(
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    () => {},
+    (r) => replies.push(r),
+  )
+  proxy.onServerFrame(encode({ AbilityRejected: ['guardian_ward', 'equipment'] }))
+  proxy.onServerFrame(encode({ AbilityCooldowns: [[['guardian_ward', 45000]]] }))
+  proxy.onServerFrame(encode({ AbilityCooldowns: [[]] }))
+  proxy.onServerFrame(encode({ AbilityRejected: [null, 'equipment'] }))
+
+  assert.deepStrictEqual(replies, [
+    { kind: 'rejected', ability: 'guardian_ward', reason: 'equipment' },
+    { kind: 'cooldowns', cooldowns: { guardian_ward: 45000 } },
+    { kind: 'cooldowns', cooldowns: {} },
+  ])
+})
+
+test("useAbility fires the skill untargeted on the agent's own connection", () => {
+  const sent = []
+  const proxy = new AgentProxy()
+  proxy.agentUpstream = { readyState: 1, send: (f) => sent.push(f) }
+
+  assert.strictEqual(proxy.useAbility('guardian_ward'), true)
+  assert.deepStrictEqual(decodedOf(sent), [['UseAbility', ['guardian_ward', null, null]]])
+
+  proxy.agentUpstream = null
+  assert.strictEqual(proxy.useAbility('guardian_ward'), false)
 })
 
 // ---------- titles ----------

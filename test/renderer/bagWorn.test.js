@@ -26,28 +26,60 @@ test('itemLabel omits the prefix when there is no enchant', async () => {
   assert.equal(itemLabel('iron_sword', undefined), 'Iron Sword')
 })
 
-// The ported XP curve, checked against the thresholds shared/src/skills.rs
-// asserts for itself (0, 100, 500, 1400): a level starts at 0% and the next
-// one's threshold is 100%, so a wrong curve shows up as a bar that fills at
-// the wrong pace rather than as an error.
-test('skill progress runs from the level threshold to the next one', async () => {
-  const { skillProgressPct } = await bagWornPromise
-  assert.equal(skillProgressPct({ level: 1, xp: 100 }), 0)
-  assert.equal(skillProgressPct({ level: 1, xp: 300 }), 50)
-  assert.equal(skillProgressPct({ level: 2, xp: 500 }), 0)
-  assert.equal(skillProgressPct({ level: 2, xp: 1400 }), 100)
+// The skill sheet mirrors the web client's abilities.ts and the server's
+// abilities.rs: a class skill is had by class, Auscultation by anyone, Fishing
+// only once learned — and each says whether the gear it takes is on.
+test('a knight has Guardian Ward, and it is ready with a blade and a shield', async () => {
+  const { availableSkills } = await bagWornPromise
+  const bare = availableSkills('knight', [], {})
+  assert.deepEqual(
+    bare.map((s) => [s.id, s.ready, s.fire]),
+    [
+      ['guardian_ward', false, true],
+      ['auscultation', false, false],
+    ],
+  )
+  const armed = availableSkills('knight', [], {
+    main_hand: { itemDefId: 'steel_longsword' },
+    off_hand: { itemDefId: 'wooden_shield' },
+  })
+  assert.equal(armed[0].ready, true)
+  // A great sword is two-handed: no shield, no ward.
+  assert.equal(
+    availableSkills('knight', [], { main_hand: { itemDefId: 'great_sword' } })[0].ready,
+    false,
+  )
 })
 
-test('an untrained skill sits at the start of level 0', async () => {
-  const { skillProgressPct } = await bagWornPromise
-  assert.equal(skillProgressPct({ level: 0, xp: 0 }), 0)
+test('a rogue has Double Slash instead, and it takes a dagger', async () => {
+  const { availableSkills } = await bagWornPromise
+  const rows = availableSkills('rogue', [], { main_hand: { itemDefId: 'dagger' } })
+  assert.deepEqual(
+    rows.map((s) => [s.id, s.source, s.ready]),
+    [
+      ['dagger_double_slash', 'rogue', true],
+      ['auscultation', null, false],
+    ],
+  )
 })
 
-// At the cap there is no next threshold to divide by, so the bar has to be
-// told it is full rather than computing it.
-test('a capped skill reads as full', async () => {
-  const { skillProgressPct } = await bagWornPromise
-  assert.equal(skillProgressPct({ level: 30, xp: 964500 }), 100)
+test('fishing appears only once learned, whatever the class', async () => {
+  const { availableSkills } = await bagWornPromise
+  assert.ok(!availableSkills('barbarian', [], {}).some((s) => s.id === 'fishing'))
+  const learned = availableSkills('barbarian', ['fishing'], { main_hand: { itemDefId: 'fishing_rod' } })
+  assert.deepEqual(
+    learned.filter((s) => s.id === 'fishing').map((s) => [s.source, s.ready]),
+    [['learned', true]],
+  )
+})
+
+test('without a known class only learned skills are listed, so no session reads as no skills', async () => {
+  const { availableSkills } = await bagWornPromise
+  assert.deepEqual(availableSkills(null, [], {}), [])
+  assert.deepEqual(
+    availableSkills(null, ['fishing'], {}).map((s) => s.id),
+    ['fishing'],
+  )
 })
 
 // Item weights are tenths of a kilo, the same reading the game's own

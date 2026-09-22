@@ -495,12 +495,14 @@ function setVitals(v) {
     actionToasts.clear()
     bagWorn.renderBag([], null, null)
     bagWorn.renderWorn({})
-    bagWorn.renderSkills({})
+    bagWorn.renderSkills([])
+    bagWorn.setCharacterClass(null)
     renderAttributes(null)
     return
   }
   const s = v.self
   lastSelf = s
+  bagWorn.setCharacterClass(s.class)
   $('dutyName').textContent = s.name
   $('dutyLevel').textContent = `LV ${s.level}`
   $('dutyLevel').hidden = false
@@ -1351,13 +1353,14 @@ async function init() {
 
   renderFeedFilters()
   bagWorn.renderWorn({})
-  bagWorn.renderSkills({})
+  bagWorn.renderSkills([])
   renderTitles(null)
   api.onLog(appendLog)
   api.onFeed(appendFeed)
   api.onVitals(setVitals)
   api.onWorn(bagWorn.renderWorn)
   api.onSkills(bagWorn.renderSkills)
+  api.onAbility(bagWorn.onAbilityReply)
   api.onTitles(renderTitles)
   api.onStats((stats) => {
     effectiveStats = stats

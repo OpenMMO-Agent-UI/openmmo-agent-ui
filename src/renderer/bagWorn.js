@@ -33,6 +33,15 @@ export function itemLabel(id, enchant) {
   return enchant ? `+${enchant} ${words}` : words
 }
 
+/// The three feeds the sheet is drawn from arrive separately — the class with
+/// the vitals, the learned skills and the gear from the relay — so each is
+/// kept and the sheet redrawn whenever any of them moves.
+let skillClass = null
+let skillsLearned = []
+let skillsWorn = {}
+let cooldownUntil = {}
+let cooldownTimer = null
+
 /// What the character has on, slot by slot, from the relay's view of the
 /// server's inventory frames (src/proxy.js) — the agent's own panel API
 /// reports the bag but never the gear.
@@ -40,6 +49,7 @@ export function renderWorn(worn) {
   const box = $('wornList')
   box.innerHTML = ''
   const equipped = worn && typeof worn === 'object' ? worn : {}
+  skillsWorn = equipped
   let count = 0
   for (const [slot, label] of WORN_SLOTS) {
     const item = equipped[slot]
@@ -58,66 +68,164 @@ export function renderWorn(worn) {
   // The slot list itself is always drawn, so the hint speaks to the gear:
   // an all-empty sheet is the one case worth saying out loud.
   $('wornEmpty').hidden = count > 0
+  drawSkills()
 }
 
-/// Player-facing skill names (shared/src/skills.rs SkillId::display_name).
-/// Anything the server trains that isn't listed falls back to `itemLabel`'s
-/// snake_case-to-words reading of its id, so a new upstream skill shows up as a
-/// row that reads like a name ("Herb Gathering") rather than as a raw id.
-const SKILL_NAMES = { fishing: 'Fishing' }
+/// The game's skills (client abilities.ts, server abilities.rs): who has each
+/// — a class by right, or anyone who learned it — and the gear it takes. The
+/// gear lists are the game's fixed item list (deps/OpenMMO/data/items.json),
+/// the way RESTOCK_ITEMS is. `fire` marks the one the drawer can use on its
+/// own; the others need a target the agent picks in the field, or are the
+/// fisher worker's job.
+const ONE_HANDED_BLADES = new Set([
+  'iron_sword',
+  'worn_iron_sword',
+  'notched_iron_sword',
+  'goblin_sword',
+  'small_sword',
+  'morningstar',
+  'steel_longsword',
+])
+const SHIELDS = new Set(['wooden_shield', 'raven_shield'])
+const mainHand = (worn, id) => worn.main_hand?.itemDefId === id
+const ABILITIES = [
+  {
+    id: 'guardian_ward',
+    name: 'Guardian Ward',
+    class: 'knight',
+    gear: 'Sword or mace, and a shield',
+    ready: (worn) =>
+      ONE_HANDED_BLADES.has(worn.main_hand?.itemDefId) && SHIELDS.has(worn.off_hand?.itemDefId),
+    fire: true,
+  },
+  {
+    id: 'dagger_double_slash',
+    name: 'Double Slash',
+    class: 'rogue',
+    gear: 'Dagger',
+    ready: (worn) => mainHand(worn, 'dagger'),
+  },
+  {
+    id: 'auscultation',
+    name: 'Auscultation',
+    gear: 'Stethoscope',
+    ready: (worn) => worn.neck?.itemDefId === 'stethoscope',
+  },
+  {
+    id: 'fishing',
+    name: 'Fishing',
+    learned: true,
+    gear: 'Fishing rod',
+    ready: (worn) => mainHand(worn, 'fishing_rod'),
+  },
+]
 
-/// The game's XP curve, ported from shared/src/skills.rs: cumulative XP for a
-/// level is `Σ 100·l²` = `100·n(n+1)(2n+1)/6`, capped at level 30. Duplicated
-/// rather than shared because that crate reaches the web client through wasm,
-/// which this renderer has no part of.
-const SKILL_LEVEL_CAP = 30
-function skillXpForLevel(level) {
-  const n = Math.min(level, SKILL_LEVEL_CAP)
-  return (100 * n * (n + 1) * (2 * n + 1)) / 6
+/// What this character can use: its class's skills, the ones anyone has, and
+/// the ones it learned — each with whether the gear it takes is on. Without a
+/// known class (no session) only learned skills count, so an empty sheet
+/// stays empty.
+export function availableSkills(characterClass, learned, worn) {
+  const had = Array.isArray(learned) ? learned : []
+  const gear = worn && typeof worn === 'object' ? worn : {}
+  return ABILITIES.filter((a) =>
+    a.learned ? had.includes(a.id) : characterClass && (!a.class || a.class === characterClass),
+  ).map((a) => ({
+    id: a.id,
+    name: a.name,
+    source: a.learned ? 'learned' : a.class ? a.class : null,
+    gear: a.gear,
+    ready: a.ready(gear),
+    fire: !!a.fire,
+  }))
 }
 
-/// How far into the current level the character is, 0–100. A capped skill
-/// reads full: there is no next level to be partway to.
-export function skillProgressPct(progress) {
-  if (progress.level >= SKILL_LEVEL_CAP) return 100
-  const start = skillXpForLevel(progress.level)
-  const next = skillXpForLevel(progress.level + 1)
-  return Math.max(0, Math.min(100, ((progress.xp - start) / (next - start)) * 100))
+/// Why the server refused a skill (shared/src/ability.rs AbilityRejectReason).
+const REJECTIONS = {
+  unavailable: "Can't use that right now.",
+  equipment: 'Missing the gear for it.',
+  cooldown: 'Still on cooldown.',
+  out_of_range: 'Out of range.',
+  not_enough_mana: 'Not enough mana.',
 }
 
-/// Trained skills, from the relay's view of the server's owner-private skill
-/// frames (src/proxy.js) — the same blind spot in the agent's panel API that
-/// makes `renderWorn` necessary. Unlike gear there is no fixed slot list: a
-/// skill has no row until it is first trained.
-export function renderSkills(skills) {
+/// Arrives with every vitals poll, so only a change redraws — a sheet redrawn
+/// under the pointer every second would never take a click.
+export function setCharacterClass(characterClass) {
+  const next = typeof characterClass === 'string' ? characterClass : null
+  if (next === skillClass) return
+  skillClass = next
+  drawSkills()
+}
+
+/// Learned skills, from the relay's view of the server's owner-private skill
+/// frame (src/proxy.js) — the same blind spot in the agent's panel API that
+/// makes `renderWorn` necessary.
+export function renderSkills(learned) {
+  skillsLearned = Array.isArray(learned) ? learned : []
+  drawSkills()
+}
+
+/// The server's answer to a fired skill: a refusal with its reason, or the
+/// cooldowns that follow a use, which hold the Use button down until they
+/// run out.
+export function onAbilityReply(reply) {
+  if (!reply) return
+  if (reply.kind === 'rejected') {
+    setSkillsStatus(t(REJECTIONS[reply.reason] || REJECTIONS.unavailable))
+    return
+  }
+  const now = Date.now()
+  cooldownUntil = {}
+  let soonest = Infinity
+  for (const [id, ms] of Object.entries(reply.cooldowns || {})) {
+    if (ms > 0) {
+      cooldownUntil[id] = now + ms
+      soonest = Math.min(soonest, ms)
+    }
+  }
+  clearTimeout(cooldownTimer)
+  if (soonest < Infinity) cooldownTimer = setTimeout(drawSkills, soonest + 50)
+  drawSkills()
+}
+
+function setSkillsStatus(text) {
+  const el = $('skillsStatus')
+  el.textContent = text
+  el.hidden = !text
+}
+
+async function useSkill(id) {
+  setSkillsStatus('')
+  const res = await api.useAbility(id)
+  if (!res || !res.ok) setSkillsStatus(t("The skill can't reach the server right now."))
+}
+
+function drawSkills() {
   const box = $('skillsList')
   box.innerHTML = ''
-  const rows = Object.entries(skills && typeof skills === 'object' ? skills : {})
-    .map(([id, progress]) => ({ id, name: SKILL_NAMES[id] ? t(SKILL_NAMES[id]) : itemLabel(id), progress }))
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const rows = availableSkills(skillClass, skillsLearned, skillsWorn)
   $('skillsEmpty').hidden = rows.length > 0
+  const now = Date.now()
   for (const row of rows) {
     const el = document.createElement('div')
-    el.className = 'skill-row'
+    el.className = row.ready ? 'skill-row' : 'skill-row skill-bare'
     const name = document.createElement('span')
     name.className = 'skill-name'
-    name.textContent = row.name
-    const level = document.createElement('span')
-    level.className = 'skill-level'
-    level.textContent = t('Lv {level}', { level: row.progress.level })
-    const pct = skillProgressPct(row.progress)
-    const track = document.createElement('div')
-    track.className = 'skill-track'
-    track.setAttribute('role', 'progressbar')
-    track.setAttribute('aria-valuemin', '0')
-    track.setAttribute('aria-valuemax', '100')
-    track.setAttribute('aria-valuenow', String(Math.round(pct)))
-    track.title = t('{xp} XP', { xp: row.progress.xp })
-    const fill = document.createElement('span')
-    fill.className = 'skill-fill'
-    fill.style.width = `${pct}%`
-    track.appendChild(fill)
-    el.append(name, level, track)
+    name.textContent = t(row.name)
+    const meta = document.createElement('span')
+    meta.className = 'skill-meta'
+    const source = row.source === 'learned' ? t('Learned') : row.source ? t(row.source) : t('Anyone')
+    meta.textContent = row.ready ? source : `${source} · ${t('Needs {gear}', { gear: t(row.gear) })}`
+    el.append(name, meta)
+    if (row.fire) {
+      const left = (cooldownUntil[row.id] || 0) - now
+      const use = document.createElement('button')
+      use.className = 'skill-use'
+      use.textContent = left > 0 ? t('{s}s', { s: Math.ceil(left / 1000) }) : t('Use')
+      use.disabled = !row.ready || left > 0
+      use.addEventListener('click', () => useSkill(row.id))
+      el.appendChild(use)
+    }
     box.appendChild(el)
   }
 }

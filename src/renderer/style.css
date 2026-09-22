@@ -1986,56 +1986,51 @@ button.quiet:not(:disabled):hover {
   border-bottom: 1px solid var(--line);
 }
 
-/* ---------- trained skills ---------- */
+/* ---------- skills ---------- */
 
 .skills-list {
   overflow-y: auto;
 }
 
 /* Same column track as the equipment sheet, so switching tabs does not move
-   where the left column starts — and the levels line up down the list instead
-   of each one sitting wherever its skill's name ended. */
+   where the left column starts; the Use button keeps to the right edge. */
 .skill-row {
   display: grid;
-  grid-template-columns: 88px 42px minmax(0, 1fr);
+  grid-template-columns: 88px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 7px 2px;
   border-bottom: 1px solid var(--line);
 }
 
-/* Clipped rather than allowed to run into the level column: an upstream skill
-   with a long name must not push the numbers out of line. */
+/* Clipped rather than allowed to run into the next column: an upstream skill
+   with a long name must not push the rest out of line. */
 .skill-name {
   min-width: 0;
-  color: var(--muted);
+  color: var(--text);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.skill-level {
-  color: var(--text);
-  font-family: var(--mono-font);
+.skill-bare .skill-name {
+  color: var(--muted);
+}
+
+.skill-meta {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-use {
+  padding: 2px 10px;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-}
-
-/* The bar takes the leftover width so the level reads at a fixed spot down
-   the column, the way the worn rows line up. */
-.skill-track {
-  flex: 1;
-  height: 6px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.skill-fill {
-  display: block;
-  height: 100%;
-  background: var(--accent);
 }
 
 .worn-slot {
