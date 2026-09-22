@@ -311,6 +311,44 @@ something the flow needs to ever succeed. Install what's missing (see
 "Local environment prerequisites" below for what this machine needed the
 first time) and retry, rather than treating it as a code-quality abort.
 
+## Step 3b: fold this run's fixes into the commits they repair
+
+`tweak-agent-client` must come out of a sync with the same commits it went
+in with — the features we carry, today two. Record each fix from Step 3 on
+top as you make it, then fold them all before Step 4 pushes anything:
+
+```
+node <repo root>/scripts/fold-tweak-fixups.js . "$releaseSha" <logical shas>
+```
+
+The logical shas are whatever `origin/tweak-agent-client` held when this run
+started — capture them in Step 2 before rebasing, because after folding they
+are gone.
+
+Why this is not tidiness. The stack grew 2 → 3 → 5 → 6 → 7 → 8 → 10 between
+protocol v79 and v93, one or two per release, until Tony squashed it back by
+hand. Every rebase replays every commit, and a fix usually touches the same
+lines as the commit it repairs, so the same hunk re-conflicts on each
+release — and a conflict is where an unattended rebase is most likely to
+choose wrong. The protocol-57 sync hit one in `shared/build.rs`, which
+computes the dungeon layout fingerprint; resolve that wrong and every gate
+stays green while every player is refused. The intermediate commits are also
+unbuildable alone: `rule-based workers` still referenced `Monster.owner_id`
+after upstream removed it and only compiled once a later fixup landed, so
+bisect and cherry-pick stop meaning anything.
+
+The script attributes each fix by the files it touches, transitively, and
+refuses rather than guessing when a fix spans two features — split it and
+re-run. It asserts the tree is byte-identical afterwards: folding rearranges
+history, never content. Verified against protocol-v93-r1, ten commits to two
+with an empty diff.
+
+One output always worth reading: `carrying a patch on upstream-owned
+file(s)`. That fix touches only files we do not own, so ownership cannot
+place it and it falls back to its area. It also means the file is now ours
+to keep gating on forever — the same trap `check-ours.js` documents. If the
+patch is not load-bearing, drop it instead of folding it.
+
 ## Step 4: tag and push the submodule
 
 Helper scripts under `scripts/` resolve their own paths from `__dirname`,
