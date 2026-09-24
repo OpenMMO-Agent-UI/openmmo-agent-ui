@@ -572,8 +572,8 @@ test('earned titles and the shown pick are read off the PlayerTitles frame', () 
   })
 })
 
-/// The server sends PlayerTitles before it has registered the player, so
-/// its `active` is always none at entry; the JoinSuccess Player that follows
+/// The server answers EnterGame with JoinSuccess, then the queued
+/// PlayerTitles whose `active` reads none at entry; the JoinSuccess Player
 /// carries the title actually worn.
 test('the title worn at entry comes off the JoinSuccess player, not the empty PlayerTitles', () => {
   const titles = []
@@ -584,11 +584,11 @@ test('the title worn at entry comes off the JoinSuccess player, not the empty Pl
     () => {},
     (t) => titles.push(t),
   )
-  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer', 'orc_slayer'], null))
   const player = playerArray(1, [0, 0, 0], 'TestChar')
   while (player.length < 18) player.push(null)
   player.push('orc_slayer')
   proxy.onServerFrame(encode({ JoinSuccess: [player, false] }))
+  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer', 'orc_slayer'], null))
 
   assert.deepStrictEqual(titles.at(-1), {
     titles: ['goblin_slayer', 'orc_slayer'],
@@ -597,10 +597,10 @@ test('the title worn at entry comes off the JoinSuccess player, not the empty Pl
   // A later PlayerTitles is the server's word again.
   proxy.onServerFrame(playerTitlesFrame(['goblin_slayer', 'orc_slayer'], null))
   assert.equal(titles.at(-1).active, null)
-  // A player wearing nothing adds nothing.
-  const bare = titles.length
+  // A player wearing nothing leaves the entry frame as sent.
   proxy.onServerFrame(joinSuccessFrame(1, [0, 0, 0]))
-  assert.equal(titles.length, bare)
+  proxy.onServerFrame(playerTitlesFrame(['goblin_slayer'], null))
+  assert.equal(titles.at(-1).active, null)
 })
 
 test('a title cleared back to none reads active as null', () => {

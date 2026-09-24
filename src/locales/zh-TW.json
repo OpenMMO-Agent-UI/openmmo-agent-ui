@@ -280,6 +280,7 @@
   "The character has to be in the world before its position can be saved.": "角色要先進到世界裡，才能存下牠站的位置。",
   "Say \"{message}\"": "說「{message}」",
   "Sell": "賣出",
+  "Locked": "已鎖定",
   "Sell→{item}": "賣出→{item}",
   "Server did not acknowledge the pinned protocol": "伺服器沒有確認釘選的協定版本",
   "Server URL is required": "伺服器網址不能空白",

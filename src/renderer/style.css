@@ -1918,6 +1918,18 @@ button.quiet:not(:disabled):hover {
   white-space: nowrap;
 }
 
+.bag-lock {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: 4px;
+  color: var(--muted);
+}
+
+.bag-lock svg {
+  width: 12px;
+  height: 12px;
+}
+
 .bag-qty {
   color: var(--muted);
   font-family: var(--mono-font);

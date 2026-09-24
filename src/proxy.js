@@ -132,11 +132,9 @@ function titlesFromUpdate(body) {
   return { titles, active: active || null }
 }
 
-/// The title `JoinSuccess`'s own Player carries, at the slot `Player.title`
-/// holds in the positional struct (shared/entity.rs), or null when there is
-/// none. The server sends `PlayerTitles` before it has registered the player,
-/// so that frame's `active` reads as none at entry whatever the character
-/// wears; the Player that follows is where the pick actually is.
+/// The title `JoinSuccess`'s Player carries (`Player.title`, shared/entity.rs),
+/// or null. The entry `PlayerTitles` that follows it reads none whatever the
+/// character wears, so this is where the worn pick is.
 const PLAYER_TITLE_SLOT = 18
 function titleFromJoin(body) {
   const player = body && body[0]
@@ -630,9 +628,9 @@ class AgentProxy {
     /// Called with the server's answer to `useAbility` — a rejection with its
     /// reason, or the cooldowns that follow a use.
     this.onAbility = onAbility
-    /// The last `PlayerTitles`, kept so the join-time Player can correct the
-    /// shown pick that frame is missing.
     this.titles = { titles: [], active: null }
+    /// The title worn at entry, until the entry `PlayerTitles` takes it.
+    this.joinTitle = null
     this.server = null
     this.apiServer = null
     this.wss = null
@@ -719,6 +717,7 @@ class AgentProxy {
     this.onSkills([])
     this.onStats(null)
     this.titles = { titles: [], active: null }
+    this.joinTitle = null
     this.onTitles(this.titles)
 
     const upstream = new WebSocket(this.upstreamUrl)
@@ -812,17 +811,13 @@ class AgentProxy {
     if (name === 'PlayerTitles') {
       const titles = titlesFromUpdate(body)
       if (titles) {
+        if (!titles.active && this.joinTitle) titles.active = this.joinTitle
+        this.joinTitle = null
         this.titles = titles
         this.onTitles(titles)
       }
     }
-    if (name === 'JoinSuccess') {
-      const active = titleFromJoin(body)
-      if (active && this.titles.active !== active) {
-        this.titles = { ...this.titles, active }
-        this.onTitles(this.titles)
-      }
-    }
+    if (name === 'JoinSuccess') this.joinTitle = titleFromJoin(body)
     if (!OWNER_ONLY.has(name)) this.broadcast(frame)
   }
 
