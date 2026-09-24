@@ -3,10 +3,7 @@
 ## General rules
 
 - Keep responses focused, brief, and concise.
-- Comments only when truly necessary, and short. Shorten or delete verbose ones
-  you come across.
-- Prefer editing existing files. No abstractions or files beyond what the task
-  requires.
+- Remove any code comments you come across and only leave the usage for scripts.
 
 ## Branching
 
