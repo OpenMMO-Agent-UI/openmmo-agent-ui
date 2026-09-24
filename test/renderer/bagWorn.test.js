@@ -105,3 +105,19 @@ test('gold reads in the denominations the game uses', async () => {
   assert.equal(formatGold(0), '0c')
   assert.equal(formatGold(-250), '-2s 50c')
 })
+
+test('bagRows groups instances and marks a row locked when any of them is', async () => {
+  const { bagRows } = await bagWornPromise
+  const rows = bagRows([
+    { item_def_id: 'iron_sword', quantity: 1 },
+    { item_def_id: 'iron_sword', quantity: 1, locked: true },
+    { item_def_id: 'healing_potion', quantity: 3 },
+  ])
+  assert.deepEqual(
+    rows.map(({ id, quantity, locked }) => ({ id, quantity, locked })),
+    [
+      { id: 'healing_potion', quantity: 3, locked: false },
+      { id: 'iron_sword', quantity: 2, locked: true },
+    ],
+  )
+})

@@ -307,21 +307,33 @@ function renderBagTotals(weight, gold) {
 /// grouped by item + enchant here into one line each, with a total count.
 /// Each row carries its own Sellable/Dropable checkboxes, staged into
 /// stagedLabels until Apply labels commits them.
+export function bagRows(bag) {
+  const grouped = new Map()
+  for (const item of bag || []) {
+    const key = `${item.item_def_id}#${item.enchant || 0}`
+    const row = grouped.get(key) || { quantity: 0, locked: false }
+    row.quantity += item.quantity || 1
+    row.locked ||= Boolean(item.locked)
+    grouped.set(key, row)
+  }
+  return [...grouped.entries()]
+    .map(([key, { quantity, locked }]) => {
+      const [id, enchant] = key.split('#')
+      return { key, id, enchant: Number(enchant), label: itemLabel(id, Number(enchant)), quantity, locked }
+    })
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+const LOCK_ICON =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round">' +
+  '<rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>'
+
 export function renderBag(bag, weight, gold) {
   renderBagTotals(weight, gold)
   const box = $('bagList')
   box.innerHTML = ''
-  const grouped = new Map()
-  for (const item of bag || []) {
-    const key = `${item.item_def_id}#${item.enchant || 0}`
-    grouped.set(key, (grouped.get(key) || 0) + (item.quantity || 1))
-  }
-  const rows = [...grouped.entries()]
-    .map(([key, quantity]) => {
-      const [id, enchant] = key.split('#')
-      return { key, id, enchant: Number(enchant), label: itemLabel(id, Number(enchant)), quantity }
-    })
-    .sort((a, b) => a.label.localeCompare(b.label))
+  const rows = bagRows(bag)
   currentBagRows = rows
 
   $('bagEmpty').hidden = rows.length > 0
@@ -344,6 +356,13 @@ export function renderBag(bag, weight, gold) {
     const name = document.createElement('span')
     name.className = 'bag-name'
     name.textContent = row.label
+    if (row.locked) {
+      const lock = document.createElement('span')
+      lock.className = 'bag-lock'
+      lock.title = t('Locked')
+      lock.innerHTML = LOCK_ICON
+      name.prepend(lock)
+    }
     const qty = document.createElement('span')
     qty.className = 'bag-qty'
     qty.textContent = `×${row.quantity}`
