@@ -158,6 +158,7 @@ async function openSession(serverUrl, idToken) {
     characters: characters.map(characterFromWire),
     createCharacter: (characterName, characterClass, gender) => createCharacter(ws, characterName, characterClass, gender),
     deleteCharacter: (characterId) => deleteCharacter(ws, characterId),
+    cancelCharacterDeletion: (characterId) => cancelCharacterDeletion(ws, characterId),
     close: () => ws.close(),
   }
 }
@@ -192,14 +193,28 @@ async function createCharacter(ws, characterName, characterClass, gender) {
 }
 
 async function deleteCharacter(ws, characterId) {
-  ws.send(encode({ DeleteCharacter: [characterId] }))
+  const [name, body] = await deletionReply(ws, { DeleteCharacter: [characterId] })
+  if (name === 'CharacterDeletionScheduled') return body[1]
+  if (name === 'CharacterDeleted') return null
+  throw new Error(`Unexpected reply to character deletion: ${name}`)
+}
+
+async function cancelCharacterDeletion(ws, characterId) {
+  const [name] = await deletionReply(ws, { CancelCharacterDeletion: [characterId] })
+  if (name !== 'CharacterDeletionCancelled') {
+    throw new Error(`Unexpected reply to canceling character deletion: ${name}`)
+  }
+}
+
+async function deletionReply(ws, message) {
+  ws.send(encode(message))
   const reply = await nextMessage(ws, REPLY_TIMEOUT_MS)
   if (!reply) throw new Error(t('The server did not respond to character deletion'))
   const [name, body] = reply
   if (name === 'CharacterError') {
     throw new Error((Array.isArray(body) && body[0]) || t('Character deletion failed'))
   }
-  if (name !== 'CharacterDeleted') throw new Error(`Unexpected reply to character deletion: ${name}`)
+  return reply
 }
 
 module.exports = { openSession, testConnection, characterFromWire, ProtocolMismatchError }

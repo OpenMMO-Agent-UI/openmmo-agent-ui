@@ -873,6 +873,11 @@ body[data-screen='game'] #screen-game {
   border-color: rgba(201, 162, 74, 0.5);
 }
 
+.slot.pending .slot-name {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
 .slot.entering .slot-pick:disabled {
   opacity: 1;
 }

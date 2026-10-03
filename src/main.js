@@ -930,13 +930,34 @@ ipcMain.handle('characters:delete', async (_e, characterId) => {
   const ready = await ensurePreflightSession()
   if (!ready.ok) return ready
   try {
-    await preflightSession.deleteCharacter(characterId)
-    currentCharacters = currentCharacters.filter((character) => character.id !== characterId)
+    const deletionDueAt = await preflightSession.deleteCharacter(characterId)
+    if (deletionDueAt == null) {
+      currentCharacters = currentCharacters.filter((character) => character.id !== characterId)
+    } else {
+      markDeletion(characterId, deletionDueAt)
+    }
+    return { ok: true, deletionDueAt }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('characters:cancel-deletion', async (_e, characterId) => {
+  const ready = await ensurePreflightSession()
+  if (!ready.ok) return ready
+  try {
+    await preflightSession.cancelCharacterDeletion(characterId)
+    markDeletion(characterId, null)
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err.message }
   }
 })
+
+function markDeletion(characterId, deletionDueAt) {
+  const character = currentCharacters.find((candidate) => candidate.id === characterId)
+  if (character) character.deletionDueAt = deletionDueAt
+}
 
 ipcMain.handle('play:enter', async (_e, characterId) => {
   const ready = await ensurePreflightSession()
