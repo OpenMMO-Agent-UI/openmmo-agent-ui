@@ -39,7 +39,9 @@ contextBridge.exposeInMainWorld('agentApp', {
   authCancel: () => ipcRenderer.invoke('auth:cancel'),
   createCharacter: (name, characterClass, gender) =>
     ipcRenderer.invoke('characters:create', { name, characterClass, gender }),
+  listCharacters: () => ipcRenderer.invoke('characters:list'),
   deleteCharacter: (characterId) => ipcRenderer.invoke('characters:delete', characterId),
+  cancelCharacterDeletion: (characterId) => ipcRenderer.invoke('characters:cancel-deletion', characterId),
   enterCharacter: (character) => ipcRenderer.invoke('play:enter', character),
   switchMode: (mode) => ipcRenderer.invoke('play:switch', mode),
   manualReady: (error) => ipcRenderer.invoke('play:manual-ready', error),

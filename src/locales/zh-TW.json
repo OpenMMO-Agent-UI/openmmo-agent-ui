@@ -99,7 +99,6 @@
   "Delete spot": "刪除地點",
   "Delete {name}": "刪除 {name}",
   "Delete {name} and its saved Google login?": "要刪除 {name} 和它存下的 Google 登入嗎？",
-  "Delete {name}? This cannot be undone.": "要刪除 {name} 嗎？這無法復原。",
   "Discard": "捨棄",
   "Discard unapplied settings changes?": "要捨棄還沒套用的設定改動嗎？",
   "Disconnected": "已斷線",
@@ -396,5 +395,11 @@
   "Food type": "食物種類",
   "Potion type": "藥水種類",
   "Scroll type": "卷軸種類",
-  "macOS can only auto-update an app inside the Applications folder. Move OpenMMO Agent UI into /Applications, then update again.": "macOS 只能自動更新位於「應用程式」資料夾內的 app。請把 OpenMMO Agent UI 拖到 /Applications，然後再更新一次。"
+  "macOS can only auto-update an app inside the Applications folder. Move OpenMMO Agent UI into /Applications, then update again.": "macOS 只能自動更新位於「應用程式」資料夾內的 app。請把 OpenMMO Agent UI 拖到 /Applications，然後再更新一次。",
+  "Delete {name}? It is removed after 24 hours, and you can cancel until then.": "要刪除 {name} 嗎？角色會在 24 小時後移除，在那之前都可以取消。",
+  "Cancel deletion": "取消刪除",
+  "Cancel deleting {name}": "取消刪除 {name}",
+  "Deletes {when}": "{when}刪除",
+  "Awaiting deletion": "等待刪除",
+  "Could not load characters": "無法載入角色"
 }

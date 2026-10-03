@@ -37,6 +37,7 @@ async function fixture(overrides = {}) {
     }),
     authSignIn: async () => ({ ok: true, accountName: 'new@example.com', characters: [] }),
     enterCharacter: async (id) => ({ ok: true, session: { mode: 'ai', characterId: id } }),
+    listCharacters: async () => ({ ok: true, characters: [{ id: 2, name: 'Two', level: 9 }] }),
     ...overrides,
   }
   const states = []
@@ -157,4 +158,33 @@ test('chooseCharacter republishes the current screen, unchanged, before it resol
   assert.equal(states[0].busy, true)
   assert.equal(states[0].screen, 'character')
   assert.equal(states.at(-1).screen, 'game')
+})
+
+test('choosing again after returning from the game never republishes the stale game screen', async () => {
+  const { workflow, states } = await fixture()
+  await workflow.start()
+  await workflow.continueWithProfile('official')
+  await workflow.chooseCharacter(2)
+
+  const back = await workflow.returnToCharacters()
+  states.length = 0
+  await workflow.chooseCharacter(2)
+
+  assert.equal(back.screen, 'character')
+  assert.equal(back.session, null)
+  assert.deepEqual(back.characters, [{ id: 2, name: 'Two', level: 9 }])
+  assert.equal(states[0].screen, 'character')
+  assert.deepEqual(states.at(-1).session, { mode: 'ai', characterId: 2 })
+})
+
+test('a failed roster refresh stays on character selection with the error', async () => {
+  const { workflow } = await fixture({ listCharacters: async () => ({ ok: false, error: 'Not signed in' }) })
+  await workflow.start()
+  await workflow.continueWithProfile('official')
+
+  const state = await workflow.returnToCharacters()
+
+  assert.equal(state.screen, 'character')
+  assert.equal(state.busy, false)
+  assert.deepEqual(state.errors, ['Not signed in'])
 })

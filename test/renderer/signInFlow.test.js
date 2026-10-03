@@ -52,3 +52,11 @@ test('a never-checked profile is unknown rather than broken', async () => {
     assert.equal(status.label, 'Not verified')
   }
 })
+
+test('a pending deletion reads as a countdown, then as awaiting once due', async () => {
+  const { deletionLabel } = await signInFlowPromise
+  const now = Date.UTC(2026, 0, 1)
+
+  assert.match(deletionLabel(now / 1000 + 5 * 3600, now), /5 hours/)
+  assert.equal(deletionLabel(now / 1000 - 60, now), 'Awaiting deletion')
+})

@@ -292,8 +292,9 @@ function renderCharacterList() {
 
 function filledSlot(character, index) {
   const entering = character.id === enteringId
+  const pending = character.deletionDueAt != null
   const slot = document.createElement('div')
-  slot.className = `slot${entering ? ' entering' : ''}`
+  slot.className = `slot${entering ? ' entering' : ''}${pending ? ' pending' : ''}`
   slot.innerHTML =
     '<button type="button" class="slot-pick">' +
     '<span class="slot-no"></span>' +
@@ -312,15 +313,17 @@ function filledSlot(character, index) {
   slot.querySelector('.slot-name').textContent = character.name
   slot.querySelector('.slot-class').textContent = `${t(character.class)} · ${t(character.gender)}`
   slot.querySelector('.slot-level').textContent = t('Lv {level}', { level: character.level })
-  slot.querySelector('.slot-cue').textContent = entering ? t('Entering') : '›'
-  slot.querySelector('.slot-delete span').textContent = t('Delete')
+  slot.querySelector('.slot-cue').textContent = entering ? t('Entering') : pending ? '' : '›'
+  slot.querySelector('.slot-delete span').textContent = pending ? t('Cancel deletion') : t('Delete')
+  slot.querySelector('.slot-delete svg').toggleAttribute('hidden', pending)
+  if (pending) slot.querySelector('.slot-flags').appendChild(tag(deletionLabel(character.deletionDueAt)))
   // Its own column rather than stacked under the class: in the name block it
   // made whichever slot carried it taller than the others.
   if (isLastPlayed(character.id)) slot.querySelector('.slot-flags').appendChild(tag(t('Last played'), true))
 
   const pick = slot.querySelector('.slot-pick')
   const remove = slot.querySelector('.slot-delete')
-  pick.disabled = enteringId != null
+  pick.disabled = enteringId != null || pending
   remove.disabled = enteringId != null
   pick.setAttribute(
     'aria-label',
@@ -330,10 +333,22 @@ function filledSlot(character, index) {
       class: t(character.class),
     }),
   )
-  remove.setAttribute('aria-label', t('Delete {name}', { name: character.name }))
+  remove.setAttribute(
+    'aria-label',
+    pending
+      ? t('Cancel deleting {name}', { name: character.name })
+      : t('Delete {name}', { name: character.name }),
+  )
   pick.addEventListener('click', () => void enterCharacter(character))
-  remove.addEventListener('click', () => void deleteCharacterSlot(character.id, character.name))
+  remove.addEventListener('click', () =>
+    void (pending ? cancelDeletionSlot(character) : deleteCharacterSlot(character.id, character.name)),
+  )
   return slot
+}
+
+export function deletionLabel(deletionDueAt, now = Date.now()) {
+  const due = deletionDueAt * 1000
+  return due > now ? t('Deletes {when}', { when: agoLabel(due, now) }) : t('Awaiting deletion')
 }
 
 function emptySlot(index) {
@@ -358,7 +373,7 @@ function isLastPlayed(id) {
 }
 
 async function enterCharacter(character) {
-  if (enteringId != null) return
+  if (enteringId != null || character.deletionDueAt != null) return
   showErrors([])
   enteringId = character.id
   selectedCharacterId = character.id
@@ -382,20 +397,38 @@ async function enterCharacter(character) {
 }
 
 async function deleteCharacterSlot(id, name) {
-  if (!(await confirmAction(t('Delete {name}? This cannot be undone.', { name })))) return
+  if (!(await confirmAction(t('Delete {name}? It is removed after 24 hours, and you can cancel until then.', { name })))) {
+    return
+  }
   const res = await api.deleteCharacter(id)
   if (!res.ok) {
     showErrors([res.error])
     return
   }
-  characters = characters.filter((c) => c.id !== id)
-  if (lastPlayedId === id) lastPlayedId = null
+  if (res.deletionDueAt != null) {
+    const character = characters.find((c) => c.id === id)
+    if (character) character.deletionDueAt = res.deletionDueAt
+  } else {
+    characters = characters.filter((c) => c.id !== id)
+    if (lastPlayedId === id) lastPlayedId = null
+  }
   if (selectedCharacterId === id) {
     selectedCharacterId = null
     await deps.persist({ characterName: '' })
   }
   renderCharacterList()
   if (!characters.length) showCreate(true)
+}
+
+async function cancelDeletionSlot(character) {
+  showErrors([])
+  const res = await api.cancelCharacterDeletion(character.id)
+  if (!res.ok) {
+    showErrors([res.error])
+    return
+  }
+  character.deletionDueAt = null
+  renderCharacterList()
 }
 
 function bind() {
@@ -515,6 +548,7 @@ export function init(dependencies) {
       authSignIn: api.authSignIn,
       authCancel: api.authCancel,
       enterCharacter: api.enterCharacter,
+      listCharacters: api.listCharacters,
     },
     renderWorkflow,
   )
@@ -523,6 +557,10 @@ export function init(dependencies) {
 
 export function start() {
   return workflow.start()
+}
+
+export function returnToCharacters() {
+  return workflow.returnToCharacters()
 }
 
 /// Redraws the rows this flow owns. The entry screens are where a first run
