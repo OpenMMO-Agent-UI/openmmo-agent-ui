@@ -908,6 +908,12 @@ ipcMain.handle('auth:cancel', () => {
   return { ok: true }
 })
 
+ipcMain.handle('characters:list', async () => {
+  const ready = await ensurePreflightSession()
+  if (!ready.ok) return ready
+  return { ok: true, characters: currentCharacters }
+})
+
 ipcMain.handle('characters:create', async (_e, { name, characterClass, gender }) => {
   const ready = await ensurePreflightSession()
   if (!ready.ok) return ready

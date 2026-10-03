@@ -515,6 +515,7 @@ export function init(dependencies) {
       authSignIn: api.authSignIn,
       authCancel: api.authCancel,
       enterCharacter: api.enterCharacter,
+      listCharacters: api.listCharacters,
     },
     renderWorkflow,
   )
@@ -523,6 +524,10 @@ export function init(dependencies) {
 
 export function start() {
   return workflow.start()
+}
+
+export function returnToCharacters() {
+  return workflow.returnToCharacters()
 }
 
 /// Redraws the rows this flow owns. The entry screens are where a first run

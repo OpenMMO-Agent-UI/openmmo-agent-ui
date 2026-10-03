@@ -121,6 +121,15 @@ export class AppWorkflow {
     })
   }
 
+  async returnToCharacters() {
+    this.publish({ screen: 'character', busy: true, errors: [], session: null })
+    const result = await this.api.listCharacters()
+    if (!result.ok) {
+      return this.publish({ busy: false, errors: [result.error || t('Could not load characters')] })
+    }
+    return this.publish({ busy: false, characters: result.characters })
+  }
+
   async chooseCharacter(characterId) {
     this.publish({ busy: true, errors: [] })
     const result = await this.api.enterCharacter(characterId)

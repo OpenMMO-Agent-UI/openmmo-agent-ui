@@ -1020,7 +1020,7 @@ function bindActions() {
       return
     }
     await api.leavePlay('character')
-    setScreen('character')
+    await signInFlow.returnToCharacters()
   })
   $('changeServer').addEventListener('click', async () => {
     if (!(await confirmAction(t('Leave this session and choose another server?'), 'Leave'))) return
