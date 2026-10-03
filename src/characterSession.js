@@ -163,10 +163,10 @@ async function openSession(serverUrl, idToken) {
 }
 
 /// `Character` is a positional array on the wire (shared/src/character.rs):
-/// [id, name, created_at, level, xp, max_hp, attributes, class, gender].
+/// [id, deletion_due_at, name, created_at, level, xp, max_hp, attributes, class, gender, ...].
 function characterFromWire(c) {
-  const [id, name, createdAt, level, xp, maxHp, attributes, characterClass, gender] = c
-  return { id, name, createdAt, level, xp, maxHp, attributes, class: characterClass, gender }
+  const [id, deletionDueAt, name, createdAt, level, xp, maxHp, attributes, characterClass, gender] = c
+  return { id, deletionDueAt, name, createdAt, level, xp, maxHp, attributes, class: characterClass, gender }
 }
 
 /// Create requires a prior roll — the server rejects CreateCharacter without
@@ -202,4 +202,4 @@ async function deleteCharacter(ws, characterId) {
   if (name !== 'CharacterDeleted') throw new Error(`Unexpected reply to character deletion: ${name}`)
 }
 
-module.exports = { openSession, testConnection, ProtocolMismatchError }
+module.exports = { openSession, testConnection, characterFromWire, ProtocolMismatchError }
