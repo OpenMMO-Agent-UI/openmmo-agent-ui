@@ -40,9 +40,10 @@
     100,
     103,
     110,
-    111
+    111,
+    114
   ],
-  "fallbackProtocol": 110,
-  "pinnedProtocol": 111,
-  "pinnedLayout": "b93349c58690932c"
+  "fallbackProtocol": 111,
+  "pinnedProtocol": 114,
+  "pinnedLayout": "563d27839d2bcaaf"
 }
