@@ -328,6 +328,7 @@
   "The relay is not listening yet.": "릴레이가 아직 수신을 시작하지 않았습니다.",
   "The server closed the connection ({code})": "서버가 연결을 닫았습니다({code})",
   "The server did not confirm a stat roll": "서버가 능력치 굴림을 확인해 주지 않았습니다",
+  "The server did not respond to sign-in": "서버가 로그인에 응답하지 않았습니다",
   "The server did not respond to character creation": "서버가 캐릭터 생성에 응답하지 않았습니다",
   "The server did not respond to character deletion": "서버가 캐릭터 삭제에 응답하지 않았습니다",
   "The server speaks protocol v{server}, but this build speaks v{build}.": "서버는 프로토콜 v{server}을(를) 요구하지만 이 빌드는 v{build}을(를) 사용합니다.",

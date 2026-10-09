@@ -328,6 +328,7 @@
   "The relay is not listening yet.": "轉送層還沒開始接聽。",
   "The server closed the connection ({code})": "伺服器關閉了連線（{code}）",
   "The server did not confirm a stat roll": "伺服器沒有確認屬性骰",
+  "The server did not respond to sign-in": "伺服器沒有回應登入",
   "The server did not respond to character creation": "伺服器沒有回應角色建立",
   "The server did not respond to character deletion": "伺服器沒有回應角色刪除",
   "The server speaks protocol v{server}, but this build speaks v{build}.": "伺服器要求協定 v{server}，但這個版本使用的是 v{build}。",
