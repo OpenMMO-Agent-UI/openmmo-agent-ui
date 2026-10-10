@@ -180,7 +180,7 @@ cd client
 npm ci
 bash ../tools/fetch-assets.sh client/public/
 npm run build:wasm
-npm test
+node <repo root>/scripts/client-test-ours.js .. "$releaseSha"   # not a bare `npm test`
 node <repo root>/scripts/check-ours.js .. "$releaseSha"   # not `npm run check`
 npm run lint
 changed=$(git -C .. diff --name-only "$releaseSha"..HEAD -- 'client/**' | sed 's|^client/||')
@@ -259,6 +259,29 @@ The v0.41.0 sync aborted because upstream 5230934 added `eatMeal` to
 player was locked out of a protocol-51 server for 5.5 hours over a missing
 `vi.fn()` in somebody else's test. Verified against that exact tree:
 upstream-only errors now exit 0, an error in a file we changed still exits 1.
+
+`client-test-ours.js` is the same scoping one gate over, for the client's
+`npm test`. It was the last unscoped gate in this block, and on 2026-10-10 it
+stalled the protocol-118 sync all morning with the live server refusing every
+player. Julian's `41471fcb` added a selectable ranger face and a test for it,
+but the shipped `client/public/models/characters/modular_male/face_*.glb` were
+never added to `assets.lock` — only the Tripo *source* assets under
+`assets/modular_human_male_01/faces/` are pinned. Upstream's CI never sees it
+because it fetches two unrelated models, `base.glb` stays absent, and the
+suite's own `describe.skipIf` skips the file wholesale; our broader
+`fetch-assets.sh` is what makes the latent bug fire. No commit of ours touches
+`client/src/lib/utils/characterModel.test.ts`.
+
+It is strict in the way `test-ours.js` is, and for the same reason: a failing
+test reports where the assertion lives, not what broke it, so file ownership
+alone would wave through exactly the case where our rebase breaks an upstream
+test. A failure is excused only when the file is not ours **and** it still
+fails on the pristine release base, re-run in a throwaway worktree that shares
+`node_modules`, `src/lib/wasm` and `public/` (build outputs, not source). If
+this branch changed `client/package.json` or its lockfile that sharing is no
+longer honest, so it blocks instead of guessing. Verified both directions
+against the protocol-118 tree: 30 upstream-owned failures exit 0 after
+reproducing on the base, and failures in files we changed exit 1.
 
 Ownership, not severity, is the test — and it is not a licence to ignore type
 errors. A file we patch becomes ours: if we ever carry a fix to an upstream
@@ -426,7 +449,7 @@ don't paper over it by skipping ahead.
 ```
 npm test
 npm --prefix deps/OpenMMO/client run build:wasm
-npm --prefix deps/OpenMMO/client test
+node scripts/client-test-ours.js deps/OpenMMO "$releaseSha"   # not `... client test`
 node scripts/check-ours.js deps/OpenMMO "$releaseSha"   # not `... run check`
 ```
 
