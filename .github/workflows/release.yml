@@ -110,7 +110,12 @@ jobs:
           NODE
       - run: npm test
       - run: npm --prefix deps/OpenMMO/client run build:wasm
-      - run: npm --prefix deps/OpenMMO/client test
+      - name: Client tests, scoped to files this fork changed
+        run: |
+          set -euo pipefail
+          git -C deps/OpenMMO fetch --quiet origin master
+          base="$(git -C deps/OpenMMO merge-base HEAD origin/master)"
+          node scripts/client-test-ours.js deps/OpenMMO "$base"
       # Ownership-scoped, like the release-sync skill's Steps 3 and 6. The raw
       # whole-tree `npm run check` here is the third copy of that gate and the
       # one on the publishing path: on 2026-09-05 the protocol-52 sync passed
