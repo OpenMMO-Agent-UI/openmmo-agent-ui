@@ -188,3 +188,65 @@ test('a failed roster refresh stays on character selection with the error', asyn
   assert.equal(state.busy, false)
   assert.deepEqual(state.errors, ['Not signed in'])
 })
+
+// The dead end this closes: a saved credential that the server refuses used to
+// drop you back on server selection, where Continue reuses the same credential
+// and fails again. The only controls that clear one are Switch account (on the
+// character screen, which a refused sign-in never reaches) and Delete (refused
+// for the builtin profile), so the sign-in screen's failed card has to be where
+// you land — it is the one that offers to forget the login.
+test('a refused saved credential lands on the sign-in screen, not back on Continue', async () => {
+  const { workflow } = await fixture({
+    authStatus: async () => ({ signedIn: true }),
+    authContinue: async () => ({ ok: false, error: 'Unexpected reply to sign-in: (undecodable frame)' }),
+  })
+  await workflow.start()
+
+  const state = await workflow.continueWithProfile('official')
+
+  assert.equal(state.screen, 'oauth')
+  assert.deepEqual(state.errors, ['Unexpected reply to sign-in: (undecodable frame)'])
+})
+
+test('switching account forgets the saved login before signing in again', async () => {
+  const signIns = []
+  const { workflow } = await fixture({
+    signOut: async () => signIns.push('signOut'),
+    authStatus: async () => ({ signedIn: signIns.length === 0 }),
+    authSignIn: async () => {
+      signIns.push('authSignIn')
+      return { ok: true, accountName: 'other@example.com', characters: [] }
+    },
+  })
+  await workflow.start()
+
+  const state = await workflow.switchAccount('official')
+
+  // signOut first, and the fresh device flow rather than authContinue: a
+  // re-run that reused the cache would be Try again under another label.
+  assert.deepEqual(signIns, ['signOut', 'authSignIn'])
+  assert.equal(state.screen, 'character')
+  assert.equal(state.accountName, 'other@example.com')
+})
+
+// A sign-out that did not happen must not be followed by a sign-in that
+// silently reuses the credential and fails identically.
+test('a failed sign-out reports itself instead of retrying with the old login', async () => {
+  const { workflow, api } = await fixture({
+    signOut: async () => {
+      throw new Error('EPERM: google.json is locked')
+    },
+  })
+  await workflow.start()
+  let continued = false
+  api.authStatus = async () => {
+    continued = true
+    return { signedIn: true }
+  }
+
+  const state = await workflow.switchAccount('official')
+
+  assert.deepEqual(state.errors, ['EPERM: google.json is locked'])
+  assert.equal(state.busy, false)
+  assert.equal(continued, false)
+})

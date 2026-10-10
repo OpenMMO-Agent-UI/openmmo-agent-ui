@@ -67,10 +67,16 @@
           <p class="hint pulsing" data-i18n>Waiting for you to finish in the browser…</p>
         </div>
 
+        <!-- Try again reuses the saved Google login, so when that login is what
+             failed it can only fail again. The second button is the way out:
+             it forgets the saved login first. Without it a refused credential
+             on the builtin profile had no exit at all — Switch account lives on
+             the character screen, which a refused sign-in never reaches. -->
         <div id="loginFailed" hidden>
           <h1 class="display" data-i18n>Sign-in didn't finish</h1>
-          <p class="lede" data-i18n>Nothing on this machine changed. Try again, or go back and pick a different server.</p>
+          <p class="lede" data-i18n>Nothing on this machine changed. Try again, sign in as a different account, or go back and pick a different server.</p>
           <button id="loginRetry" class="primary block" data-i18n>Try again</button>
+          <button id="loginSwitchAccount" class="ghost block" data-i18n>Sign in with a different Google account</button>
         </div>
 
         <button id="loginCancel" class="linklike" data-i18n>Back to servers</button>

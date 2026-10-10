@@ -80,13 +80,42 @@ export class AppWorkflow {
     }
     if (generation !== this.generation) return this.snapshot()
     if (!result.ok) {
+      // A protocol mismatch is not a sign-in problem and has the outdated
+      // dialog of its own, so it still drops back to the server list.
+      if (result.protocolMismatch) {
+        return this.publish({ screen: 'server', busy: false, errors: [] })
+      }
+      // Anything else lands on the sign-in screen's failed card whether or not
+      // a saved credential was used. It used to go back to the server list when
+      // one was, which left no way to reach `switchAccount` — that button is on
+      // the character screen, and a refused credential never gets there. The
+      // only other control that clears one is Delete, refused for the builtin
+      // profile, so a stale saved login was an unrecoverable dead end: Continue
+      // reuses the credential, fails, and returns you to Continue.
       return this.publish({
-        screen: status.signedIn ? 'server' : 'oauth',
+        screen: 'oauth',
         busy: false,
-        errors: result.protocolMismatch ? [] : [result.error || 'Sign-in failed'],
+        errors: [result.error || 'Sign-in failed'],
       })
     }
     return this.showCharacters(result)
+  }
+
+  /// Forget the profile's saved Google login, then sign in again from scratch.
+  /// Reached from the character screen ("Switch account") and from the sign-in
+  /// screen's failed card, where it is the recovery rather than a convenience:
+  /// Try again reuses the credential that just failed.
+  async switchAccount(profileId) {
+    this.generation++
+    this.publish({ busy: true, errors: [] })
+    try {
+      await this.api.signOut()
+    } catch (err) {
+      // Nothing was cleared, so a fresh sign-in would silently reuse the old
+      // credential and fail the same way. Say so instead.
+      return this.publish({ busy: false, errors: [err?.message || t('Could not sign out')] })
+    }
+    return this.continueWithProfile(profileId ?? this.state.selectedProfileId)
   }
 
   showCharacters(result) {
