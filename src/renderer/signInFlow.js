@@ -496,10 +496,12 @@ function bind() {
   $('loginCancel').addEventListener('click', () => workflow.cancelOAuth())
   $('loginRetry').addEventListener('click', () => workflow.continueWithProfile(selectedProfileId))
 
-  $('switchAccount').addEventListener('click', async () => {
-    await api.signOut()
-    await workflow.continueWithProfile(selectedProfileId)
-  })
+  // Both of these forget the saved Google login and sign in fresh; the one on
+  // the sign-in screen exists because a refused credential never reaches the
+  // character screen, where the other one lives.
+  for (const id of ['switchAccount', 'loginSwitchAccount']) {
+    $(id).addEventListener('click', () => workflow.switchAccount(selectedProfileId))
+  }
 
   $('backToRoster').addEventListener('click', () => {
     showErrors([])
@@ -547,6 +549,7 @@ export function init(dependencies) {
       authContinue: api.authContinue,
       authSignIn: api.authSignIn,
       authCancel: api.authCancel,
+      signOut: api.signOut,
       enterCharacter: api.enterCharacter,
       listCharacters: api.listCharacters,
     },
