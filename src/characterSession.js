@@ -128,7 +128,7 @@ function authErrorMessage(name, body) {
 /// handshake (failing closed on a version mismatch), signs in
 /// with the given Google id_token, and returns { accountName, characters,
 /// createCharacter, deleteCharacter, close }.
-async function openSession(serverUrl, idToken) {
+async function openSession(serverUrl, idToken, { replyTimeoutMs = REPLY_TIMEOUT_MS } = {}) {
   const ws = await connect(serverUrl)
   const mine = protocolVersion()
 
@@ -140,7 +140,12 @@ async function openSession(serverUrl, idToken) {
   ws.send(encode({ ClientInfo: [mine, 'cli', stampLayoutVersion('pre-flight')] }))
   ws.send(encode({ Authenticate: [idToken] }))
 
-  const [name, body] = (await nextMessage(ws, REPLY_TIMEOUT_MS)) || []
+  const reply = await nextMessage(ws, replyTimeoutMs)
+  if (!reply) {
+    ws.close()
+    throw new Error(t('The server did not respond to sign-in'))
+  }
+  const [name, body] = reply
   if (name === 'AuthError') {
     const message = authErrorMessage(name, body) || 'Sign-in was refused'
     ws.close()

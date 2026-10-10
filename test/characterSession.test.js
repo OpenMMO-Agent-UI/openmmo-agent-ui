@@ -80,3 +80,11 @@ test('a refused deletion carries the server message', async (t) => {
 
   await assert.rejects(session.deleteCharacter(9), /Not your character/)
 })
+
+test('a silent server fails sign-in as a timeout, not an undecodable frame', async (t) => {
+  const server = await fakeServer(() => null)
+  t.after(server.close)
+  await assert.rejects(openSession(server.url, 'token', { replyTimeoutMs: 50 }), {
+    message: 'The server did not respond to sign-in',
+  })
+})
