@@ -27,8 +27,19 @@ jobs:
           openmmo_sha="$(git rev-parse HEAD:deps/OpenMMO)"
           openmmo_url="$(git config -f .gitmodules submodule.deps/OpenMMO.url)"
           openmmo_branch="tweak-agent-client"
-          git clone --depth=1 --branch "$openmmo_branch" "$openmmo_url" deps/OpenMMO
-          git -C deps/OpenMMO checkout --detach "$openmmo_sha"
+          # Fetch the pinned SHA by name rather than trusting it to sit in a
+          # depth-1 history of the branch tip. `tweak-agent-client` is our patch
+          # stack *rebased* onto each upstream release, so every sync force-pushes
+          # it and orphans the SHA the previous pin named — the commit is still
+          # served, but it is no longer an ancestor of the tip. That makes the
+          # shallow clone fail with `unable to read tree` for the whole window
+          # between pushing the rebase and bumping the pin, and permanently for
+          # any older tag. Both bit us on 2026-10-10 at protocol 118.
+          git init --quiet deps/OpenMMO
+          git -C deps/OpenMMO remote add origin "$openmmo_url"
+          git -C deps/OpenMMO fetch --quiet --depth=1 origin "$openmmo_sha" \
+            || git -C deps/OpenMMO fetch --quiet origin "$openmmo_branch"
+          git -C deps/OpenMMO checkout --quiet --detach "$openmmo_sha"
           git -C deps/OpenMMO submodule update --init --force --depth=1 --recursive
       - uses: actions/setup-node@v5
         with:
@@ -49,5 +60,19 @@ jobs:
       - run: npm test
       - run: bash deps/OpenMMO/tools/fetch-assets.sh client/public/
       - run: npm --prefix deps/OpenMMO/client run build:wasm
-      - run: npm --prefix deps/OpenMMO/client test
-      - run: npm --prefix deps/OpenMMO/client run check
+      # The last two unscoped copies of gates the release-sync skill and
+      # release.yml already scope by ownership. Leaving them whole-tree here
+      # meant upstream's own breakage still painted master red, which is not a
+      # cosmetic problem: a red master is what Steps 3 and 6 refuse to release
+      # on top of. On 2026-10-10 that was `characterModel.test.ts` — 1 of 184
+      # files, failing on `face_*.glb` that upstream never pinned in
+      # assets.lock — and it held protocol 118 back after the sync itself had
+      # already been fixed. Scope every copy or none; scoping some is how
+      # v0.42.0 burned a tag.
+      - name: Client tests and type-check, scoped to files this fork changed
+        run: |
+          set -euo pipefail
+          git -C deps/OpenMMO fetch --quiet origin master
+          base="$(git -C deps/OpenMMO merge-base HEAD origin/master)"
+          node scripts/client-test-ours.js deps/OpenMMO "$base"
+          node scripts/check-ours.js deps/OpenMMO "$base"
