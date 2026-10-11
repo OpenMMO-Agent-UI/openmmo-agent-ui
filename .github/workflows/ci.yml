@@ -35,10 +35,14 @@ jobs:
           # shallow clone fail with `unable to read tree` for the whole window
           # between pushing the rebase and bumping the pin, and permanently for
           # any older tag. Both bit us on 2026-10-10 at protocol 118.
+          # Deep enough to still contain the upstream release commit our patch
+          # stack sits on: the ownership-scoped gates below need a merge-base
+          # against it, and a depth-1 fetch has no common history to find one
+          # in — which fails silently under `set -e` with `--quiet`.
           git init --quiet deps/OpenMMO
           git -C deps/OpenMMO remote add origin "$openmmo_url"
-          git -C deps/OpenMMO fetch --quiet --depth=1 origin "$openmmo_sha" \
-            || git -C deps/OpenMMO fetch --quiet origin "$openmmo_branch"
+          git -C deps/OpenMMO fetch --quiet --depth=25 origin "$openmmo_sha" \
+            || git -C deps/OpenMMO fetch --quiet --depth=25 origin "$openmmo_branch"
           git -C deps/OpenMMO checkout --quiet --detach "$openmmo_sha"
           git -C deps/OpenMMO submodule update --init --force --depth=1 --recursive
       - uses: actions/setup-node@v5
@@ -72,7 +76,13 @@ jobs:
       - name: Client tests and type-check, scoped to files this fork changed
         run: |
           set -euo pipefail
-          git -C deps/OpenMMO fetch --quiet origin master
-          base="$(git -C deps/OpenMMO merge-base HEAD origin/master)"
+          git -C deps/OpenMMO fetch --quiet --depth=25 origin master
+          # The sync fast-forwards the fork's master to the upstream release our
+          # stack is rebased onto, so master's tip is the base. merge-base is
+          # the honest answer when it can be computed; say so rather than let
+          # `set -e` kill the step with no output, the way it just did.
+          base="$(git -C deps/OpenMMO merge-base HEAD origin/master \
+            || git -C deps/OpenMMO rev-parse origin/master)"
+          echo "scoping gates against base $base"
           node scripts/client-test-ours.js deps/OpenMMO "$base"
           node scripts/check-ours.js deps/OpenMMO "$base"
