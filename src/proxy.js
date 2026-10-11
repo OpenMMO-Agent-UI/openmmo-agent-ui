@@ -12,16 +12,25 @@ const { encode, decode, variantOf, Float, endOf, arrayAt, arrayHeader } = requir
 ///                           +--> spectators (/mirror)
 ///
 /// Everything is relayed byte for byte, so the server cannot tell the agent is
-/// behind anything. Being in the middle is what makes the spectator view
-/// possible without patching agent-client: we see the agent's own outbound
-/// moves, which the server never echoes back to it, and can hand spectators
-/// the `PlayerMoved` its neighbours would have received.
+/// behind anything. Being in the middle is what lets spectators watch without
+/// patching agent-client.
+///
+/// KNOWN GAP — a spectator does not see the agent take individual steps. The
+/// server does not echo a mover its own `PlayerMoved`, and this relay used to
+/// fill that in from the agent's outbound frame. It never did: the branch was
+/// keyed on a `PlayerMove` client message, and the real ones are
+/// `PlayerMoveGoal` / `PlayerMoveStop` / `PlayerMoveDirection` — they carry a
+/// *goal or a direction*, not a position, so there is nothing to translate. A
+/// spectator currently learns the agent's position only from `JoinSuccess` and
+/// from teleports. Closing this needs a position source, and agent-client
+/// already publishes one: `/api/state`'s `self.position`, which main.js polls
+/// at 1 Hz. Keyed on a name that no longer existed, the old code read as
+/// working while doing nothing — `test/proxyMessageNames.test.js` now fails on
+/// that class of drift.
 
 /// Messages that belong to the connection that owns them. A spectator that
 /// adopted monsters would run a second AI for creatures the agent drives.
 const OWNER_ONLY = new Set([
-  'MonsterAssigned',
-  'SpawnMonsterRequest',
   'AuthSuccess',
   'CharacterCreated',
   'CharacterStatsRolled',
@@ -154,7 +163,6 @@ function entityStateId(name, body) {
 /// describes rather than by message name.
 function placeKey(name, body) {
   if (name === 'ShopState') return `shop#${body[0]}`
-  if (name === 'DungeonDoorsState') return `doors#${body[0]}`
   if (name === 'DungeonPropsState') return `props#${body[0]}#${body[1]}`
   return null
 }
@@ -305,10 +313,9 @@ class WorldSnapshot {
     }
     if (MOVE_PLAYER.has(name)) {
       const id = body && body[0]
-      // The agent's own movement is tracked separately (onAgentFrame sees the
-      // outbound PlayerMove the server never echoes) — but a *teleport* does
-      // come back from the server, and it's the one way self position changes
-      // without an outbound move, so take it here.
+      // A teleport does come back from the server, and it is currently the
+      // only way the agent's own position reaches a spectator at all — see
+      // onAgentFrame, where the step-by-step path is dead.
       if (id !== null && id === this.selfPlayerId) this.takeSelfPosition(body[1], body[2], body[3])
       else if (this.knownPlayers.has(id)) this.playerMoves.set(id, raw)
       return
@@ -316,12 +323,6 @@ class WorldSnapshot {
     if (MOVE_MONSTER.has(name)) {
       const id = body && body[0]
       if (this.knownMonsters.has(id)) this.monsterMoves.set(id, raw)
-      return
-    }
-    // Addressed to the agent alone and carrying no id: the server overriding
-    // where it thinks the agent is, which no outbound PlayerMove will report.
-    if (name === 'PositionCorrected') {
-      this.takeSelfPosition(body[0], body[1], body[2])
       return
     }
     const slot = ENTITY_STATE_SLOT.get(name)
@@ -845,64 +846,24 @@ class AgentProxy {
     }
   }
 
-  /// The agent's own movement never comes back from the server, so a
-  /// spectator would see a character that never walks. Turn each outbound
-  /// PlayerMove into the PlayerMoved its neighbours receive — and record it
-  /// on the snapshot, or a spectator that (re)connects later — the header's
-  /// reload drops the iframe and builds a new one, and a dropped mirror socket
-  /// comes back by itself — gets replayed the position from JoinSuccess, stale
-  /// the moment the agent takes its first step.
+  /// Watches the agent's outbound frames. Nothing is derived from them today:
+  /// see the KNOWN GAP in this file's header for why self-movement cannot be
+  /// reconstructed from `PlayerMoveGoal`/`PlayerMoveDirection`, and where the
+  /// position would have to come from instead. Kept as the hook that fix wants,
+  /// rather than removed and rediscovered.
   onAgentFrame(frame) {
     const [name, body] = safeVariant(frame)
     if (!Array.isArray(body)) return
-    if (name === 'PlayerMove') {
-      // PlayerMove is [position, rotation, floor_level, append, sprinting]
-      // (shared/src/messages.rs) — the sprint flag is what paces the step, so
-      // it has to travel with the position it paced.
-      const [position, rotation, floorLevel, , sprinting] = body
-      if (!Array.isArray(position) || this.snapshot.selfPlayerId === null) return
-      this.snapshot.selfPosition = position
-      this.snapshot.selfRotation = typeof rotation === 'number' ? rotation : 0
-      this.snapshot.selfFloor = typeof floorLevel === 'number' ? floorLevel : this.snapshot.selfFloor
-      this.snapshot.selfSprinting = sprinting === true
-      if (this.spectators.size === 0) return
-      this.broadcast(this.snapshot.selfPlayerMovedFrame())
-      return
-    }
-    if (name === 'MonsterMove') this.onAgentMonsterMove(body)
+    void name
   }
 
-  /// The agent also runs the AI for every monster the server assigned it
-  /// (its own monster_ai.rs), and those moves are echoed back to the owner
-  /// no more than the agent's own are — so without this, every monster the
-  /// agent drives stands perfectly still in the spectator view while the
-  /// ones it does not drive walk around. Same translation as PlayerMove ->
-  /// PlayerMoved: the outbound client message plus the owner the server
-  /// would have stamped on it on the way out to everyone else.
-  ///
-  /// Claiming ownership here is safe because a spectator's `ownedByMe()` is
-  /// hardcoded false (overlay/.../observerStore.ts) — it will draw the
-  /// monster without adopting its brain, which is the whole reason
-  /// `MonsterAssigned` is in OWNER_ONLY.
-  onAgentMonsterMove(body) {
-    const [monsterId, position, rotation, state, targetPosition] = body
-    if (typeof monsterId !== 'string' || !Array.isArray(position)) return
-    const float = (n) => new Float(typeof n === 'number' ? n : 0)
-    const moved = encode({
-      MonsterMoved: [
-        monsterId,
-        position.map(float),
-        float(rotation),
-        state,
-        (Array.isArray(targetPosition) ? targetPosition : position).map(float),
-        this.snapshot.selfPlayerId,
-      ],
-    })
-    // Keep it for late joiners too, on the same terms as a server-sent move:
-    // only for a monster the spectator has actually been introduced to.
-    if (this.snapshot.knownMonsters.has(monsterId)) this.snapshot.monsterMoves.set(monsterId, moved)
-    if (this.spectators.size > 0) this.broadcast(moved)
-  }
+  /// Monster movement was client-driven once, and this translated the agent's
+  /// outbound frame the way self-movement was meant to be translated. Upstream
+  /// made monster AI server-only in protocol v85 ("remove ownership and client
+  /// control messages", shared/src/lib.rs) and the agent has driven no monster
+  /// since, so there is no outbound frame left to translate — the server's own
+  /// `MonsterMoved` is now the only source, and MOVE_MONSTER above relays it.
+  /// The translation is gone rather than kept keyed on a deleted message name.
 
   /// Hand the player's pick of earned title to the server on the agent's own
   /// connection: the renderer has no route to the server but the relay, and
