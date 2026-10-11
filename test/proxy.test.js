@@ -21,8 +21,6 @@ function groundItemArray(instanceId, position) {
 }
 
 const joinSuccessFrame = (id, position) => encode({ JoinSuccess: [playerArray(id, position, 'TestChar'), false] })
-const playerMoveFrame = (position, sprinting = false) =>
-  encode({ PlayerMove: [position.map(F), F(0), 0, false, sprinting] })
 const monsterSpawnedFrame = (id, position) => encode({ MonsterSpawned: [monsterArray(id, position)] })
 const monsterMovedFrame = (id, p) => encode({ MonsterMoved: [id, p.map(F), F(0), 'Chase', p.map(F), null] })
 const playerAppearedFrame = (id, position) => encode({ PlayerAppeared: [playerArray(id, position)] })
@@ -85,16 +83,6 @@ function fakeSpectator() {
 
 // ---------- positions ----------
 
-test('a spectator reconnecting after the agent moved sees the current position, not the stale join-time one', () => {
-  const proxy = new AgentProxy()
-  proxy.onServerFrame(joinSuccessFrame(42, [-1504.3, 0.0, 4736.5]))
-  // Nobody is watching: a reload tore the old /mirror socket down. The move
-  // still has to be recorded, or the new one replays stale data.
-  proxy.onAgentFrame(playerMoveFrame([-1588.3, 1.0, 4701.3]))
-
-  assertNear(finalPosition(proxy.snapshot.frames()), [-1588.3, 1.0, 4701.3])
-})
-
 test('a spectator connecting before the agent has ever moved sees the join position', () => {
   const proxy = new AgentProxy()
   proxy.onServerFrame(joinSuccessFrame(42, [-1504.3, 0.0, 4736.5]))
@@ -123,20 +111,11 @@ test('another player who moved after appearing is replayed at their current posi
 test('a teleport of the agent’s own character updates its tracked position', () => {
   const proxy = new AgentProxy()
   proxy.onServerFrame(joinSuccessFrame(42, [-1588.3, 1.0, 4701.3]))
-  // scroll_of_return: the one way self position changes without an outbound
-  // PlayerMove for onAgentFrame to see.
+  // scroll_of_return. With the step-by-step path dead (see proxy.js's KNOWN
+  // GAP), this and JoinSuccess are the only self positions a spectator gets.
   proxy.onServerFrame(encode({ PlayerTeleported: [42, [-1473.5, 1.1, 4732.8].map(F), F(0), 0] }))
 
   assertNear(finalPosition(proxy.snapshot.frames()), [-1473.5, 1.1, 4732.8])
-})
-
-test('a server position correction updates the tracked self position', () => {
-  const proxy = new AgentProxy()
-  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
-  proxy.onAgentFrame(playerMoveFrame([500, 0, 500]))
-  proxy.onServerFrame(encode({ PositionCorrected: [[12, 0, 12].map(F), F(0), 0] }))
-
-  assertNear(finalPosition(proxy.snapshot.frames()), [12, 0, 12])
 })
 
 // ---------- other per-entity state ----------
@@ -183,14 +162,14 @@ test('shop and dungeon state are kept per place, not clobbered by the next one',
   proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
   proxy.onServerFrame(encode({ ShopState: [11, 'Rica', ['iron_sword'], 60, []] }))
   proxy.onServerFrame(encode({ ShopState: [12, 'Karl', ['old_boot'], 50, []] }))
-  proxy.onServerFrame(encode({ DungeonDoorsState: ['crypt', [[0, 1]]] }))
+  proxy.onServerFrame(encode({ DungeonPropsState: ['crypt', 1, []] }))
 
   const frames = proxy.snapshot.frames()
   const shops = decodedOf(frames)
     .filter(([n]) => n === 'ShopState')
     .map(([, b]) => b[0])
   assert.deepStrictEqual(shops.sort(), [11, 12], 'both merchants should survive')
-  assert.ok(namesOf(frames).includes('DungeonDoorsState'))
+  assert.ok(namesOf(frames).includes('DungeonPropsState'))
 })
 
 // ---------- the join-time bulk baseline ----------
@@ -258,42 +237,30 @@ test('a removed entity leaves no orphan frame behind', () => {
   assert.ok(!names.includes('MonsterSpawned'), `got ${names.join(', ')}`)
 })
 
-test('each outbound move is broadcast live to attached spectators', () => {
+/// Pins proxy.js's KNOWN GAP so it cannot be mistaken for working again. The
+/// relay derives nothing from the agent's outbound frames: the branch that was
+/// meant to turn a step into the `PlayerMoved` the server withholds from the
+/// mover was keyed on a `PlayerMove` client message that does not exist, and
+/// the real `PlayerMoveGoal`/`PlayerMoveDirection` carry a goal or a heading,
+/// not a position. Five tests used to cover that path by feeding it frames the
+/// protocol has no variant for, which is why eighty protocol versions of
+/// deadness read as green. When the gap is closed, delete this test.
+test('the relay derives no self movement from the agent’s outbound frames', () => {
   const proxy = new AgentProxy()
   proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
   const spy = fakeSpectator()
   proxy.spectators.add(spy)
 
-  proxy.onAgentFrame(playerMoveFrame([10, 0, 10]))
-  proxy.onAgentFrame(playerMoveFrame([20, 0, 20]))
-  proxy.onAgentFrame(playerMoveFrame([30, 0, 30]))
+  for (const frame of [
+    encode({ PlayerMoveGoal: [1, F(30), F(30), true, false] }),
+    encode({ PlayerMoveDirection: [2, F(0), 1, 0, true] }),
+    encode({ PlayerMoveStop: [3] }),
+  ]) {
+    proxy.onAgentFrame(frame)
+  }
 
-  const moves = decodedOf(spy.sent).filter(([n]) => n === 'PlayerMoved')
-  assert.strictEqual(moves.length, 3, `every move should reach the spectator, got ${spy.sent.length} frames`)
-  assert.strictEqual(moves[2][1][0], 42, 'broadcast must carry the agent player id')
-  assertNear(moves[2][1][1], [30, 0, 30])
-})
-
-test('a sprinted step is broadcast as a sprint, live and on reconnect', () => {
-  const proxy = new AgentProxy()
-  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
-  const spy = fakeSpectator()
-  proxy.spectators.add(spy)
-
-  // Workers always sprint. A spectator told otherwise walks the body at 3 m/s
-  // while the server runs it at 4.5, and the gap only ends in the client's
-  // desync snap — the teleporting the mirror was full of.
-  proxy.onAgentFrame(playerMoveFrame([10, 0, 10], true))
-
-  const live = decodedOf(spy.sent).filter(([n]) => n === 'PlayerMoved')
-  assert.strictEqual(live[0][1][4], true, 'the live frame must carry the sprint')
-  const replayed = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMoved')
-  assert.strictEqual(replayed[0][1][4], true, 'and so must the one a late spectator is replayed')
-
-  // A teleport lands standing still: nothing paced it, so nothing may claim it did.
-  proxy.onServerFrame(encode({ PlayerTeleported: [42, [80, 0, 80].map(F), F(0), 0] }))
-  const afterJump = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMoved')
-  assert.strictEqual(afterJump[0][1][4], false)
+  assert.deepStrictEqual(decodedOf(spy.sent).filter(([n]) => n === 'PlayerMoved'), [])
+  assertNear(finalPosition(proxy.snapshot.frames()), [0, 0, 0])
 })
 
 test('a spectator that joins mid-ride is told the character is mounted', () => {
@@ -307,42 +274,6 @@ test('a spectator that joins mid-ride is told the character is mounted', () => {
   proxy.onServerFrame(encode({ PlayerMountChanged: [42, false] }))
   const after = decodedOf(proxy.snapshot.frames()).filter(([n]) => n === 'PlayerMountChanged')
   assert.deepStrictEqual(after.map(([, body]) => body), [[42, false]], 'the latest mount state wins')
-})
-
-test('monsters the agent drives are broadcast live and tracked for reconnects', () => {
-  const proxy = new AgentProxy()
-  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
-  proxy.onServerFrame(monsterSpawnedFrame('m1', [10, 0, 10]))
-
-  const spy = fakeSpectator()
-  proxy.spectators.add(spy)
-  // The agent runs the AI for monsters assigned to it and sends MonsterMove;
-  // the server never echoes that back to the owner, so the relay is the only
-  // place it can be seen.
-  proxy.onAgentFrame(
-    encode({ MonsterMove: ['m1', [40, 0, 45].map(F), F(0), 'Chase', [50, 0, 55].map(F)] }),
-  )
-
-  const moves = decodedOf(spy.sent).filter(([n]) => n === 'MonsterMoved')
-  assert.strictEqual(moves.length, 1, 'the move should reach the spectator live')
-  assertNear(moves[0][1][1], [40, 0, 45])
-  assert.strictEqual(moves[0][1][5], 42, 'owner_id should be the agent, as the server would have stamped it')
-  assertNear(finalMonsterPosition(proxy.snapshot.frames(), 'm1'), [40, 0, 45])
-})
-
-test('an agent move for a monster the spectator was never introduced to is not replayed', () => {
-  const proxy = new AgentProxy()
-  proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
-  // MonsterAssigned is OWNER_ONLY, so a monster known to the agent only that
-  // way was never announced to spectators — a move naming it would be an
-  // orphan. It is still broadcast live (harmless, and the client may know it
-  // by another route), but must not be baked into the catch-up snapshot.
-  proxy.onAgentFrame(
-    encode({ MonsterMove: ['ghost', [1, 0, 1].map(F), F(0), 'Idle', [1, 0, 1].map(F)] }),
-  )
-
-  const names = namesOf(proxy.snapshot.frames())
-  assert.ok(!names.includes('MonsterMoved'), `got ${names.join(', ')}`)
 })
 
 /// `PlayerInventory` on the wire: [bag, equipped], each `ItemInstance` being
