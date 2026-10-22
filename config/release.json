@@ -47,9 +47,10 @@
     118,
     119,
     120,
-    124
+    124,
+    128
   ],
-  "fallbackProtocol": 120,
-  "pinnedProtocol": 124,
+  "fallbackProtocol": 124,
+  "pinnedProtocol": 128,
   "pinnedLayout": "7a7d9058c69bb14c"
 }
