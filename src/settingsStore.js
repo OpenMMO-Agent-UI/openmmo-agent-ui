@@ -81,7 +81,7 @@ const DEFAULTS = {
   workerAnchorX: null,
   workerAnchorZ: null,
   /// Which dungeon the dungeoneer works, by registry id
-  /// (deps/OpenMMO/data/dungeons.json).
+  /// (deps/OpenMMO/data-src/dungeons.csv).
   workerDungeonId: 'old_crypt',
   /// Deaths in one nightly cycle before it stops and says why. A character
   /// that cannot survive the section should not grind the XP penalty down
