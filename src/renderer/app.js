@@ -129,14 +129,18 @@ const WORKER_KINDS = [
 ]
 
 /// The dungeons the game ships, in ascending difficulty — the fixed registry
-/// (deps/OpenMMO/data/dungeons.json), not something a server varies. Named
-/// here rather than read from it: the panel has no access to the checkout,
-/// and the same list already sits in RESTOCK_ITEMS' hands for the same reason.
+/// (deps/OpenMMO/data-src/dungeons.csv, from which data/dungeons.json is
+/// generated), not something a server varies. Named here rather than read from
+/// it: the panel has no access to the checkout, and the same list already sits
+/// in RESTOCK_ITEMS' hands for the same reason. Kept honest by
+/// test/registryMirrors.test.js, because a dungeon missing here is simply one
+/// the dungeoneer cannot be pointed at.
 const DUNGEONS = [
   { id: 'old_crypt', name: 'Old Crypt', floors: 5 },
   { id: 'orc_warrens', name: 'Orc Warrens', floors: 10 },
   { id: 'ogre_stronghold', name: 'Ogre Stronghold', floors: 15 },
   { id: 'skeleton_crypt', name: 'Skeleton Crypt', floors: 20 },
+  { id: 'sundered_bastion', name: 'Sundered Bastion', floors: 25 },
 ]
 
 /// What a town trip may restock, by category — the game's fixed item list
@@ -539,9 +543,11 @@ function renderAttributes(attributes) {
   $('statsEmpty').hidden = cells.length > 0
 }
 
-/// Player-facing title names (doc/TITLES.md, data/titles.json). Anything the
-/// server awards that isn't listed falls back to itemLabel's words reading,
-/// the same safety net trained skills use.
+/// Player-facing title names (doc/TITLES.md, data-src/titles.csv), in that
+/// registry's `order`. Anything the server awards that isn't listed falls back
+/// to itemLabel's words reading, the same safety net trained skills use — a
+/// soft landing, which is why four of these went missing unnoticed until the
+/// Sundered Bastion shipped. test/registryMirrors.test.js is the hard one.
 const TITLE_NAMES = {
   goblin_slayer: 'Slayer of the Goblin Chief',
   goblin_slayer_solo: 'Who Slew the Goblin Chief Alone',
@@ -552,6 +558,10 @@ const TITLE_NAMES = {
   sturgeon_angler: 'Who Landed the Golden Sturgeon',
   skeleton_slayer: 'Slayer of the Skeleton Knight',
   skeleton_slayer_solo: 'Who Slew the Skeleton Knight Alone',
+  barkan_slayer: 'Slayer of Barkan',
+  barkan_slayer_solo: 'Who Slew Barkan Alone',
+  terraclash_raider: 'Who Brought Down Terraclash',
+  terraclash_final_blow: 'Who Dealt Terraclash the Final Blow',
 }
 
 /// One option in the title picker: the radio itself is the whole row, and the
