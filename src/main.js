@@ -241,7 +241,7 @@ function stopFeedPolling() {
 /// the agent's mirror socket instead of the game server — never the agent's
 /// own raw watch-panel port, which speaks a JSON API, not the game UI.
 async function spectatorSceneUrl() {
-  const base = await clientServer.start(settings.terrain)
+  const base = await clientServer.start(settings.terrain, selectedProfileSettings().googleClientId)
   const mirror = proxy.mirrorUrl
   if (!mirror) throw new Error(i18n.t('The relay is not listening yet.'))
   return `${base}/?observe=${encodeURIComponent(mirror)}`
@@ -251,8 +251,19 @@ async function spectatorSceneUrl() {
 /// says so.
 async function openSpectatorView() {
   try {
-    send('view:ready', { scene: await spectatorSceneUrl() })
+    const scene = await spectatorSceneUrl()
+    // The embedded client decides it is a spectator purely from `?observe=`
+    // (observerStore.ts) and a manual session purely from `#manual=`. If
+    // either is missing or rejected it silently renders the login screen
+    // instead, which in a packaged app is a dead end. Logging the URL the
+    // frame is actually given is the difference between a report that can be
+    // diagnosed and one that cannot — a player reported exactly that screen
+    // in both modes and there was nothing on record to say which part of the
+    // URL had gone missing.
+    agent.append('app', `view: spectator ${scene}`)
+    send('view:ready', { scene })
   } catch (err) {
+    agent.append('app', `view: spectator failed — ${err.message}`)
     send('view:error', err.message)
   }
 }
@@ -387,7 +398,7 @@ async function startManualController(context) {
     profile.googleClientId,
     profile.googleClientSecret,
   )
-  const base = await clientServer.start(profile.terrainOrigin)
+  const base = await clientServer.start(profile.terrainOrigin, profile.googleClientId)
   const bootstrap = Buffer.from(
     JSON.stringify({
       serverUrl: profile.serverUrl,
@@ -410,6 +421,14 @@ async function startManualController(context) {
       },
     }
   })
+  // Same reasoning as the spectator view: record what the frame is handed.
+  // The id token is the bulk of the hash and is a credential, so it is cut
+  // out — its presence and length are what matter for diagnosis, not its
+  // value.
+  agent.append(
+    'app',
+    `view: manual ${base}/#manual=<${bootstrap.length} chars, characterId=${context.characterId}>`,
+  )
   send('view:ready', { scene: viewUrl, mode: 'manual' })
   await readiness
   return { viewUrl }
