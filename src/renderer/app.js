@@ -144,8 +144,15 @@ const DUNGEONS = [
 ]
 
 /// What a town trip may restock, by category — the game's fixed item list
-/// (deps/OpenMMO/data/items.json), not something a server varies. The first
+/// (deps/OpenMMO/data-src/items.csv, from which data/items.json is generated),
+/// not something a server varies. Listed in that file's own order, so the first
 /// entry of each is what an unset (`''`, "Auto") config falls back to.
+///
+/// Kept honest by test/registryMirrors.test.js. It was not, and it drifted:
+/// `supreme_healing_potion` and the four rice dishes shipped upstream and
+/// never reached this list, so the dungeoneer could not be pointed at the
+/// strongest potion in the game. Nothing broke — the picker was just short,
+/// which is why it took a player noticing.
 const RESTOCK_ITEMS = {
   workerFoodItem: [
     'apple',
@@ -153,13 +160,17 @@ const RESTOCK_ITEMS = {
     'cheese',
     'jerky',
     'lembas_wafer',
+    'chicken_rice',
+    'chicken_curry',
+    'fried_rice',
+    'vegetable_rice',
     'grilled_minnow',
     'grilled_perch',
     'grilled_trout',
     'grilled_salmon',
     'grilled_sturgeon',
   ],
-  workerPotionItem: ['healing_potion', 'greater_healing_potion'],
+  workerPotionItem: ['healing_potion', 'greater_healing_potion', 'supreme_healing_potion'],
   workerScrollItem: ['scroll_of_return'],
 }
 
