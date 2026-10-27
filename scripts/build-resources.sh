@@ -64,7 +64,13 @@ fi
 
 echo "==> building the web client"
 npm --prefix "$checkout/client" ci
-npm --prefix "$checkout/client" run build
+# Vite inlines VITE_GOOGLE_CLIENT_ID at build time, but the real id is per
+# connection profile and only known at runtime. Build with the same placeholder
+# upstream's docker/client.Dockerfile uses; src/server.js substitutes it when
+# it serves the bundle, the way docker/client-entrypoint.sh does for nginx.
+# Unset, the bundle ships an empty id and the embedded client can only say
+# "Sign-in is currently unavailable".
+VITE_GOOGLE_CLIENT_ID=__GOOGLE_CLIENT_ID__ npm --prefix "$checkout/client" run build
 
 echo "==> staging"
 bash "$root/scripts/package-resources.sh" "$checkout"

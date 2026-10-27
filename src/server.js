@@ -142,15 +142,47 @@ function isLfsPointer(file, size) {
   }
 }
 
-function serveFile(res, file) {
+/// The client bundle is built with this standing in for the Google client id,
+/// because Vite inlines `import.meta.env.VITE_GOOGLE_CLIENT_ID` at build time
+/// and we only learn the real one at runtime, from the selected connection
+/// profile. Upstream has the same problem and solves it the same way — see
+/// docker/client.Dockerfile, which builds with the placeholder, and
+/// docker/client-entrypoint.sh, which seds it before nginx starts. We serve
+/// the bundle ourselves, so this is where our substitution belongs.
+///
+/// Without it the bundle ships an empty client id, LoginScreen's `if
+/// (!clientId)` fires, and the embedded client says "Sign-in is currently
+/// unavailable" — which is what a player sees whenever anything drops them
+/// onto that screen, with no way forward.
+const CLIENT_ID_PLACEHOLDER = '__GOOGLE_CLIENT_ID__'
+
+/// Only the two types the bundle can carry the placeholder in, matching the
+/// entrypoint's own `-name '*.js' -o -name '*.html'`.
+const SUBSTITUTABLE = new Set(['.js', '.html'])
+
+/// Pure half, so it can be tested without a built dist. `clientId` is
+/// `undefined` when no profile is selected yet; that leaves the bundle alone
+/// rather than baking in an empty id, so a later serve with a real profile
+/// still works. An explicit empty string does substitute — that is a profile
+/// genuinely configured without an id, and matches the entrypoint's
+/// `${GOOGLE_CLIENT_ID:-}`.
+function injectClientId(data, ext, clientId) {
+  if (clientId === undefined || !SUBSTITUTABLE.has(ext)) return data
+  const text = data.toString('utf8')
+  if (!text.includes(CLIENT_ID_PLACEHOLDER)) return data
+  return Buffer.from(text.split(CLIENT_ID_PLACEHOLDER).join(clientId), 'utf8')
+}
+
+function serveFile(res, file, clientId) {
   fs.readFile(file, (err, data) => {
     if (err) {
       res.writeHead(404, { 'content-type': 'text/plain' })
       res.end('Not found')
       return
     }
+    const body = injectClientId(data, path.extname(file), clientId)
     res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' })
-    res.end(data)
+    res.end(body)
   })
 }
 
@@ -158,6 +190,7 @@ class ClientServer {
   constructor() {
     this.server = null
     this.port = 0
+    this.googleClientId = undefined
     this.origin = null
     this.starting = null
   }
@@ -170,8 +203,9 @@ class ClientServer {
   /// that arrives mid-listen waits on the same promise instead of getting a
   /// portless (null) URL. A restart of the agent should not cycle the view's
   /// origin either, which would reload the whole 3D scene for nothing.
-  start(terrain) {
+  start(terrain, googleClientId) {
     this.origin = apiOrigin(terrain)
+    this.googleClientId = googleClientId
     if (this.starting) return this.starting
     this.starting = this.#listen().catch((err) => {
       this.stop()
@@ -223,7 +257,7 @@ class ClientServer {
             proxyAndCache(req, res, this.origin, path.join(assetCacheRoot(), decoded))
             return
           }
-          serveFile(res, path.join(root, 'index.html'))
+          serveFile(res, path.join(root, 'index.html'), this.googleClientId)
           return
         }
         if (this.origin && isLfsPointer(file, stat.size)) {
@@ -237,7 +271,7 @@ class ClientServer {
           proxyAndCache(req, res, this.origin, path.join(assetCacheRoot(), decoded))
           return
         }
-        serveFile(res, file)
+        serveFile(res, file, this.googleClientId)
       })
     })
 
@@ -253,8 +287,16 @@ class ClientServer {
     if (this.server) this.server.close()
     this.server = null
     this.port = 0
+    this.googleClientId = undefined
     this.starting = null
   }
 }
 
-module.exports = { ClientServer, distReady, clientDist, assetCacheRoot }
+module.exports = {
+  ClientServer,
+  distReady,
+  clientDist,
+  assetCacheRoot,
+  injectClientId,
+  CLIENT_ID_PLACEHOLDER,
+}
