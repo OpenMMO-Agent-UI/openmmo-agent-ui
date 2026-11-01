@@ -43,6 +43,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          # `@stable` installs the minimal profile, which has no clippy —
+          # without this the Rust gate below dies on "no such command".
+          components: clippy
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
@@ -129,6 +132,26 @@ jobs:
           git -C deps/OpenMMO fetch --quiet origin master
           base="$(git -C deps/OpenMMO merge-base HEAD origin/master)"
           node scripts/check-ours.js deps/OpenMMO "$base"
+      # The Rust half of the same gate, missing from this workflow and from
+      # ci.yml until 2026-11-01. `cargo build --release` in `package` does not
+      # cover it: `#[cfg(test)]` is not built for a release binary, so a test
+      # module that cannot compile publishes a release and never once runs.
+      # Blocking on all three shipped crates, which is the policy the
+      # release-sync skill's Step 3 already applies with this exact command,
+      # and skipped when no Rust of ours moved.
+      - name: Rust gates on the crates we ship
+        run: |
+          set -euo pipefail
+          git -C deps/OpenMMO fetch --quiet origin master
+          base="$(git -C deps/OpenMMO merge-base HEAD origin/master)"
+          if git -C deps/OpenMMO diff --quiet "$base" HEAD -- \
+            '*.rs' '*Cargo.toml' '*Cargo.lock'; then
+            echo 'no Rust of ours changed — skipping the Rust gates'
+            exit 0
+          fi
+          node scripts/clippy-ours.js deps/OpenMMO "$base"
+          cargo test --manifest-path deps/OpenMMO/Cargo.toml --locked \
+            -p agent-client -p onlinerpg-shared -p onlinerpg-terrain
 
   package:
     needs: validate

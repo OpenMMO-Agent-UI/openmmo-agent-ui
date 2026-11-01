@@ -55,6 +55,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+          # `@stable` installs the minimal profile, which has no clippy —
+          # without this the Rust gate below dies on "no such command".
+          components: clippy
       - uses: taiki-e/install-action@v2
         with:
           tool: wasm-pack
@@ -86,3 +89,33 @@ jobs:
           echo "scoping gates against base $base"
           node scripts/client-test-ours.js deps/OpenMMO "$base"
           node scripts/check-ours.js deps/OpenMMO "$base"
+      # The fourth copy of Step 3's gates, and until now the missing one: this
+      # workflow and release.yml ran no cargo at all, so every Rust change that
+      # arrived through a pull request was merged without ever being compiled.
+      # `cargo build --release` on the publishing path does not cover it —
+      # `#[cfg(test)]` is not built for a release binary. On 2026-11-01 that
+      # shipped a worker/tests.rs whose new test called a closure declared
+      # inside a different test: the file could not compile, the regression
+      # test for the bug being fixed never ran once, and CI was green.
+      #
+      # Deliberately blocking on all three shipped crates rather than scoped to
+      # changed files, which is the policy Step 3 already applies with this
+      # exact command: these are the crates we ship, so a red test in one is a
+      # release blocker whoever wrote it. Skipped entirely when no Rust of ours
+      # moved, so an upstream-only sync pays nothing for it and the sync skill
+      # stays the gate for upstream's own Rust.
+      - name: Rust gates on the crates we ship
+        run: |
+          set -euo pipefail
+          # Recomputed, not inherited: each step is its own shell. Same
+          # expression as the step above, fallback included.
+          base="$(git -C deps/OpenMMO merge-base HEAD origin/master \
+            || git -C deps/OpenMMO rev-parse origin/master)"
+          if git -C deps/OpenMMO diff --quiet "$base" HEAD -- \
+            '*.rs' '*Cargo.toml' '*Cargo.lock'; then
+            echo 'no Rust of ours changed — skipping the Rust gates'
+            exit 0
+          fi
+          node scripts/clippy-ours.js deps/OpenMMO "$base"
+          cargo test --manifest-path deps/OpenMMO/Cargo.toml --locked \
+            -p agent-client -p onlinerpg-shared -p onlinerpg-terrain
