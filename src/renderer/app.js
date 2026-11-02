@@ -967,6 +967,13 @@ function bindActions() {
     void bagWorn.submitBagLabels(signInFlow.getSelectedCharacterId(), settings.characterName),
   )
 
+  // Staged marks survive the switch either way round: both lists are keyed by
+  // item_def_id, so the catalogue shows a mark set from the bag and the bag
+  // shows one set from the catalogue.
+  $('bagShowAll').addEventListener('change', (event) =>
+    void bagWorn.setShowEverything(event.target.checked),
+  )
+
   $('restart').addEventListener('click', async () => {
     showErrors([])
     const res = await api.restart()
@@ -1191,6 +1198,9 @@ async function switchLanguage(language) {
   if (settingsSnapshot) settingsSnapshot.language = language
   await applyLanguage(language)
   await persistImmediateSetting(patch)
+  // The item names came from the game's own dictionary for the old language,
+  // so they are as stale as the markup the switch just redrew.
+  await bagWorn.loadItemCatalogue({ reload: true })
   renderClassOptions()
   renderTranslation()
   renderHunt()
@@ -1333,6 +1343,12 @@ async function init() {
 
   await applyLanguage(settings.language)
   writeField('language', 'text', settings.language)
+
+  // Before the first render, because `itemLabel` reads it: the restock
+  // pickers, the bag rows and the title fallback all name items through it,
+  // and until the table is in hand it can only spell an id out as words. One
+  // read, after the language is settled so the names come back localized.
+  await bagWorn.loadItemCatalogue()
 
   for (const [id, type] of Object.entries(FIELDS)) writeField(id, type, settings[id])
   renderClassOptions()

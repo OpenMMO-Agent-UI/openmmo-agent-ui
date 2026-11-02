@@ -141,6 +141,21 @@ function stampLayoutVersion(version) {
   return layout ? `${version}+layout.${layout}` : version
 }
 
+/// Where the bag drawer's item catalogue is read from, nearest first: the
+/// copies `package-resources.sh` stages beside the agent binary, then the
+/// checkout's own. Two roots rather than one because the game keeps the
+/// table and its name dictionaries in different trees (`data-src/` and
+/// `client/src/lib/i18n/locales/`) and the bundle flattens both into one
+/// directory.
+function itemDataRoots() {
+  const roots = []
+  if (app.isPackaged) roots.push(path.join(packagedSeedDir(), 'game-data'))
+  const root = repoRoot()
+  roots.push(path.join(root, 'data-src'))
+  roots.push(path.join(root, 'client', 'src', 'lib', 'i18n', 'locales'))
+  return roots
+}
+
 module.exports = {
   repoRoot,
   packagedSeedDir,
@@ -150,4 +165,5 @@ module.exports = {
   protocolVersion,
   layoutVersion,
   stampLayoutVersion,
+  itemDataRoots,
 }

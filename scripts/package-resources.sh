@@ -100,6 +100,26 @@ for entry in system_prompt.txt user_prompts templates animation_durations.json; 
     cp -R "$src" "$out/agent-client/data/$entry"
 done
 
+# The bag drawer's item catalogue: every item the game ships, so a sell or
+# drop mark can be set on something the bag does not happen to hold. Staged
+# flat into one directory because the game keeps the table and its name
+# dictionaries in different trees (runtimeEnv.js itemDataRoots reads them
+# back from here). `data-src/items.csv` and not the generated
+# `data/items.json`: the JSON is gitignored output of the client's
+# generate:csv, so a checkout that never ran it has a stale copy or none.
+#
+# Missing is a warning and not a failure. The drawer falls back to listing
+# the bag — which is all it could ever do before — and a packaging change
+# must not be able to stop a release over a panel affordance.
+mkdir -p "$out/agent-client/game-data"
+for src in \
+    "$checkout/data-src/items.csv" \
+    "$checkout/client/src/lib/i18n/locales/zh-Hant.items.json" \
+    "$checkout/client/src/lib/i18n/locales/ko.items.json"; do
+    [[ -f $src ]] || { echo "warning: missing $src, skipping" >&2; continue; }
+    cp "$src" "$out/agent-client/game-data/$(basename "$src")"
+done
+
 cp -R "$dist/." "$out/client/"
 rm -rf \
     "$out/client/textures" \

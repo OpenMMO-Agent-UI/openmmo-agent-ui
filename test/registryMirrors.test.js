@@ -26,22 +26,19 @@ const test = require('node:test')
 /// it, so a checkout that has never run the generator has a stale JSON or none
 /// at all. The CSV is the committed source of truth.
 
+const { parseItemsCsv } = require('../src/itemCatalogue')
+
 const ROOT = path.join(__dirname, '..')
 const DATA_SRC = path.join(ROOT, 'deps', 'OpenMMO', 'data-src')
 const APP_JS = path.join(ROOT, 'src', 'renderer', 'app.js')
 
-/// These CSVs have no quoted fields — `chestDrops` separates with `;` exactly
-/// so a plain split stays valid. Assert that rather than assume it, because a
-/// quoted comma would silently shift every column after it.
+/// The same parser the app itself reads these files with, so the gate below
+/// covers the parser as well as the mirrors. It asserts the no-quoted-fields
+/// assumption rather than trusting it — `chestDrops` separates with `;`
+/// exactly so a plain split stays valid, and a quoted comma would silently
+/// shift every column after it.
 function readCsv(file) {
-  const text = fs.readFileSync(path.join(DATA_SRC, file), 'utf8').trim()
-  assert.ok(!text.includes('"'), `${file} has quoted fields — this parser would misread them`)
-  const [head, ...rows] = text.split('\n')
-  const cols = head.split(',')
-  return rows.filter(Boolean).map((row) => {
-    const cells = row.split(',')
-    return Object.fromEntries(cols.map((c, i) => [c, cells[i] ?? '']))
-  })
+  return parseItemsCsv(fs.readFileSync(path.join(DATA_SRC, file), 'utf8'))
 }
 
 /// The literals as the renderer declares them, parsed from source the way
