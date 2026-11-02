@@ -1879,6 +1879,23 @@ button.quiet:not(:disabled):hover {
 
 /* ---------- bag ---------- */
 
+/* The catalogue toggle sits above the column heads rather than beside the
+   Apply button: it changes what the list *is*, which is a question you answer
+   before reading the rows, not after. */
+.bag-scope {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bag-scope input {
+  margin: 0;
+}
+
 .bag-list {
   overflow-y: auto;
 }

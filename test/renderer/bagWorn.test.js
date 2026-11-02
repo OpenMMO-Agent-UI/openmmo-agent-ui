@@ -121,3 +121,27 @@ test('bagRows groups instances and marks a row locked when any of them is', asyn
     ],
   )
 })
+
+/// One row per item, not per item+enchant. A sell or drop mark is per
+/// `item_def_id` and always was — the agent's own actions carry no enchant
+/// field — so two rows offered a distinction nothing downstream could
+/// honour, and ticking one box silently armed the other. The levels are
+/// named in the label instead, so nothing is hidden.
+test('bagRows groups enchant levels into one markable row and names them', async () => {
+  const { bagRows } = await bagWornPromise
+  const rows = bagRows([
+    { item_def_id: 'iron_sword', quantity: 1, enchant: 2 },
+    { item_def_id: 'iron_sword', quantity: 1, enchant: 0 },
+    { item_def_id: 'iron_sword', quantity: 1, enchant: 5 },
+  ])
+  assert.equal(rows.length, 1, 'one mark, one checkbox')
+  assert.equal(rows[0].quantity, 3)
+  assert.equal(rows[0].label, 'Iron Sword (+0, +2, +5)', 'ascending, and nothing dropped')
+  assert.deepEqual(rows[0].enchants, [0, 2, 5])
+})
+
+test('an ordinary unenchanted stack is named plainly', async () => {
+  const { bagRows } = await bagWornPromise
+  const rows = bagRows([{ item_def_id: 'iron_sword', quantity: 1, enchant: 0 }])
+  assert.equal(rows[0].label, 'Iron Sword', '"(+0)" on every row is noise')
+})

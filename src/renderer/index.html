@@ -365,6 +365,15 @@
               </div>
               <div data-character-panel="bag" hidden>
                 <p class="hint" data-i18n>Mark what the agent may sell or drop, then apply.</p>
+                <!-- A mark is per item and lives in a file the agent reads, so
+                     nothing about it needs the item to be in the bag — but the
+                     only way to reach a checkbox was to be holding the thing,
+                     which is backwards for deciding in advance what may be
+                     binned on the way down a dungeon. -->
+                <label class="bag-scope">
+                  <input type="checkbox" id="bagShowAll" />
+                  <span data-i18n>Show every item in the game</span>
+                </label>
                 <!-- The two columns are named once here instead of per row: the
                      marks used to be an S and a D you had to hover to decode. -->
                 <div class="bag-head" id="bagHead" hidden>

@@ -1,6 +1,6 @@
 'use strict'
 
-import { $, confirmAction } from './dom.js'
+import { $ } from './dom.js'
 import { t } from './i18n.js'
 
 const api = window.agentApp
@@ -25,11 +25,35 @@ const WORN_SLOTS = [
   ['ring_left', 'Ring (left)'],
 ]
 
-/// item_def_id is a snake_case identifier ("healing_potion") — turn it into
-/// words, with the enchant level prefixed the way the game names enchanted
-/// gear ("+2 Iron Sword").
+/// The game's own item table, by id, once the main process has handed it
+/// over. Until then, and for anything the table does not name, `itemLabel`
+/// falls back to reading the id as words.
+let catalogueById = new Map()
+
+/// Every item the game ships, name-sorted in the panel's language. Fetched
+/// once: it is fixed content, and the drawer opens often.
+let catalogueRows = null
+
+export async function loadItemCatalogue({ reload = false } = {}) {
+  if (catalogueRows && !reload) return catalogueRows
+  try {
+    catalogueRows = (await api.getItemCatalogue()) || []
+  } catch {
+    // No table, no catalogue mode. The drawer lists the bag, which is all it
+    // could do before this existed, and `itemLabel` reads ids as words.
+    catalogueRows = []
+  }
+  catalogueById = new Map(catalogueRows.map((row) => [row.id, row]))
+  return catalogueRows
+}
+
+/// item_def_id is a snake_case identifier ("healing_potion") — the game's own
+/// name for it when we have the table (localized, where the game has a
+/// dictionary), otherwise the id read as words. The enchant level is
+/// prefixed the way the game names enchanted gear ("+2 Iron Sword").
 export function itemLabel(id, enchant) {
-  const words = id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+  const known = catalogueById.get(id)?.name
+  const words = known || id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
   return enchant ? `+${enchant} ${words}` : words
 }
 
@@ -233,22 +257,29 @@ function drawSkills() {
 /// Sellable/dropable marks for the currently loaded character — the source
 /// of truth is main.js's labels.json; instance.txt's own copy is just a
 /// rendering of this for agent-client to read (see config.composeInstanceText).
-/// Staged in-memory as Sets of "item_def_id#enchant" bag-row keys and only
-/// written to disk when Apply labels is clicked.
+/// Staged in-memory as Sets of item_def_ids and only written to disk when
+/// Apply labels is clicked.
+///
+/// Plain ids, not the `item_def_id#enchant` keys this used to stage. The
+/// enchant half was never written to disk and could never be acted on — the
+/// agent's sell and drop actions have no enchant field — so all it did was
+/// split one item's mark across as many checkboxes as the bag held enchant
+/// levels, and raise a confirmation on submit to apologise for it. A mark on
+/// `iron_sword` is a mark on iron swords.
 let stagedLabels = { sellable: new Set(), dropable: new Set() }
-/// The bag rows from the most recent render, kept around so submit can check
-/// for enchant collisions without re-deriving them.
-let currentBagRows = []
+
+/// Marks saved by an older build arrive as `id#enchant`. Read back as ids,
+/// deduped — two rows that only differed by enchant were always one mark.
+function idsOf(keys) {
+  return new Set((keys || []).map((key) => String(key).split('#')[0]).filter(Boolean))
+}
 
 export async function loadBagLabels(characterId) {
   stagedLabels = { sellable: new Set(), dropable: new Set() }
   $('bagLabelsStatus').textContent = ''
   if (!characterId) return
   const saved = await api.getBagLabels(characterId)
-  stagedLabels = {
-    sellable: new Set(saved.sellable || []),
-    dropable: new Set(saved.dropable || []),
-  }
+  stagedLabels = { sellable: idsOf(saved.sellable), dropable: idsOf(saved.dropable) }
 }
 
 /// The columns are named once in the panel's head row, so a row carries only
@@ -304,22 +335,34 @@ function renderBagTotals(weight, gold) {
 
 /// agent-client keeps each pickup as its own bag instance rather than
 /// merging stacks, so raw entries repeat the same item many times over —
-/// grouped by item + enchant here into one line each, with a total count.
-/// Each row carries its own Sellable/Dropable checkboxes, staged into
-/// stagedLabels until Apply labels commits them.
+/// grouped into one line per item here, with a total count.
+///
+/// Per item, not per item+enchant, which is what this used to do. A sell or
+/// drop mark is per `item_def_id` and always was: the agent's own actions
+/// carry no enchant field, so splitting one mark across a +0 row and a +2 row
+/// offered a distinction nothing downstream could honour, and ticking one box
+/// silently armed the other. The levels in the bag are named in the label
+/// instead, so nothing is hidden — "Iron Sword (+0, +2)".
 export function bagRows(bag) {
   const grouped = new Map()
   for (const item of bag || []) {
-    const key = `${item.item_def_id}#${item.enchant || 0}`
-    const row = grouped.get(key) || { quantity: 0, locked: false }
+    const id = item.item_def_id
+    const row = grouped.get(id) || { quantity: 0, locked: false, enchants: new Set() }
     row.quantity += item.quantity || 1
     row.locked ||= Boolean(item.locked)
-    grouped.set(key, row)
+    row.enchants.add(Number(item.enchant) || 0)
+    grouped.set(id, row)
   }
   return [...grouped.entries()]
-    .map(([key, { quantity, locked }]) => {
-      const [id, enchant] = key.split('#')
-      return { key, id, enchant: Number(enchant), label: itemLabel(id, Number(enchant)), quantity, locked }
+    .map(([id, { quantity, locked, enchants }]) => {
+      const levels = [...enchants].sort((a, b) => a - b)
+      // One unenchanted stack is the ordinary case and says nothing worth
+      // saying; anything else is worth spelling out.
+      const plain = levels.length === 1 && levels[0] === 0
+      const label = plain
+        ? itemLabel(id)
+        : `${itemLabel(id)} (${levels.map((n) => `+${n}`).join(', ')})`
+      return { id, enchants: levels, label, quantity, locked }
     })
     .sort((a, b) => a.label.localeCompare(b.label))
 }
@@ -329,28 +372,66 @@ const LOCK_ICON =
   'stroke-linecap="round" stroke-linejoin="round">' +
   '<rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>'
 
+/// The last bag we were handed, so the catalogue toggle can redraw without
+/// waiting for the next poll — a checkbox that does nothing until the agent
+/// ticks reads as broken.
+let lastBag = []
+
+/// Whether the drawer is listing the whole catalogue or just what is carried.
+/// Carried is the default: it is the shorter list and the common errand.
+let showEverything = false
+
+/// One row per item in the catalogue, in the shape `drawRows` wants. No
+/// quantity and no lock: neither is a property of an item we may not hold.
+/// What the bag *does* hold is still counted, so switching to the full list
+/// does not lose sight of it.
+function catalogueRowsFor(bag) {
+  const carried = new Map(bagRows(bag).map((row) => [row.id, row]))
+  return (catalogueRows || []).map((item) => ({
+    id: item.id,
+    label: item.name,
+    quantity: carried.get(item.id)?.quantity || 0,
+    locked: carried.get(item.id)?.locked || false,
+  }))
+}
+
 export function renderBag(bag, weight, gold) {
+  lastBag = bag || []
   renderBagTotals(weight, gold)
+  drawRows()
+}
+
+function drawRows() {
   const box = $('bagList')
   box.innerHTML = ''
-  const rows = bagRows(bag)
-  currentBagRows = rows
+  // Catalogue mode collapses the bag's enchant variants into one row per
+  // item, which is also the granularity a mark has.
+  const rows = showEverything
+    ? catalogueRowsFor(lastBag)
+    : bagRows(lastBag).map((row) => ({ ...row, id: row.id }))
 
-  $('bagEmpty').hidden = rows.length > 0
-  // The column names have nothing to name over an empty bag.
+  // Nothing carried is worth saying; nothing in the catalogue means the item
+  // table could not be read, which is a different sentence.
+  const emptyEl = $('bagEmpty')
+  emptyEl.hidden = rows.length > 0
+  emptyEl.textContent = showEverything
+    ? t('The item list could not be read from this build.')
+    : t('Nothing carried yet.')
+  // The column names have nothing to name over an empty list.
   $('bagHead').hidden = rows.length === 0
   $('bagLabelsSubmit').hidden = rows.length === 0
+
   for (const row of rows) {
     const el = document.createElement('div')
     el.className = 'bag-row'
 
-    const sell = bagMarkCheckbox('Sell', row.label, stagedLabels.sellable.has(row.key), (checked) => {
-      if (checked) stagedLabels.sellable.add(row.key)
-      else stagedLabels.sellable.delete(row.key)
+    const sell = bagMarkCheckbox('Sell', row.label, stagedLabels.sellable.has(row.id), (checked) => {
+      if (checked) stagedLabels.sellable.add(row.id)
+      else stagedLabels.sellable.delete(row.id)
     })
-    const drop = bagMarkCheckbox('Drop', row.label, stagedLabels.dropable.has(row.key), (checked) => {
-      if (checked) stagedLabels.dropable.add(row.key)
-      else stagedLabels.dropable.delete(row.key)
+    const drop = bagMarkCheckbox('Drop', row.label, stagedLabels.dropable.has(row.id), (checked) => {
+      if (checked) stagedLabels.dropable.add(row.id)
+      else stagedLabels.dropable.delete(row.id)
     })
 
     const name = document.createElement('span')
@@ -365,30 +446,23 @@ export function renderBag(bag, weight, gold) {
     }
     const qty = document.createElement('span')
     qty.className = 'bag-qty'
-    qty.textContent = `×${row.quantity}`
+    // A zero in catalogue mode is "you do not have this", which the blank
+    // says more quietly than "×0" does.
+    qty.textContent = row.quantity > 0 ? `×${row.quantity}` : ''
     el.append(sell, drop, name, qty)
     box.appendChild(el)
   }
 }
 
-/// sell/drop actions take only an item_def_id, with no way to say which
-/// enchant level they mean (agent-client driver/action.rs) — so marking one
-/// enchant variant while carrying another is ambiguous: the model could act
-/// on either. Surfaced as one consolidated warning per submit, listing every
-/// item_def_id in the staged batch that has more than one enchant variant in
-/// the current bag.
-function enchantCollisions() {
-  const enchantsById = new Map()
-  for (const row of currentBagRows) {
-    if (!enchantsById.has(row.id)) enchantsById.set(row.id, new Set())
-    enchantsById.get(row.id).add(row.enchant)
-  }
-  const ids = new Set()
-  for (const key of [...stagedLabels.sellable, ...stagedLabels.dropable]) {
-    const id = key.split('#')[0]
-    if ((enchantsById.get(id)?.size || 0) > 1) ids.add(id)
-  }
-  return [...ids].map((id) => itemLabel(id)).sort()
+/// The catalogue toggle. Marks are per item_def_id and the agent reads them
+/// from a file, so there is nothing about them that needs the item to be in
+/// the bag — but the only way to reach a checkbox was to be holding the
+/// thing, which is backwards for a dungeoneer deciding in advance what it
+/// may bin.
+export async function setShowEverything(on) {
+  showEverything = Boolean(on)
+  if (showEverything) await loadItemCatalogue()
+  drawRows()
 }
 
 export async function submitBagLabels(characterId, characterName) {
@@ -397,21 +471,6 @@ export async function submitBagLabels(characterId, characterName) {
     return
   }
   try {
-    const collisions = enchantCollisions()
-    if (collisions.length) {
-      const proceed = await confirmAction(
-        t(
-          '{items} — you carry more than one enchant level, and sell/drop can\'t tell them apart. ' +
-            'The agent might act on the wrong one. Apply labels anyway?',
-          { items: collisions.join(', ') },
-        ),
-        'Apply anyway',
-      )
-      if (!proceed) {
-        $('bagLabelsStatus').textContent = t('Cancelled.')
-        return
-      }
-    }
     $('bagLabelsStatus').textContent = t('Applying…')
     const res = await api.saveBagLabels(characterId, characterName, {
       sellable: [...stagedLabels.sellable],

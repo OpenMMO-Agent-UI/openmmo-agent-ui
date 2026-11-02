@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('agentApp', {
   restart: () => ipcRenderer.invoke('agent:restart'),
   setActiveTitle: (title) => ipcRenderer.invoke('agent:set-title', title),
   useAbility: (ability) => ipcRenderer.invoke('agent:use-ability', ability),
+  getItemCatalogue: () => ipcRenderer.invoke('items:catalogue'),
   getBagLabels: (characterId) => ipcRenderer.invoke('labels:get', { characterId }),
   saveBagLabels: (characterId, characterName, labels) =>
     ipcRenderer.invoke('labels:save', { characterId, characterName, labels }),

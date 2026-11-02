@@ -13,8 +13,9 @@ preserveLegacyUserData(app)
 
 const settingsStore = require('./settingsStore')
 const i18n = require('./i18n')
+const itemCatalogue = require('./itemCatalogue')
 const personalityText = require('./personalityText')
-const { agentDir, seedRuntimeData } = require('./runtimeEnv')
+const { agentDir, seedRuntimeData, itemDataRoots } = require('./runtimeEnv')
 const { renderConfigToml } = require('./configToml')
 const { AgentProcess } = require('./agent')
 const { ClientServer, distReady, assetCacheRoot } = require('./server')
@@ -752,6 +753,18 @@ function materializePersonality(profileId, characterId, characterName) {
 /// Sellable/dropable marks on bag items — the source of truth for the bag
 /// panel's checkboxes; instance.txt's own copy is just a rendering of this
 /// for agent-client to read.
+/// Every item the game ships, so a mark can be set on something the bag does
+/// not happen to hold. Read once per language and kept: the table is fixed
+/// content, and re-parsing 187 rows on every drawer open is work for nothing.
+const catalogueCache = new Map()
+ipcMain.handle('items:catalogue', () => {
+  const language = i18n.language()
+  if (!catalogueCache.has(language)) {
+    catalogueCache.set(language, itemCatalogue.catalogue(itemDataRoots(), language))
+  }
+  return catalogueCache.get(language)
+})
+
 ipcMain.handle('labels:get', (_e, { characterId }) => {
   if (!characterId) return { sellable: [], dropable: [] }
   return characterStore.open('labels', profileStore.selected().id, characterId).read()
