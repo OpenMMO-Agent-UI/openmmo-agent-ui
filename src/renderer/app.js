@@ -141,6 +141,8 @@ const DUNGEONS = [
   { id: 'ogre_stronghold', name: 'Ogre Stronghold', floors: 15 },
   { id: 'skeleton_crypt', name: 'Skeleton Crypt', floors: 20 },
   { id: 'sundered_bastion', name: 'Sundered Bastion', floors: 25 },
+  { id: 'thieves_den', name: 'Thieves\' Den', floors: 20 },
+  { id: 'shadow_guild', name: 'Shadow Guild', floors: 25 },
 ]
 
 /// What a town trip may restock, by category — the game's fixed item list
@@ -571,6 +573,10 @@ const TITLE_NAMES = {
   skeleton_slayer_solo: 'Who Slew the Skeleton Knight Alone',
   barkan_slayer: 'Slayer of Barkan',
   barkan_slayer_solo: 'Who Slew Barkan Alone',
+  thief_king_slayer: 'Slayer of the Thief King',
+  thief_king_slayer_solo: 'Who Slew the Thief King Alone',
+  shadow_master_slayer: 'Slayer of the Shadow Master',
+  shadow_master_slayer_solo: 'Who Slew the Shadow Master Alone',
   terraclash_raider: 'Who Brought Down Terraclash',
   terraclash_final_blow: 'Who Dealt Terraclash the Final Blow',
 }

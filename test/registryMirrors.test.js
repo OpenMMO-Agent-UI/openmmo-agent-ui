@@ -80,9 +80,11 @@ test('the dungeon picker lists every dungeon the game ships', (t) => {
   assert.ok(expected.length >= 4, `parsed only ${expected.length} dungeons — the parser is wrong`)
 
   const block = literalBlock(appSource(), 'DUNGEONS')
-  const actual = [...block.matchAll(/\{\s*id:\s*'([^']+)',\s*name:\s*'([^']+)',\s*floors:\s*(\d+)\s*\}/g)].map(
-    (m) => ({ id: m[1], name: m[2], floors: Number(m[3]) })
-  )
+  const actual = [
+    ...block.matchAll(
+      /\{\s*id:\s*'([^']+)',\s*name:\s*'((?:[^'\\]|\\.)*)',\s*floors:\s*(\d+)\s*\}/g
+    ),
+  ].map((m) => ({ id: m[1], name: m[2].replace(/\\'/g, "'"), floors: Number(m[3]) }))
 
   // Ascending difficulty is the stated order of the list and the order the
   // picker shows, so compare the sequence, not just the membership.
