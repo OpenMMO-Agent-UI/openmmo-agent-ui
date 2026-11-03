@@ -120,6 +120,57 @@ test('the title picker names every title the game awards', (t) => {
   )
 })
 
+/// These tables feed `t()` as *variables* — `t(d.name)`, `t(TITLE_NAMES[id])`
+/// — and i18n.test.js says plainly that it cannot see those: it scans literal
+/// `t('…')` arguments and the markup's `data-i18n` keys. Its stated fallback
+/// is that the two dictionaries have to agree with each other, which catches
+/// a key present in one and missing from the other and cannot catch one
+/// missing from both.
+///
+/// Which is exactly what upstream v0.75.0 produced. Thieves' Den and Shadow
+/// Guild were mirrored into `DUNGEONS` correctly, so they appeared in the
+/// picker and could be selected and played — in English, in the middle of a
+/// Chinese or Korean list where every other dungeon was translated. Four new
+/// titles the same. Every gate was green: the mirror test passed because the
+/// rows were right, and the i18n test passed because it never looked.
+const DICTIONARIES = ['zh-TW', 'ko']
+
+function dictionary(language) {
+  return JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'src', 'locales', `${language}.json`), 'utf8')
+  )
+}
+
+/// Names the picker will hand to `t()`: one per dungeon, one per title.
+function translatableNames(source) {
+  const names = []
+  const dungeons = literalBlock(source, 'DUNGEONS')
+  for (const m of dungeons.matchAll(/name:\s*(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g)) {
+    names.push((m[1] ?? m[2]).replace(/\\(.)/g, '$1'))
+  }
+  const titles = literalBlock(source, 'TITLE_NAMES')
+  for (const m of titles.matchAll(/^\s{2}[a-z0-9_]+:\s*'((?:[^'\\]|\\.)*)',/gm)) {
+    names.push(m[1].replace(/\\(.)/g, '$1'))
+  }
+  return names
+}
+
+test('every dungeon and title name the picker shows is translated', () => {
+  const names = translatableNames(appSource())
+  assert.ok(names.length > 20, `collected only ${names.length} names — the reader is wrong`)
+
+  for (const language of DICTIONARIES) {
+    const dict = dictionary(language)
+    const missing = names.filter((name) => !dict[name]).sort()
+    assert.deepEqual(
+      missing,
+      [],
+      `src/locales/${language}.json has no entry for these picker names — they would ` +
+        `render in English beside translated ones`
+    )
+  }
+})
+
 /// `RESTOCK_ITEMS` is the third hardcoded mirror in app.js: what a worker's
 /// town trip may be told to buy, by category. It was not covered when the
 /// other two were, and it had already drifted — `supreme_healing_potion` and
