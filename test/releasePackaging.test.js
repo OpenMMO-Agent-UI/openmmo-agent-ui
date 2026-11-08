@@ -192,7 +192,7 @@ test('the release workflow uploads the DMG alongside the zip', () => {
 
   assert.match(workflow, /macos-dmg-artifact/)
   assert.match(workflow, /artifact-dmg/)
-  assert.match(workflow, /if: matrix\.os == 'macos-14'/)
+  assert.match(workflow, /if: matrix\.os == 'macos-15'/)
   assert.match(workflow, /out\/\$\{\{ matrix\.artifact-dmg \}\}/)
 })
 

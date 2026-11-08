@@ -160,7 +160,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             label: macOS arm64
             command: dist:mac
             artifact: ${{ needs.validate.outputs.macos-artifact }}
@@ -201,7 +201,7 @@ jobs:
           tool: wasm-pack
       - run: npm ci
       - name: Configure Apple signing and notarization
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-15'
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -250,7 +250,7 @@ jobs:
         run: ls out/latest*.yml
 
       - name: Verify macOS notarization
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-15'
         run: |
           app="out/mac-arm64/OpenMMO Agent UI.app"
           [[ -d "$app" ]] || { echo "expected app bundle not found at $app" >&2; exit 1; }
@@ -274,7 +274,7 @@ jobs:
       # name so the draft-release download pattern picks it up alongside the
       # zip and the other platforms' installers.
       - uses: actions/upload-artifact@v4
-        if: matrix.os == 'macos-14'
+        if: matrix.os == 'macos-15'
         with:
           name: ${{ matrix.artifact-dmg }}
           path: out/${{ matrix.artifact-dmg }}
