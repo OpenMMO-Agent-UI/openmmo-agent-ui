@@ -143,6 +143,7 @@ const DUNGEONS = [
   { id: 'sundered_bastion', name: 'Sundered Bastion', floors: 25 },
   { id: 'thieves_den', name: 'Thieves\' Den', floors: 20 },
   { id: 'shadow_guild', name: 'Shadow Guild', floors: 25 },
+  { id: 'blackvein_mine', name: 'Blackvein Mine', floors: 25 },
 ]
 
 /// What a town trip may restock, by category — the game's fixed item list
@@ -577,6 +578,8 @@ const TITLE_NAMES = {
   thief_king_slayer_solo: 'Who Slew the Thief King Alone',
   shadow_master_slayer: 'Slayer of the Shadow Master',
   shadow_master_slayer_solo: 'Who Slew the Shadow Master Alone',
+  foreman_slayer: 'Slayer of the Rampaging Foreman',
+  foreman_slayer_solo: 'Who Slew the Rampaging Foreman Alone',
   terraclash_raider: 'Who Brought Down Terraclash',
   terraclash_final_blow: 'Who Dealt Terraclash the Final Blow',
 }
