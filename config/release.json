@@ -57,9 +57,10 @@
     139,
     142,
     145,
-    149
+    149,
+    154
   ],
-  "fallbackProtocol": 145,
-  "pinnedProtocol": 149,
-  "pinnedLayout": "b6c036a9d40e3c13"
+  "fallbackProtocol": 149,
+  "pinnedProtocol": 154,
+  "pinnedLayout": "ce1fa24e4276799e"
 }
