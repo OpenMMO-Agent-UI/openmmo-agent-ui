@@ -62,9 +62,10 @@
     158,
     159,
     162,
-    164
+    164,
+    166
   ],
-  "fallbackProtocol": 162,
-  "pinnedProtocol": 164,
+  "fallbackProtocol": 164,
+  "pinnedProtocol": 166,
   "pinnedLayout": "619ad24b905d9a0a"
 }
