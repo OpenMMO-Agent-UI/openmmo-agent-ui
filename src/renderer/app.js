@@ -144,6 +144,7 @@ const DUNGEONS = [
   { id: 'thieves_den', name: 'Thieves\' Den', floors: 20 },
   { id: 'shadow_guild', name: 'Shadow Guild', floors: 25 },
   { id: 'blackvein_mine', name: 'Blackvein Mine', floors: 25 },
+  { id: 'stone_garden', name: 'Garden of Stone', floors: 30 },
 ]
 
 /// What a town trip may restock, by category — the game's fixed item list
@@ -162,6 +163,7 @@ const RESTOCK_ITEMS = {
     'bread',
     'cheese',
     'jerky',
+    'floating_eye_meat',
     'lembas_wafer',
     'chicken_rice',
     'chicken_curry',
@@ -580,6 +582,8 @@ const TITLE_NAMES = {
   shadow_master_slayer_solo: 'Who Slew the Shadow Master Alone',
   foreman_slayer: 'Slayer of the Rampaging Foreman',
   foreman_slayer_solo: 'Who Slew the Rampaging Foreman Alone',
+  medusa_slayer: 'Slayer of Medusa',
+  medusa_slayer_solo: 'Who Slew Medusa Alone',
   terraclash_raider: 'Who Brought Down Terraclash',
   terraclash_final_blow: 'Who Dealt Terraclash the Final Blow',
 }
