@@ -120,16 +120,19 @@ test('a teleport of the agent’s own character updates its tracked position', (
 
 // ---------- other per-entity state ----------
 
-test('health and torch state survive a reconnect', () => {
+test('health and gear state survive a reconnect', () => {
   const proxy = new AgentProxy()
   proxy.onServerFrame(joinSuccessFrame(42, [0, 0, 0]))
   proxy.onServerFrame(playerAppearedFrame(7, [10, 0, 10]))
   proxy.onServerFrame(encode({ PlayerHealthUpdate: [7, 31, 100] }))
-  proxy.onServerFrame(encode({ PlayerTorchToggled: [7, true] }))
+  proxy.onServerFrame(encode({ PlayerGearChanged: [7, [null, 'torch', null, null, null, {}]] }))
 
   const frames = decodedOf(proxy.snapshot.frames())
   assert.deepStrictEqual(frames.find(([n]) => n === 'PlayerHealthUpdate')[1], [7, 31, 100])
-  assert.deepStrictEqual(frames.find(([n]) => n === 'PlayerTorchToggled')[1], [7, true])
+  assert.deepStrictEqual(frames.find(([n]) => n === 'PlayerGearChanged')[1], [
+    7,
+    [null, 'torch', null, null, null, {}],
+  ])
 })
 
 test('a respawn replaces the death that preceded it rather than replaying both', () => {

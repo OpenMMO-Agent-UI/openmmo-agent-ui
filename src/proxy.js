@@ -54,15 +54,11 @@ const ADD_GROUND_ITEM = new Set(['GroundItemSpawned', 'GroundItemAppeared'])
 const MOVE_PLAYER = new Set(['PlayerMoved', 'PlayerTeleported'])
 const MOVE_MONSTER = new Set(['MonsterMoved'])
 
-/// Per-entity state where only the latest frame matters. Messages that are
-/// mutually exclusive share a slot, so a respawn replaces the death before it
-/// instead of both being replayed; ones that are independent (how hurt you
-/// are vs. whether your torch is lit) get their own.
 const ENTITY_STATE_SLOT = new Map([
   ['PlayerDead', 'life'],
   ['PlayerRespawned', 'life'],
   ['PlayerHealthUpdate', 'health'],
-  ['PlayerTorchToggled', 'torch'],
+  ['PlayerGearChanged', 'gear'],
   ['PlayerInteractionChanged', 'interaction'],
   // Being on a horse is how fast the body moves, so a spectator that joins
   // mid-ride and is not told draws it at footpace and snaps forward for the
@@ -276,7 +272,7 @@ class WorldSnapshot {
       const id = body && body[0]
       this.knownPlayers.delete(id)
       this.playerMoves.delete(id)
-      for (const slot of ['life', 'health', 'torch', 'interaction']) this.entityState.delete(`${slot}#${id}`)
+      for (const slot of ['life', 'health', 'gear', 'interaction']) this.entityState.delete(`${slot}#${id}`)
       // Forgetting our own sighting is enough; a baseline-introduced entity
       // needs the departure replayed instead.
       if (!this.players.delete(id)) this.playerDrops.set(id, raw)
