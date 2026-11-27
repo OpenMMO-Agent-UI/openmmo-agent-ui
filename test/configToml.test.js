@@ -34,6 +34,73 @@ function rustConstant(...names) {
   assert.fail(`agent-client's openai.rs no longer defines ${names.join(' or ')}`)
 }
 
+/// The one path the panel owns and the agent has to be told about. Two
+/// independent copies of a directory name is what broke v0.92.0: upstream
+/// d48726b0 moved its default cache from `onlinerpg` to `openmmo`, our
+/// mirrored copy did not follow, and the agent looked where the app never
+/// writes — then ran the device flow, printed a code into a log tab nobody
+/// watches, and exited 1 every three minutes while the spectator waited
+/// forever. Nothing errored; the panel still read as signed in.
+///
+/// So the config states the path outright and this holds it to that. Both
+/// directions matter: `cache_path` missing hands the agent back its own
+/// default, and a `cache_path` that disagrees with where sign-in actually
+/// writes is the same bug wearing a different name.
+test('google auth tells the agent where the sign-in it already did is kept', () => {
+  const toml = renderConfigToml(
+    settings({ authMode: 'google', googleClientId: 'cid', credentialPath: '/tmp/x/google.json' })
+  )
+  assert.match(
+    toml,
+    /^cache_path = "\/tmp\/x\/google\.json"$/m,
+    'without cache_path the agent falls back to its own default directory'
+  )
+
+  // The agent only honours a configured path ahead of its default; prove the
+  // line lands inside [auth], where it reads it.
+  const auth = toml.slice(toml.indexOf('[auth]'))
+  const nextSection = auth.slice(1).search(/^\[/m)
+  const block = nextSection === -1 ? auth : auth.slice(0, nextSection + 1)
+  assert.match(block, /cache_path = /, 'cache_path must sit under [auth]')
+})
+
+/// `agentSettings` is what puts it there. A refactor that drops it would
+/// leave `renderConfigToml` correct and the written file wrong.
+test('the written config carries the credential path, not just the renderer', () => {
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'configToml.js'), 'utf8')
+  assert.match(
+    source,
+    /renderConfigToml\(agentSettings\(settings\)\)/,
+    'writeConfig must render the agent settings, or cache_path never reaches disk'
+  )
+  assert.match(
+    source,
+    /credentialPath: credentialPath\(\)/,
+    'agentSettings must take the path from settingsStore, the one place sign-in writes'
+  )
+})
+
+/// And the two remaining mirrors of that path — ours and the agent's own
+/// default — are no longer required to agree, but if they ever do agree again
+/// by accident nobody should rely on it. This records what the agent's
+/// default is, so a future reader can see it is deliberately not ours.
+test("the agent's own default cache directory is not assumed to be ours", () => {
+  const rust = fs.readFileSync(
+    path.join(__dirname, '..', 'deps', 'OpenMMO', 'agent-client', 'src', 'google_auth.rs'),
+    'utf8'
+  )
+  assert.match(
+    rust,
+    /fn resolve_cache_path\(configured: Option<&str>\)/,
+    "google_auth.rs no longer takes a configured cache path — cache_path may be ignored now"
+  )
+  assert.match(
+    rust,
+    /if let Some\(path\) = configured\s*\{\s*return expand_home\(path\);/,
+    'a configured path must still win over the default, or stating it achieves nothing'
+  )
+})
+
 function settings(overrides = {}) {
   return {
     server: 'wss://openmmo.to.nexus/ws',

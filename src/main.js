@@ -16,7 +16,7 @@ const i18n = require('./i18n')
 const itemCatalogue = require('./itemCatalogue')
 const personalityText = require('./personalityText')
 const { agentDir, seedRuntimeData, itemDataRoots } = require('./runtimeEnv')
-const { renderConfigToml } = require('./configToml')
+const { renderConfigToml, agentSettings } = require('./configToml')
 const { AgentProcess } = require('./agent')
 const { ClientServer, distReady, assetCacheRoot } = require('./server')
 const { AgentProxy } = require('./proxy')
@@ -649,7 +649,9 @@ ipcMain.handle('settings:apply', async (_e, patch) => {
   return { ok: true, settings }
 })
 
-ipcMain.handle('config:preview', () => renderConfigToml(settings))
+// The preview has to be the file the agent is actually given, cache_path
+// and all — a preview that omits a line is how a wrong one goes unnoticed.
+ipcMain.handle('config:preview', () => renderConfigToml(agentSettings(settings)))
 
 /// null rather than an error: the spectator client falls back to its on-device
 /// translator when this returns nothing, and a failed line keeps its original
