@@ -5,6 +5,7 @@ const path = require('node:path')
 
 const { agentDir } = require('./runtimeEnv')
 const { instancePromptRelativePath, memoryRelativePath } = require('./personalityText')
+const { credentialPath } = require('./settingsStore')
 const { tomlString } = require('./toml')
 
 function isNumber(value) {
@@ -49,6 +50,23 @@ function renderConfigToml(s) {
     // silently throws away the sign-in Login already did and re-prompts.
     lines.push(`client_id = ${tomlString(s.googleClientId)}`)
     if (s.googleClientSecret) lines.push(`client_secret = ${tomlString(s.googleClientSecret)}`)
+    // Where the sign-in this app already did is kept. Stated outright
+    // because the alternative was two codebases independently agreeing on a
+    // directory name, and on 2026-11-26 they stopped: upstream d48726b0
+    // ("Keep the Google sign-in cache under openmmo instead of onlinerpg")
+    // moved its default, our mirrored copy of the path did not follow, and
+    // v0.92.0 shipped an agent that looked somewhere the app never writes.
+    //
+    // The failure had no error of its own. `resolve_cache_path` finds no
+    // file, falls through to the device flow, and prints a code to a log tab
+    // nobody is watching; three minutes later the unentered code expires,
+    // the agent exits 1, and the app restarts it into the same wait. The
+    // spectator sits on "Waiting for the agent to enter the world…" forever
+    // while the panel looks signed in — because it is. Only the agent is not.
+    //
+    // `resolve_cache_path` honours a configured path ahead of its own
+    // default, so this ends the coupling rather than re-establishing it.
+    if (s.credentialPath) lines.push(`cache_path = ${tomlString(s.credentialPath)}`)
   }
 
   lines.push('', '[claude]', `model = ${tomlString(s.models.claude)}`)
@@ -141,17 +159,25 @@ function renderConfigToml(s) {
   return lines.join('\n')
 }
 
+/// The settings the agent is actually started with: the panel's, plus the
+/// one path the panel owns and the agent must be told. Kept out of
+/// `renderConfigToml` so that stays a pure function of its argument.
+function agentSettings(settings) {
+  return { ...settings, credentialPath: credentialPath() }
+}
+
 function writeConfig(settings) {
   const dir = path.join(agentDir(), 'data')
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, 'config.toml')
   const backup = `${file}.bak`
   if (fs.existsSync(file) && !fs.existsSync(backup)) fs.copyFileSync(file, backup)
-  fs.writeFileSync(file, renderConfigToml(settings))
+  fs.writeFileSync(file, renderConfigToml(agentSettings(settings)))
   return file
 }
 
 module.exports = {
   renderConfigToml,
+  agentSettings,
   writeConfig,
 }
