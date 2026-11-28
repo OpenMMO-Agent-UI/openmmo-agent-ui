@@ -586,6 +586,11 @@ const TITLE_NAMES = {
   medusa_slayer_solo: 'Who Slew Medusa Alone',
   terraclash_raider: 'Who Brought Down Terraclash',
   terraclash_final_blow: 'Who Dealt Terraclash the Final Blow',
+  estate_defender_1: 'Who Held the Banner',
+  estate_defender_2: 'Who Held the Banner Against the Horde',
+  estate_defender_3: 'Who Held the Banner Against the Stone Host',
+  estate_defender_4: 'Who Held the Banner Against the Serpent Brood',
+  estate_disgrace: 'Who Lost the Banner',
 }
 
 /// One option in the title picker: the radio itself is the whole row, and the
