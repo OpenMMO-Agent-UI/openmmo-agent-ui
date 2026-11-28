@@ -34,26 +34,45 @@ function rustConstant(...names) {
   assert.fail(`agent-client's openai.rs no longer defines ${names.join(' or ')}`)
 }
 
+/// The TOML key agent-client reads the credential cache path from, taken from
+/// its own source rather than restated here. v0.92.1 is why: this block used
+/// to assert `cache_path`, which is the name of the *function* that consumes
+/// the value (`resolve_cache_path`), not the field that carries it. TOML
+/// parsed the line, serde ignored it, the fix did nothing, and the test
+/// passed — because it only ever checked that the renderer wrote the line the
+/// renderer meant to write. Reading the name out of the Rust is the whole
+/// point: an assertion that restates an assumption cannot catch the
+/// assumption being wrong.
+function rustTokenCacheKey() {
+  const main = fs.readFileSync(
+    path.join(__dirname, '..', 'deps', 'OpenMMO', 'agent-client', 'src', 'main.rs'),
+    'utf8',
+  )
+  const match = main.match(/config\.auth\.google\.(\w+)\.as_deref\(\)/)
+  assert.ok(
+    match,
+    "agent-client's main.rs no longer reads a configured credential cache path — " +
+      'the agent may have stopped honouring one at all',
+  )
+  return match[1]
+}
+
 /// The one path the panel owns and the agent has to be told about. Two
 /// independent copies of a directory name is what broke v0.92.0: upstream
 /// d48726b0 moved its default cache from `onlinerpg` to `openmmo`, our
 /// mirrored copy did not follow, and the agent looked where the app never
 /// writes — then ran the device flow, printed a code into a log tab nobody
-/// watches, and exited 1 every three minutes while the spectator waited
-/// forever. Nothing errored; the panel still read as signed in.
-///
-/// So the config states the path outright and this holds it to that. Both
-/// directions matter: `cache_path` missing hands the agent back its own
-/// default, and a `cache_path` that disagrees with where sign-in actually
-/// writes is the same bug wearing a different name.
+/// watches, and exited 1 every half hour while the spectator waited forever.
+/// Nothing errored; the panel still read as signed in.
 test('google auth tells the agent where the sign-in it already did is kept', () => {
+  const key = rustTokenCacheKey()
   const toml = renderConfigToml(
     settings({ authMode: 'google', googleClientId: 'cid', credentialPath: '/tmp/x/google.json' })
   )
   assert.match(
     toml,
-    /^cache_path = "\/tmp\/x\/google\.json"$/m,
-    'without cache_path the agent falls back to its own default directory'
+    new RegExp(`^${key} = "/tmp/x/google\\.json"$`, 'm'),
+    `the agent reads [auth] ${key}; anything else is parsed and ignored`
   )
 
   // The agent only honours a configured path ahead of its default; prove the
@@ -61,7 +80,7 @@ test('google auth tells the agent where the sign-in it already did is kept', () 
   const auth = toml.slice(toml.indexOf('[auth]'))
   const nextSection = auth.slice(1).search(/^\[/m)
   const block = nextSection === -1 ? auth : auth.slice(0, nextSection + 1)
-  assert.match(block, /cache_path = /, 'cache_path must sit under [auth]')
+  assert.match(block, new RegExp(`${key} = `), `${key} must sit under [auth]`)
 })
 
 /// `agentSettings` is what puts it there. A refactor that drops it would
@@ -71,7 +90,7 @@ test('the written config carries the credential path, not just the renderer', ()
   assert.match(
     source,
     /renderConfigToml\(agentSettings\(settings\)\)/,
-    'writeConfig must render the agent settings, or cache_path never reaches disk'
+    'writeConfig must render the agent settings, or the path never reaches disk'
   )
   assert.match(
     source,
@@ -80,11 +99,10 @@ test('the written config carries the credential path, not just the renderer', ()
   )
 })
 
-/// And the two remaining mirrors of that path — ours and the agent's own
-/// default — are no longer required to agree, but if they ever do agree again
-/// by accident nobody should rely on it. This records what the agent's
-/// default is, so a future reader can see it is deliberately not ours.
-test("the agent's own default cache directory is not assumed to be ours", () => {
+/// Stating the path only helps while the agent still prefers a configured one
+/// over its own default. If upstream ever drops that, this turns back into a
+/// silent lockout and we need to hear about it from a test, not a player.
+test('a configured cache path still wins over the agent\'s own default', () => {
   const rust = fs.readFileSync(
     path.join(__dirname, '..', 'deps', 'OpenMMO', 'agent-client', 'src', 'google_auth.rs'),
     'utf8'
@@ -92,7 +110,7 @@ test("the agent's own default cache directory is not assumed to be ours", () => 
   assert.match(
     rust,
     /fn resolve_cache_path\(configured: Option<&str>\)/,
-    "google_auth.rs no longer takes a configured cache path — cache_path may be ignored now"
+    'google_auth.rs no longer takes a configured cache path'
   )
   assert.match(
     rust,

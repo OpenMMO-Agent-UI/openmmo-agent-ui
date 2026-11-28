@@ -66,7 +66,14 @@ function renderConfigToml(s) {
     //
     // `resolve_cache_path` honours a configured path ahead of its own
     // default, so this ends the coupling rather than re-establishing it.
-    if (s.credentialPath) lines.push(`cache_path = ${tomlString(s.credentialPath)}`)
+    //
+    // The key is `token_cache` (`config.auth.google.token_cache`, read in
+    // agent-client's main.rs). v0.92.1 shipped this line spelled `cache_path`
+    // — the name of the *function* that consumes it — which TOML parses and
+    // serde ignores, so the fix did nothing and the device code kept coming.
+    // test/configToml.test.js now reads the name out of the Rust rather than
+    // restating it.
+    if (s.credentialPath) lines.push(`token_cache = ${tomlString(s.credentialPath)}`)
   }
 
   lines.push('', '[claude]', `model = ${tomlString(s.models.claude)}`)
